@@ -1,8 +1,10 @@
 import { type FormEvent, type ReactNode, useState } from "react";
 import splitLogo from "@/assets/split-logo.png";
+import AddressSearchField from "@/components/AddressSearchField";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { formatNationalPhoneNumber, getPhoneInputMaxLength } from "@/lib/phone";
 import {
   Select,
   SelectContent,
@@ -82,10 +84,15 @@ export function createEmptyProfile(): UserProfile {
 
 export function normalizeUserProfile(profile: Partial<UserProfile>): UserProfile {
   const base = createEmptyProfile();
-  return {
+  const normalized = {
     ...base,
     ...profile,
     splitId: profile.splitId || base.splitId,
+  };
+
+  return {
+    ...normalized,
+    phoneNumber: formatNationalPhoneNumber(normalized.phoneNumber ?? "", normalized.phoneCountryCode),
   };
 }
 
@@ -238,30 +245,6 @@ const countryOptions = [
   { value: "Uruguay", label: "🇺🇾 Uruguay" },
   { value: "Venezuela", label: "🇻🇪 Venezuela" },
   { value: "Other", label: "🌐 Other" },
-];
-
-const addressSuggestions = [
-  {
-    addressLine: "1500 Broadway",
-    zipCode: "10036",
-    city: "New York",
-    state: "NY",
-    country: "United States",
-  },
-  {
-    addressLine: "1600 Vine Street",
-    zipCode: "90028",
-    city: "Los Angeles",
-    state: "CA",
-    country: "United States",
-  },
-  {
-    addressLine: "10 Music Square East",
-    zipCode: "37203",
-    city: "Nashville",
-    state: "TN",
-    country: "United States",
-  },
 ];
 
 type AccountAccessProps = {
@@ -497,10 +480,18 @@ function renderAccountStep({
   }
 
   if (step.field === "phoneNumber") {
+    const phoneMaxLength = getPhoneInputMaxLength(profile.phoneCountryCode);
+
     return (
       <Field label={step.label} htmlFor={step.field}>
         <div className="grid gap-3 md:grid-cols-[150px_1fr]">
-          <Select value={profile.phoneCountryCode} onValueChange={(value) => updateProfile("phoneCountryCode", value)}>
+          <Select
+            value={profile.phoneCountryCode}
+            onValueChange={(value) => {
+              updateProfile("phoneCountryCode", value);
+              updateProfile("phoneNumber", formatNationalPhoneNumber(profile.phoneNumber ?? "", value));
+            }}
+          >
             <SelectTrigger className="h-12 rounded-full px-5 shadow-sm shadow-foreground/5">
               <SelectValue placeholder="🇺🇸 +1" />
             </SelectTrigger>
@@ -515,9 +506,14 @@ function renderAccountStep({
           <Input
             id={step.field}
             type="tel"
+            inputMode="numeric"
+            autoComplete="tel-national"
+            maxLength={phoneMaxLength}
             value={profile.phoneNumber ?? ""}
-            onChange={(event) => updateProfile("phoneNumber", event.target.value)}
-            placeholder="(555) 000-0000"
+            onChange={(event) =>
+              updateProfile("phoneNumber", formatNationalPhoneNumber(event.target.value, profile.phoneCountryCode))
+            }
+            placeholder="555-000-0000"
             required={step.required}
             className="h-12 rounded-full px-5 text-base shadow-sm shadow-foreground/5 md:text-sm"
           />
@@ -527,46 +523,24 @@ function renderAccountStep({
   }
 
   if (step.field === "legalAddress") {
-    const matchingSuggestions = addressSuggestions.filter((suggestion) =>
-      suggestion.addressLine.toLowerCase().includes((profile.addressLine ?? "").toLowerCase().trim()),
-    );
-
     return (
       <div className="space-y-4">
         <Field label="Address" htmlFor="addressLine">
-          <Input
+          <AddressSearchField
             id="addressLine"
-            value={profile.addressLine ?? ""}
-            onChange={(event) => updateProfile("addressLine", event.target.value)}
-            placeholder="Example: 1500 Broadway"
+            value={{
+              addressLine: profile.addressLine ?? "",
+              zipCode: profile.zipCode ?? "",
+              city: profile.city ?? "",
+              state: profile.state ?? "",
+              country: profile.country ?? "",
+            }}
+            onFieldChange={updateProfile}
+            placeholder="Start typing your full legal address"
             required
-            className="h-12 rounded-full px-5 text-base shadow-sm shadow-foreground/5 md:text-sm"
+            className="h-12 rounded-full px-5 pr-12 text-base shadow-sm shadow-foreground/5 md:text-sm"
           />
         </Field>
-
-        {(profile.addressLine ?? "") && matchingSuggestions.length > 0 && (
-          <div className="space-y-2">
-            <p className="text-xs font-semibold text-muted-foreground">Suggested addresses</p>
-            <div className="grid gap-2">
-              {matchingSuggestions.map((suggestion) => (
-                <button
-                  key={`${suggestion.addressLine}-${suggestion.zipCode}`}
-                  type="button"
-                  className="rounded-lg border border-border bg-background px-3 py-2 text-left text-xs leading-5 shadow-sm transition-colors hover:bg-secondary"
-                  onClick={() => {
-                    updateProfile("addressLine", suggestion.addressLine);
-                    updateProfile("zipCode", suggestion.zipCode);
-                    updateProfile("city", suggestion.city);
-                    updateProfile("state", suggestion.state);
-                    updateProfile("country", suggestion.country);
-                  }}
-                >
-                  {suggestion.addressLine}, {suggestion.city}, {suggestion.state} {suggestion.zipCode}, {suggestion.country}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
 
         <div className="grid gap-3 md:grid-cols-2">
           <Field label="Zip Code" htmlFor="zipCode">
@@ -835,6 +809,7 @@ function normalizeProfile(profile: UserProfile): UserProfile {
     ...normalized,
     legalName,
     legalAddress,
+    phoneNumber: formatNationalPhoneNumber(profile.phoneNumber ?? "", profile.phoneCountryCode),
     ipiNumber: (profile.ipiNumber ?? "").trim(),
     customProName: profile.proAffiliation === "Other" ? (profile.customProName ?? "").trim() : "",
     publishingStatus,

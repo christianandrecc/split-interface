@@ -1,8 +1,10 @@
 import { type ReactNode, useMemo, useState } from "react";
+import AddressSearchField from "@/components/AddressSearchField";
 import { UserProfile } from "@/components/AccountAccess";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { formatNationalPhoneNumber, getPhoneInputMaxLength } from "@/lib/phone";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Check, IdCard, Mail, MapPin, Music2, Phone, Save, User } from "lucide-react";
 
@@ -72,6 +74,7 @@ export default function ProfilePage({ userProfile, onUpdateProfile }: ProfilePag
   const displayName = useMemo(() => buildLegalName(draft) || draft.emailAddress || "Your Profile", [draft]);
   const needsPublishingDetails = requiresPublishingDetails(draft.publishingStatus);
   const simplePublishingSetup = isSimplePublishingSetup(draft.publishingStatus);
+  const phoneMaxLength = getPhoneInputMaxLength(draft.phoneCountryCode);
 
   const update = (field: keyof UserProfile, value: string) => {
     setSaved(false);
@@ -130,7 +133,13 @@ export default function ProfilePage({ userProfile, onUpdateProfile }: ProfilePag
           <ProfileSection icon={<Mail className="h-4 w-4" />} title="Contact">
             <div className="grid gap-4 md:grid-cols-[160px_1fr]">
               <Field label="Country Code" htmlFor="profilePhoneCode">
-                <Select value={draft.phoneCountryCode} onValueChange={(value) => update("phoneCountryCode", value)}>
+                <Select
+                  value={draft.phoneCountryCode}
+                  onValueChange={(value) => {
+                    update("phoneCountryCode", value);
+                    update("phoneNumber", formatNationalPhoneNumber(draft.phoneNumber, value));
+                  }}
+                >
                   <SelectTrigger id="profilePhoneCode">
                     <SelectValue placeholder="Select code" />
                   </SelectTrigger>
@@ -144,7 +153,18 @@ export default function ProfilePage({ userProfile, onUpdateProfile }: ProfilePag
                 </Select>
               </Field>
               <Field label="Phone Number" htmlFor="profilePhone">
-                <Input id="profilePhone" type="tel" value={draft.phoneNumber} onChange={(event) => update("phoneNumber", event.target.value)} />
+                <Input
+                  id="profilePhone"
+                  type="tel"
+                  inputMode="numeric"
+                  autoComplete="tel-national"
+                  maxLength={phoneMaxLength}
+                  value={draft.phoneNumber}
+                  onChange={(event) =>
+                    update("phoneNumber", formatNationalPhoneNumber(event.target.value, draft.phoneCountryCode))
+                  }
+                  placeholder="555-000-0000"
+                />
               </Field>
             </div>
             <Field label="Email Address" htmlFor="profileEmail">
@@ -154,7 +174,18 @@ export default function ProfilePage({ userProfile, onUpdateProfile }: ProfilePag
 
           <ProfileSection icon={<MapPin className="h-4 w-4" />} title="Legal Address">
             <Field label="Address" htmlFor="profileAddress">
-              <Input id="profileAddress" value={draft.addressLine} onChange={(event) => update("addressLine", event.target.value)} />
+              <AddressSearchField
+                id="profileAddress"
+                value={{
+                  addressLine: draft.addressLine,
+                  zipCode: draft.zipCode,
+                  city: draft.city,
+                  state: draft.state,
+                  country: draft.country,
+                }}
+                onFieldChange={update}
+                placeholder="Start typing your full legal address"
+              />
             </Field>
             <div className="grid gap-4 md:grid-cols-2">
               <Field label="Zip Code" htmlFor="profileZip">
@@ -335,6 +366,7 @@ function normalizeProfile(profile: UserProfile): UserProfile {
   return {
     ...profile,
     legalName: buildLegalName(profile),
+    phoneNumber: formatNationalPhoneNumber(profile.phoneNumber, profile.phoneCountryCode),
     legalAddress: [profile.addressLine, profile.city, profile.state, profile.zipCode, profile.country]
       .map((part) => part.trim())
       .filter(Boolean)
