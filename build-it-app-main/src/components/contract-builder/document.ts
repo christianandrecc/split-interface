@@ -2,7 +2,16 @@ import type { UserProfile } from "@/components/AccountAccess";
 import type { ContractData } from "./types";
 import { partyDisplayName } from "./types";
 
-export type StoredSplitSheetStatus = "Draft" | "Pending Signatures" | "Executed";
+export type StoredSplitSheetStatus =
+  | "Draft"
+  | "Pending Collaborator Acceptance"
+  | "Pending Split Approval"
+  | "Revision Requested"
+  | "Ready to Sign"
+  | "Pending Signatures"
+  | "Fully Signed"
+  | "Verified and Stored"
+  | "Executed";
 
 export type StoredSplitSheetDocument = {
   id: string;
@@ -13,10 +22,61 @@ export type StoredSplitSheetDocument = {
   updatedAt: string;
   storedAt?: string;
   sentAt?: string;
+  verifiedAt?: string;
   documentNumber: string;
   data: ContractData;
   creatorProfile: UserProfile;
   collaborators: string[];
+  collaboratorInvites: {
+    id: string;
+    partyId: string;
+    name: string;
+    inviteMethod: string;
+    inviteValue: string;
+    status: "Pending" | "Accepted" | "Declined";
+    respondedAt?: string;
+    profileSnapshot?: {
+      username?: string;
+      displayName?: string;
+      role?: string;
+      email?: string;
+      phoneNumber?: string;
+      splitId?: string;
+    };
+  }[];
+  currentProposalId?: string;
+  splitProposalVersions: {
+    id: string;
+    versionNumber: number;
+    proposedBy: string;
+    notes: string;
+    createdAt: string;
+    allocations: {
+      partyId: string;
+      name: string;
+      role: string;
+      percentage: number;
+      notes?: string;
+    }[];
+  }[];
+  splitApprovals: {
+    id: string;
+    proposalVersionId: string;
+    collaboratorId: string;
+    collaboratorName: string;
+    status: "Pending" | "Approved" | "Rejected";
+    notes?: string;
+    respondedAt?: string;
+  }[];
+  splitSignatures: {
+    id: string;
+    proposalVersionId: string;
+    collaboratorId: string;
+    collaboratorName: string;
+    status: "Pending" | "Signed";
+    signedAt?: string;
+    signatureMethod?: string;
+  }[];
   auditTrail: {
     timestamp: string;
     actor: string;
@@ -44,6 +104,24 @@ export function createSplitSheetDocument(data: ContractData, creatorProfile: Use
   const collaborators = data.parties
     .filter((party) => !party.isCurrentUser)
     .map((party) => partyDisplayName(party));
+  const collaboratorInvites = data.parties
+    .filter((party) => !party.isCurrentUser)
+    .map((party) => ({
+      id: makeId(),
+      partyId: party.id,
+      name: partyDisplayName(party),
+      inviteMethod: party.inviteMethod,
+      inviteValue: party.inviteValue || party.email || party.phoneNumber || party.splitId,
+      status: "Pending" as const,
+      profileSnapshot: {
+        displayName: party.professionalName || party.legalName || party.inviteValue,
+        role: party.role,
+        email: party.email,
+        phoneNumber: party.phoneNumber,
+        splitId: party.splitId,
+      },
+    }));
+  const proposalId = makeId();
 
   return {
     id,
@@ -56,6 +134,35 @@ export function createSplitSheetDocument(data: ContractData, creatorProfile: Use
     data,
     creatorProfile,
     collaborators,
+    collaboratorInvites,
+    currentProposalId: proposalId,
+    splitProposalVersions: [
+      {
+        id: proposalId,
+        versionNumber: 1,
+        proposedBy: actorName(creatorProfile),
+        notes: "Initial split proposal",
+        createdAt: now,
+        allocations: data.parties.map((party) => ({
+          partyId: party.id,
+          name: partyDisplayName(party),
+          role: party.role || "Collaborator",
+          percentage: Number(party.percent) || 0,
+          notes: party.contributionDescription,
+        })),
+      },
+    ],
+    splitApprovals: [
+      {
+        id: makeId(),
+        proposalVersionId: proposalId,
+        collaboratorId: "creator",
+        collaboratorName: actorName(creatorProfile),
+        status: "Approved",
+        respondedAt: now,
+      },
+    ],
+    splitSignatures: [],
     auditTrail: [
       {
         timestamp: now,

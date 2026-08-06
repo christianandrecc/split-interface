@@ -4,9 +4,7 @@ import { ArrowLeft } from "lucide-react";
 import ProgressTracker from "./ProgressTracker";
 import StepMetadata from "./StepMetadata";
 import StepParties from "./StepParties";
-import StepRights from "./StepRights";
 import StepClauses from "./StepClauses";
-import StepSignatures from "./StepSignatures";
 import StepReview from "./StepReview";
 import SplitSheetDocumentPreview from "./SplitSheetDocumentPreview";
 import { createSplitSheetDocument, addDocumentAuditTrail, type StoredSplitSheetDocument } from "./document";
@@ -17,6 +15,7 @@ import {
   type ContractData,
   type Party,
   DEFAULT_CONTRACT,
+  getTodayDateInputValue,
   makeParty,
   sumPercents,
   isWriterReady,
@@ -42,6 +41,7 @@ export default function ContractBuilder({
 
   const stepIdx = STEPS.findIndex((s) => s.id === step);
   const isSongStep = step === "metadata";
+  const signedInArtistName = getSignedInArtistName(userProfile);
 
   const update = useCallback(
     (partial: Partial<ContractData>) => setData((prev) => ({ ...prev, ...partial })),
@@ -51,11 +51,9 @@ export default function ContractBuilder({
   const canContinue = (): boolean => {
     const writersReady = data.parties.every(isWriterReady);
     switch (step) {
-      case "metadata": return !!(data.songTitle.trim() && data.compositionType);
-      case "parties": return data.parties.length >= 1 && writersReady && Math.abs(sumPercents(data.parties) - 100) < 0.01;
-      case "rights": return !!data.registrationContactType;
+      case "metadata": return !!data.songTitle.trim();
       case "clauses": return !!data.sampleStatus;
-      case "signatures": return data.parties.some((p) => p.isSigner);
+      case "parties": return data.parties.length >= 1 && writersReady && Math.abs(sumPercents(data.parties) - 100) < 0.01;
       case "review": return true;
       default: return false;
     }
@@ -65,11 +63,13 @@ export default function ContractBuilder({
   const prev = () => { if (stepIdx > 0) setStep(STEPS[stepIdx - 1].id); };
 
   const handlePropose = () => {
-    const document = createSplitSheetDocument(data, userProfile);
+    const signedInArtistData = bindContractToSignedInArtist(data, userProfile);
+    const document = createSplitSheetDocument(signedInArtistData, userProfile);
+    setData(signedInArtistData);
     setGeneratedDocument(document);
     setDocumentStored(false);
     setDocumentSent(false);
-    toast.success("SPLIT Sheet preview generated", { description: data.songTitle || "Untitled Song" });
+    toast.success("SPLIT Sheet draft created", { description: signedInArtistData.songTitle || "Untitled Work" });
   };
 
   const handleStoreGeneratedDocument = () => {
@@ -97,19 +97,19 @@ export default function ContractBuilder({
     const sentDocument = addDocumentAuditTrail(
       {
         ...generatedDocument,
-        status: generatedDocument.collaborators.length ? "Pending Signatures" : "Executed",
+        status: generatedDocument.collaborators.length ? "Pending Collaborator Acceptance" : "Verified and Stored",
         storedAt: generatedDocument.storedAt || new Date().toISOString(),
         sentAt: new Date().toISOString(),
       },
       userProfile.emailAddress || userProfile.legalName || "SPLIT user",
-      generatedDocument.collaborators.length ? "Sent to collaborators" : "Marked ready for solo writer",
+      generatedDocument.collaborators.length ? "Sent invitations to collaborators" : "Stored solo writer split",
     );
 
     setGeneratedDocument(sentDocument);
     setDocumentStored(true);
     setDocumentSent(true);
     onSendDocument(sentDocument);
-    toast.success(generatedDocument.collaborators.length ? "SPLIT Sheet sent to collaborators" : "Solo SPLIT Sheet is ready");
+    toast.success(generatedDocument.collaborators.length ? "Invites sent to collaborators" : "Solo SPLIT Sheet stored");
   };
 
   if (generatedDocument) {
@@ -155,11 +155,9 @@ export default function ContractBuilder({
               : "max-w-4xl py-6 md:py-10"
           }`}
         >
-          {step === "metadata" && <StepMetadata data={data} onChange={update} />}
-          {step === "parties" && <StepParties data={data} onChange={update} />}
-          {step === "rights" && <StepRights data={data} onChange={update} />}
+          {step === "metadata" && <StepMetadata data={data} signedInArtistName={signedInArtistName} onChange={update} />}
           {step === "clauses" && <StepClauses data={data} onChange={update} />}
-          {step === "signatures" && <StepSignatures data={data} onChange={update} />}
+          {step === "parties" && <StepParties data={data} onChange={update} />}
           {step === "review" && <StepReview data={data} />}
 
           {/* Navigation */}
@@ -176,7 +174,7 @@ export default function ContractBuilder({
                 onClick={handlePropose}
                 className="bg-primary text-primary-foreground rounded-lg px-5 md:px-6 py-2.5 text-sm font-semibold hover:bg-primary/90 transition-colors shadow-sm"
               >
-                Propose SPLIT Sheet
+                Create SPLIT Sheet
               </button>
             ) : (
               <button
@@ -197,10 +195,33 @@ export default function ContractBuilder({
 function createInitialContract(userProfile: UserProfile): ContractData {
   return {
     ...DEFAULT_CONTRACT,
+    creationDate: getTodayDateInputValue(),
+    artistProjectName: getSignedInArtistName(userProfile),
+    recordingArtist: getSignedInArtistName(userProfile),
     parties: [
       profileToParty(userProfile),
-      makeParty({ percent: 50, signingOrder: 2, inviteMethod: "email", role: "Contributor" }),
     ],
+  };
+}
+
+function getSignedInArtistName(userProfile: UserProfile) {
+  return (
+    userProfile.displayName ||
+    userProfile.pkaNames.split(",")[0]?.trim() ||
+    userProfile.legalName ||
+    [userProfile.legalFirstName, userProfile.legalMiddleName, userProfile.legalLastName].filter(Boolean).join(" ") ||
+    userProfile.emailAddress ||
+    "Signed-in SPLIT profile"
+  );
+}
+
+function bindContractToSignedInArtist(data: ContractData, userProfile: UserProfile): ContractData {
+  const signedInArtistName = getSignedInArtistName(userProfile);
+
+  return {
+    ...data,
+    artistProjectName: signedInArtistName,
+    recordingArtist: signedInArtistName,
   };
 }
 
@@ -216,8 +237,8 @@ function profileToParty(userProfile: UserProfile): Party {
   return makeParty({
     splitId: userProfile.splitId,
     phoneNumber,
-    inviteMethod: "splitId",
-    inviteValue: userProfile.splitId,
+    inviteMethod: userProfile.username ? "username" : userProfile.emailAddress ? "email" : "phone",
+    inviteValue: userProfile.username ? `@${userProfile.username}` : userProfile.emailAddress || phoneNumber,
     accountLinked: true,
     isCurrentUser: true,
     legalName: userProfile.legalName || [userProfile.legalFirstName, userProfile.legalMiddleName, userProfile.legalLastName].filter(Boolean).join(" "),
@@ -232,7 +253,7 @@ function profileToParty(userProfile: UserProfile): Party {
     publisherIpi: needsPublishingDetails ? userProfile.publisherIpi || userProfile.adminIpi || "" : "",
     publisherPro: needsPublishingDetails ? userProfile.publisherPro || userProfile.proAffiliation || "" : "",
     publisherContact: needsPublishingDetails ? userProfile.publisherContact || "" : "",
-    percent: 50,
+    percent: 100,
     role: "Songwriter",
     signingOrder: 1,
   });

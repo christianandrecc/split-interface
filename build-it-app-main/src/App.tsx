@@ -41,6 +41,16 @@ const App = () => {
   const handleSignIn = (emailAddress: string) => {
     const fallbackName = emailAddress.split("@")[0];
     const profile = normalizeUserProfile({
+      username: fallbackName,
+      displayName: fallbackName,
+      profileImageUrl: "",
+      roleTags: "",
+      socialInstagram: "",
+      socialTikTok: "",
+      socialX: "",
+      socialWebsite: "",
+      profileLocation: "",
+      profileVisibility: "Collaborators only",
       legalName: fallbackName,
       legalFirstName: fallbackName,
       legalMiddleName: "",

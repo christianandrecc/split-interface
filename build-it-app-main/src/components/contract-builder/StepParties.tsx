@@ -1,7 +1,5 @@
 import {
   CONTRIBUTION_OPTIONS,
-  PRO_OPTIONS,
-  PUBLISHING_STATUS_OPTIONS,
   ROLE_OPTIONS,
   SPLIT_TYPE_OPTIONS,
   hasWriterIdentity,
@@ -11,19 +9,17 @@ import {
   type ContractData,
   type Party,
 } from "./types";
-import { AlertCircle, CheckCircle2, ChevronDown, Hash, Info, Mail, Phone, Plus, Settings2, User, X } from "lucide-react";
-import { useMemo, useState } from "react";
+import { AtSign, AlertCircle, CheckCircle2, ChevronDown, Mail, Phone, Plus, User, X } from "lucide-react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { useMemo, useState, type ReactNode } from "react";
 
 interface Props {
   data: ContractData;
   onChange: (d: Partial<ContractData>) => void;
 }
 
-const INVITE_METHODS = [
-  { id: "splitId", label: "SPLIT ID", icon: Hash, placeholder: "SPL-1234-ABCD" },
-  { id: "email", label: "Email", icon: Mail, placeholder: "writer@email.com" },
-  { id: "phone", label: "Phone", icon: Phone, placeholder: "+1 (555) 000-0000" },
-] as const;
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const PHONE_PATTERN = /^[+()\d\s.-]+$/;
 
 function applyEqualSplits(parties: Party[]) {
   if (!parties.length) return parties;
@@ -38,24 +34,48 @@ function applyEqualSplits(parties: Party[]) {
   }));
 }
 
+function inferInviteMethod(value: string) {
+  const trimmed = value.trim();
+  const digits = trimmed.replace(/\D/g, "");
+
+  if (EMAIL_PATTERN.test(trimmed)) return "email";
+  if (digits.length > 0 && PHONE_PATTERN.test(trimmed) && (trimmed.startsWith("+") || /^[\d(]/.test(trimmed))) return "phone";
+  return "username";
+}
+
+function normalizeInviteValue(value: string, method: string) {
+  const trimmed = value.trim();
+
+  if (!trimmed) return "";
+  if (method === "username" && trimmed.startsWith("@")) return `@${trimmed.replace(/^@+/, "")}`;
+  return trimmed;
+}
+
 export default function StepParties({ data, onChange }: Props) {
-  const [openAdvancedWriters, setOpenAdvancedWriters] = useState<Record<string, boolean>>({});
   const { parties } = data;
+  const [openNotes, setOpenNotes] = useState<Record<string, boolean>>({});
   const activeSplitType = data.splitType === "Equal" ? "Equal" : "Custom";
   const isEqualSplit = activeSplitType === "Equal";
   const total = useMemo(() => sumPercents(parties), [parties]);
   const valid = Math.abs(total - 100) < 0.01;
   const incompleteWriters = parties
     .map((party, index) => ({
-      label: partyDisplayName(party) === "Invited writer" ? `Writer ${index + 1}` : partyDisplayName(party),
+      label: partyDisplayName(party) === "Invited collaborator" ? `Collaborator ${index + 1}` : partyDisplayName(party),
       missing: getMissingWriterItems(party),
     }))
     .filter((writer) => writer.missing.length > 0);
+  const missingSummary = [
+    !valid ? `Split total must equal 100% (${total}%)` : "",
+    ...incompleteWriters.map((writer) => `${writer.label}: ${writer.missing.join(", ")}`),
+  ].filter(Boolean);
 
   const update = <Key extends keyof Party>(id: string, field: Key, val: Party[Key]) =>
     onChange({ parties: parties.map((p) => (p.id === id ? { ...p, [field]: val } : p)) });
 
-  const updateInvite = (id: string, method: string, value: string) => {
+  const updateInvite = (id: string, rawValue: string) => {
+    const method = inferInviteMethod(rawValue);
+    const value = normalizeInviteValue(rawValue, method);
+
     onChange({
       parties: parties.map((party) => {
         if (party.id !== id) return party;
@@ -65,9 +85,9 @@ export default function StepParties({ data, onChange }: Props) {
           inviteMethod: method,
           inviteValue: value,
           accountLinked: Boolean(value.trim()),
-          splitId: method === "splitId" ? value : party.splitId,
-          email: method === "email" ? value : party.email,
-          phoneNumber: method === "phone" ? value : party.phoneNumber,
+          splitId: "",
+          email: method === "email" ? value : "",
+          phoneNumber: method === "phone" ? value : "",
         };
       }),
     });
@@ -96,7 +116,7 @@ export default function StepParties({ data, onChange }: Props) {
   const add = () => {
     const nextParties = [
       ...parties,
-      makeParty({ role: "Contributor", percent: 0, signingOrder: parties.length + 1, inviteMethod: "email" }),
+      makeParty({ role: "Contributor", percent: 0, signingOrder: parties.length + 1, inviteMethod: "username" }),
     ];
 
     onChange({
@@ -116,47 +136,38 @@ export default function StepParties({ data, onChange }: Props) {
           : nextParties,
     });
   };
-  const toggleAdvanced = (id: string) =>
-    setOpenAdvancedWriters((current) => ({ ...current, [id]: !current[id] }));
-
   return (
     <div>
       <div className="mb-1 flex items-center gap-2">
-        <h1 className="text-xl font-bold">Writers & Composition Splits</h1>
-        <InfoTooltip label="How SPLIT uses linked account info">
-          SPLIT pulls country, PRO, IPI/CAE, publisher/admin routing, and contact metadata from each linked SPLIT account. You only need the collaborator's SPLIT ID, account email, or phone number to invite them.
-        </InfoTooltip>
+        <h1 className="text-xl font-bold">Invite Collaborators</h1>
       </div>
       <p className="text-sm text-muted-foreground mb-8">
-        Add yourself once, then invite collaborators through their SPLIT account instead of re-entering their metadata.
+        Add the people who were part of the work, then start from an even split or propose custom percentages.
       </p>
 
-      <div className="mb-6 rounded-lg border border-border bg-card p-4">
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Split Method</div>
-            <div className="mt-1 text-sm font-bold">{activeSplitType}</div>
+      <div className="mb-5 rounded-lg border border-border bg-card/70 px-3 py-2.5">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="mr-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Initial split</span>
+          <div className="inline-flex rounded-full border border-border bg-background p-0.5">
+            {SPLIT_TYPE_OPTIONS.map((option) => (
+              <button
+                key={option}
+                onClick={() => chooseSplitType(option)}
+                className={`rounded-full px-3 py-1 text-[11px] font-semibold transition-colors ${
+                  activeSplitType === option
+                    ? "bg-primary/10 text-primary"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {option}
+              </button>
+            ))}
           </div>
-          <div className={`text-sm font-bold tabular-nums ${valid ? "text-[hsl(var(--split-verified))]" : "text-destructive"}`}>
+          <div className={`ml-auto text-xs font-bold tabular-nums ${valid ? "text-[hsl(var(--split-verified))]" : "text-destructive"}`}>
             {total}%
           </div>
         </div>
-        <div className="mb-3 flex flex-wrap gap-2">
-          {SPLIT_TYPE_OPTIONS.map((option) => (
-            <button
-              key={option}
-              onClick={() => chooseSplitType(option)}
-              className={`rounded-lg border px-3 py-2 text-xs font-semibold transition-colors ${
-                activeSplitType === option
-                  ? "border-primary bg-primary/10 text-primary"
-                  : "border-border bg-background text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              {option}
-            </button>
-          ))}
-        </div>
-        <div className="h-2 overflow-hidden rounded-full bg-secondary">
+        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-secondary">
           <div
             className={`h-full rounded-full transition-all duration-300 ${
               valid ? "bg-[hsl(var(--split-verified))]" : total > 100 ? "bg-destructive" : "bg-primary"
@@ -164,12 +175,8 @@ export default function StepParties({ data, onChange }: Props) {
             style={{ width: `${Math.min(total, 100)}%` }}
           />
         </div>
-        {isEqualSplit ? (
-          <p className="mt-2 text-xs text-muted-foreground">
-            Equal split automatically divides 100% across all writers and updates when writers are added or removed.
-          </p>
-        ) : !valid && (
-          <p className="mt-2 text-xs text-destructive">
+        {!isEqualSplit && !valid && (
+          <p className="mt-1.5 text-[11px] text-destructive">
             {total > 100 ? `Over by ${(total - 100).toFixed(2)}%` : `${(100 - total).toFixed(2)}% remaining`}
           </p>
         )}
@@ -187,7 +194,7 @@ export default function StepParties({ data, onChange }: Props) {
                 </div>
                 <div>
                   <span className="text-xs font-semibold text-muted-foreground">
-                    Writer {i + 1}{p.isCurrentUser ? " · You" : ""}
+                    Collaborator {i + 1}{p.isCurrentUser ? " · You" : ""}
                   </span>
                   <div className="text-sm font-bold">{partyDisplayName(p)}</div>
                 </div>
@@ -212,10 +219,8 @@ export default function StepParties({ data, onChange }: Props) {
                 )}
               </div>
 
-              {p.isCurrentUser ? (
-                <CurrentUserAccount party={p} />
-              ) : (
-                <InviteWriter party={p} onInviteChange={(method, value) => updateInvite(p.id, method, value)} />
+              {!p.isCurrentUser && (
+                <InviteWriter party={p} onInviteChange={(value) => updateInvite(p.id, value)} />
               )}
 
               <div className="mt-5 grid gap-3 md:grid-cols-2">
@@ -230,7 +235,7 @@ export default function StepParties({ data, onChange }: Props) {
                     ))}
                   </select>
                 </InputCell>
-                <InputCell label="Writer Share">
+                <InputCell label="Split Share">
                   <div className="flex items-center gap-1">
                     <input
                       type="number"
@@ -276,31 +281,28 @@ export default function StepParties({ data, onChange }: Props) {
                 )}
               </div>
 
-              <div className="mt-5 rounded-lg border border-border bg-background">
-                <button
-                  type="button"
-                  onClick={() => toggleAdvanced(p.id)}
-                  className="flex w-full items-center gap-3 px-4 py-3 text-left"
-                >
-                  <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-secondary text-muted-foreground">
-                    <Settings2 className="h-4 w-4" />
-                  </span>
-                  <span className="flex-1">
-                    <span className="block text-sm font-bold">Advanced writer options</span>
-                    <span className="mt-0.5 block text-xs text-muted-foreground">
-                      Optional notes and account metadata overrides for registration.
-                    </span>
-                  </span>
-                  <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${openAdvancedWriters[p.id] ? "rotate-180" : ""}`} />
-                </button>
-
-                {openAdvancedWriters[p.id] && (
-                  <AdvancedWriterOptions
-                    party={p}
-                    onUpdate={(field, value) => update(p.id, field, value)}
+              <Collapsible
+                open={Boolean(openNotes[p.id])}
+                onOpenChange={(open) => setOpenNotes((current) => ({ ...current, [p.id]: open }))}
+              >
+                <CollapsibleTrigger asChild>
+                  <button
+                    type="button"
+                    className="mt-5 flex w-full items-center justify-between rounded-lg border border-border bg-background px-3 py-2.5 text-left text-xs font-semibold text-muted-foreground transition-colors hover:text-foreground"
+                  >
+                    <span>Optional contribution note</span>
+                    <ChevronDown className={`h-3.5 w-3.5 transition-transform ${openNotes[p.id] ? "rotate-180" : ""}`} />
+                  </button>
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  <textarea
+                    value={p.contributionDescription}
+                    onChange={(event) => update(p.id, "contributionDescription", event.target.value)}
+                    placeholder="Add a short note if the contribution needs context."
+                    className="mt-3 min-h-[72px] w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm outline-none placeholder:text-muted-foreground/50 focus:ring-2 focus:ring-ring/30"
                   />
-                )}
-              </div>
+                </CollapsibleContent>
+              </Collapsible>
             </div>
           );
         })}
@@ -311,79 +313,23 @@ export default function StepParties({ data, onChange }: Props) {
         className="mt-4 flex items-center gap-1.5 text-sm font-medium text-primary transition-colors hover:text-primary/80"
       >
         <Plus className="h-3.5 w-3.5" />
-        Invite another writer
+        Invite another collaborator
       </button>
 
-      <div className={`mt-5 rounded-lg border px-4 py-3 ${
-        valid && incompleteWriters.length === 0
-          ? "border-[hsl(var(--split-verified)/0.25)] bg-[hsl(var(--split-verified)/0.07)]"
-          : "border-[hsl(var(--split-pending)/0.28)] bg-[hsl(var(--split-pending)/0.07)]"
-      }`}>
-        <div className="flex items-start gap-3">
-          {valid && incompleteWriters.length === 0 ? (
-            <CheckCircle2 className="mt-0.5 h-4 w-4 flex-shrink-0 text-[hsl(var(--split-verified))]" />
-          ) : (
-            <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0 text-[hsl(var(--split-pending))]" />
-          )}
-          <div>
-            <div className="flex items-center gap-2 text-sm font-bold">
-              <span>
-                {valid && incompleteWriters.length === 0 ? "Writers are ready" : "To continue, finish these required items"}
-              </span>
-              <InfoTooltip label="What this ownership note means" placement="above">
-                This confirms ownership shares in the composition. Publisher and administrator details are for registration and royalty routing only unless a separate publishing agreement is attached.
-              </InfoTooltip>
-            </div>
-            {valid && incompleteWriters.length === 0 ? (
-              <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                Writer shares total 100%, and every writer has a linked account identity plus contribution selections.
-              </p>
-            ) : (
-              <div className="mt-2 space-y-1.5 text-xs leading-5 text-muted-foreground">
-                {!valid && (
-                  <p>
-                    Ownership total must equal 100%. Current total: <span className="font-semibold text-foreground">{total}%</span>.
-                  </p>
-                )}
-                {incompleteWriters.map((writer) => (
-                  <p key={writer.label}>
-                    <span className="font-semibold text-foreground">{writer.label}:</span> {writer.missing.join(", ")}
-                  </p>
-                ))}
-              </div>
-            )}
-          </div>
+      {valid && incompleteWriters.length === 0 ? (
+        <div className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium text-[hsl(var(--split-verified))]">
+          <CheckCircle2 className="h-3.5 w-3.5" />
+          Ready to continue
         </div>
-      </div>
-    </div>
-  );
-}
-
-function InfoTooltip({
-  label,
-  children,
-  placement = "below",
-}: {
-  label: string;
-  children: string;
-  placement?: "above" | "below";
-}) {
-  return (
-    <div className="group relative inline-flex">
-      <button
-        type="button"
-        className="flex h-7 w-7 items-center justify-center rounded-full border border-border bg-background text-muted-foreground transition-colors hover:border-primary/30 hover:bg-primary/5 hover:text-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
-        aria-label={label}
-      >
-        <Info className="h-4 w-4" />
-      </button>
-      <div
-        className={`pointer-events-none absolute left-1/2 z-20 hidden w-[min(22rem,calc(100vw-3rem))] -translate-x-1/2 rounded-lg border border-border bg-popover px-3 py-2 text-xs font-normal leading-5 text-popover-foreground shadow-lg group-focus-within:block group-hover:block ${
-          placement === "above" ? "bottom-9" : "top-9"
-        }`}
-      >
-        {children}
-      </div>
+      ) : (
+        <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs leading-5 text-muted-foreground">
+          <AlertCircle className="h-3.5 w-3.5 text-[hsl(var(--split-pending))]" />
+          <span className="font-semibold text-[hsl(var(--split-pending))]">Required</span>
+          {missingSummary.map((item) => (
+            <span key={item}>{item}</span>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -393,171 +339,47 @@ function InviteWriter({
   onInviteChange,
 }: {
   party: Party;
-  onInviteChange: (method: string, value: string) => void;
+  onInviteChange: (value: string) => void;
 }) {
-  const activeMethod = INVITE_METHODS.find((method) => method.id === party.inviteMethod) ?? INVITE_METHODS[1];
+  const methodMeta = getInviteMethodMeta(party.inviteMethod, party.inviteValue);
+  const MethodIcon = methodMeta?.icon;
 
   return (
     <div className="rounded-lg border border-border bg-background p-4">
-      <div className="mb-3 flex flex-wrap gap-2">
-        {INVITE_METHODS.map(({ id, label, icon: Icon }) => (
-          <button
-            key={id}
-            onClick={() => onInviteChange(id, party.inviteValue)}
-            className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold transition-colors ${
-              party.inviteMethod === id
-                ? "border-primary bg-primary/10 text-primary"
-                : "border-border bg-card text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <Icon className="h-3.5 w-3.5" />
-            {label}
-          </button>
-        ))}
+      <div className="mb-2 flex items-center justify-between gap-3">
+        <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Invite</span>
+        {methodMeta && MethodIcon && (
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-1 text-[11px] font-semibold text-muted-foreground">
+            <MethodIcon className="h-3 w-3" />
+            {methodMeta.label}
+          </span>
+        )}
       </div>
       <input
         value={party.inviteValue}
-        onChange={(event) => onInviteChange(party.inviteMethod, event.target.value)}
-        placeholder={`Invite by ${activeMethod.label}: ${activeMethod.placeholder}`}
+        onChange={(event) => onInviteChange(event.target.value)}
+        placeholder="@username, email, or phone"
         className="field-input"
       />
       <p className="mt-2 text-xs leading-5 text-muted-foreground">
-        Their SPLIT account will provide legal name, PRO, country, IPI/CAE, and publisher/admin routing after they accept.
+        SPLIT will match this to an account when possible.
       </p>
     </div>
   );
 }
 
-function AdvancedWriterOptions({
-  party,
-  onUpdate,
-}: {
-  party: Party;
-  onUpdate: <Key extends keyof Party>(field: Key, value: Party[Key]) => void;
-}) {
-  const showPublisherFields = ["Signed to publisher", "Admin by third party", "Co-published"].includes(party.publishingStatus);
-
-  return (
-    <div className="space-y-4 border-t border-border px-4 py-4">
-      <InputCell label="Contribution Description">
-        <textarea
-          value={party.contributionDescription}
-          onChange={(event) => onUpdate("contributionDescription", event.target.value)}
-          placeholder="Optional. Add detail only if the contribution needs extra context."
-          className="min-h-[84px] w-full rounded-lg border border-border bg-card px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-ring/30 placeholder:text-muted-foreground/50"
-        />
-      </InputCell>
-
-      <div className="rounded-lg border border-primary/15 bg-primary/5 px-3 py-2 text-xs leading-5 text-muted-foreground">
-        Publisher/admin information normally comes from the writer's SPLIT account and is used for registration and royalty routing. Override it here only if the account info is missing or needs a one-time correction for this split sheet.
-      </div>
-
-      <div className="grid gap-3 md:grid-cols-2">
-        <InputCell label="PRO / Society Override">
-          <select
-            value={party.proAffiliation}
-            onChange={(event) => onUpdate("proAffiliation", event.target.value)}
-            className="field-input"
-          >
-            {PRO_OPTIONS.map((pro) => (
-              <option key={pro}>{pro}</option>
-            ))}
-          </select>
-        </InputCell>
-        <InputCell label="IPI / CAE Override">
-          <input
-            value={party.ipiNumber}
-            onChange={(event) => onUpdate("ipiNumber", event.target.value)}
-            placeholder="Optional override"
-            className="field-input"
-          />
-        </InputCell>
-        <InputCell label="Publishing Status Override">
-          <select
-            value={party.publishingStatus}
-            onChange={(event) => onUpdate("publishingStatus", event.target.value)}
-            className="field-input"
-          >
-            {PUBLISHING_STATUS_OPTIONS.map((status) => (
-              <option key={status}>{status}</option>
-            ))}
-          </select>
-        </InputCell>
-        <InputCell label="Publisher / Admin Entity">
-          <input
-            value={party.publisherName}
-            onChange={(event) => onUpdate("publisherName", event.target.value)}
-            placeholder={showPublisherFields ? "Publisher or admin" : "Optional"}
-            className="field-input"
-          />
-        </InputCell>
-        {showPublisherFields && (
-          <>
-            <InputCell label="Publisher IPI">
-              <input
-                value={party.publisherIpi}
-                onChange={(event) => onUpdate("publisherIpi", event.target.value)}
-                placeholder="Optional"
-                className="field-input"
-              />
-            </InputCell>
-            <InputCell label="Publisher / Admin Contact">
-              <input
-                value={party.publisherContact}
-                onChange={(event) => onUpdate("publisherContact", event.target.value)}
-                placeholder="registration contact email"
-                className="field-input"
-              />
-            </InputCell>
-          </>
-        )}
-      </div>
-
-      <InputCell label="Registration Notes">
-        <textarea
-          value={party.registrationNotes}
-          onChange={(event) => onUpdate("registrationNotes", event.target.value)}
-          placeholder="Optional notes for PRO/MLC/publisher routing."
-          className="min-h-[72px] w-full rounded-lg border border-border bg-card px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-ring/30 placeholder:text-muted-foreground/50"
-        />
-      </InputCell>
-    </div>
-  );
-}
-
-function CurrentUserAccount({ party }: { party: Party }) {
-  return (
-    <div className="rounded-lg border border-[hsl(var(--split-verified)/0.25)] bg-[hsl(var(--split-verified)/0.07)] p-4">
-      <div className="mb-3 flex items-center gap-2 text-xs font-bold text-[hsl(var(--split-verified))]">
-        <CheckCircle2 className="h-4 w-4" />
-        Linked to your SPLIT account
-      </div>
-      <div className="grid gap-3 md:grid-cols-3">
-        <AccountMeta label="SPLIT ID" value={party.splitId} />
-        <AccountMeta label="Email" value={party.email} />
-        <AccountMeta label="Phone" value={party.phoneNumber || "Not saved"} />
-        <AccountMeta label="Country" value={party.country} />
-        <AccountMeta label="PRO" value={party.proAffiliation === "Other" ? party.customProName || "Other" : party.proAffiliation} />
-        <AccountMeta label="Legal Name" value={party.legalName} />
-      </div>
-    </div>
-  );
-}
-
-function AccountMeta({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-lg border border-border bg-card px-3 py-2.5">
-      <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</div>
-      <div className="mt-1 truncate text-xs font-bold">{value || "Pending"}</div>
-    </div>
-  );
+function getInviteMethodMeta(method: string, value: string) {
+  if (!value.trim()) return null;
+  if (method === "email") return { label: "Email", icon: Mail };
+  if (method === "phone") return { label: "Phone", icon: Phone };
+  return { label: "Username", icon: AtSign };
 }
 
 function getMissingWriterItems(party: Party) {
   const missing: string[] = [];
 
-  if (!hasWriterIdentity(party)) missing.push("SPLIT ID, account email, or phone invite");
-  if (Number(party.percent) <= 0) missing.push("writer share");
+  if (!hasWriterIdentity(party)) missing.push("username, email, or phone invite");
+  if (Number(party.percent) <= 0) missing.push("split share");
   if (party.contributionCategories.length === 0) missing.push("contribution selection");
 
   return missing;
@@ -568,7 +390,7 @@ function InputCell({
   children,
 }: {
   label: string;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   return (
     <label>

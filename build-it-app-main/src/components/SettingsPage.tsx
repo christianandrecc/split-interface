@@ -3,15 +3,12 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Bell, FileText, Lock, Save, Settings2, ShieldCheck } from "lucide-react";
+import { Bell, FileText, Lock, Save, Settings2 } from "lucide-react";
 
 type AppSettings = {
   defaultSplitMethod: string;
   defaultTerritory: string;
   defaultUserRole: string;
-  requireHundredPercent: boolean;
-  warnMissingRegistration: boolean;
-  autoAddSelf: boolean;
   emailOnSignature: boolean;
   emailOnComment: boolean;
   remindUnsignedParties: boolean;
@@ -25,9 +22,6 @@ const defaultSettings: AppSettings = {
   defaultSplitMethod: "Custom",
   defaultTerritory: "Worldwide",
   defaultUserRole: "Songwriter",
-  requireHundredPercent: true,
-  warnMissingRegistration: true,
-  autoAddSelf: true,
   emailOnSignature: true,
   emailOnComment: true,
   remindUnsignedParties: true,
@@ -67,7 +61,7 @@ export default function SettingsPage() {
                 label="Default Split Method"
                 value={settings.defaultSplitMethod}
                 onValueChange={(value) => update("defaultSplitMethod", value)}
-                options={["Equal", "Custom", "Role-based", "Manually negotiated"]}
+                options={["Equal", "Custom", "Role-based"]}
               />
               <SelectField
                 label="Default Territory"
@@ -82,27 +76,6 @@ export default function SettingsPage() {
                 options={["Songwriter", "Composer", "Lyricist", "Topliner", "Beatmaker (Composition)", "Contributor"]}
               />
             </div>
-            <ToggleRow
-              title="Auto-add me to new split sheets"
-              description="Adds your profile as an initial writer when you start a split sheet."
-              checked={settings.autoAddSelf}
-              onCheckedChange={(checked) => update("autoAddSelf", checked)}
-            />
-          </SettingsSection>
-
-          <SettingsSection icon={<ShieldCheck className="h-4 w-4" />} title="Split Sheet Rules">
-            <ToggleRow
-              title="Require splits to total 100%"
-              description="Prevent sending a split sheet until writer shares add up correctly."
-              checked={settings.requireHundredPercent}
-              onCheckedChange={(checked) => update("requireHundredPercent", checked)}
-            />
-            <ToggleRow
-              title="Warn about missing PRO or MLC details"
-              description="Show a warning when writers are missing IPI, PRO, publisher/admin, ISWC, or ISRC details."
-              checked={settings.warnMissingRegistration}
-              onCheckedChange={(checked) => update("warnMissingRegistration", checked)}
-            />
           </SettingsSection>
 
           <SettingsSection icon={<Bell className="h-4 w-4" />} title="Notifications">

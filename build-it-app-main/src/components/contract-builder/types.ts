@@ -1,10 +1,8 @@
 export const STEPS = [
-  { id: "metadata", label: "Song", num: 1 },
-  { id: "parties", label: "Writers", num: 2 },
-  { id: "rights", label: "Registration", num: 3 },
-  { id: "clauses", label: "Clearance", num: 4 },
-  { id: "signatures", label: "Authorization", num: 5 },
-  { id: "review", label: "Review", num: 6 },
+  { id: "metadata", label: "Work", num: 1 },
+  { id: "clauses", label: "Sample", num: 2 },
+  { id: "parties", label: "Collaborators", num: 3 },
+  { id: "review", label: "Review", num: 4 },
 ] as const;
 
 export type StepId = (typeof STEPS)[number]["id"];
@@ -65,9 +63,7 @@ export const PRO_OPTIONS = [
 export const CONTRIBUTION_OPTIONS = [
   "Lyrics",
   "Melody",
-  "Topline",
   "Composition / Music",
-  "Hook",
   "Arrangement",
   "Beat / instrumental composition",
   "Sample or interpolation contribution",
@@ -162,9 +158,11 @@ export interface ContractData {
   // Song identification
   songTitle: string;
   alternateTitles: string;
+  artistProjectName: string;
   creationDate: string;
   creationLocation: string;
   studioName: string;
+  workNotes: string;
   lyricLanguage: string;
   compositionType: string;
   iswc: string;
@@ -193,6 +191,7 @@ export interface ContractData {
 
   // Clearance checks
   sampleStatus: string;
+  sampleNotes: string;
   sampleOriginalWork: string;
   sampleOriginalArtist: string;
   sampleOriginalWriters: string;
@@ -232,6 +231,11 @@ export interface ContractData {
   includeAuditTrail: boolean;
 }
 
+export function getTodayDateInputValue(date = new Date()) {
+  const timezoneOffsetMs = date.getTimezoneOffset() * 60 * 1000;
+  return new Date(date.getTime() - timezoneOffsetMs).toISOString().slice(0, 10);
+}
+
 export function uid() {
   return crypto.randomUUID?.() ?? `${Date.now()}_${Math.random().toString(16).slice(2)}`;
 }
@@ -241,16 +245,15 @@ export function sumPercents(parties: Party[]) {
 }
 
 export function partyDisplayName(party: Party) {
-  return party.professionalName || party.legalName || party.email || party.phoneNumber || party.splitId || party.inviteValue || "Invited writer";
+  return party.professionalName || party.legalName || party.inviteValue || party.email || party.phoneNumber || "Invited collaborator";
 }
 
 export function hasWriterIdentity(party: Party) {
   return Boolean(
     party.isCurrentUser ||
-      party.splitId.trim() ||
+      party.inviteValue.trim() ||
       party.email.trim() ||
-      party.phoneNumber.trim() ||
-      party.inviteValue.trim()
+      party.phoneNumber.trim()
   );
 }
 
@@ -295,18 +298,19 @@ export function makeParty(overrides: Partial<Party> = {}): Party {
 export const DEFAULT_CONTRACT: ContractData = {
   songTitle: "",
   alternateTitles: "",
+  artistProjectName: "",
   creationDate: "",
   creationLocation: "",
   studioName: "",
+  workNotes: "",
   lyricLanguage: "English",
   compositionType: "Original Song",
   iswc: "",
   relatedIsrc: "",
   parties: [
-    makeParty({ percent: 50, signingOrder: 1 }),
-    makeParty({ percent: 50, signingOrder: 2 }),
+    makeParty({ percent: 100, signingOrder: 1 }),
   ],
-  splitType: "Custom",
+  splitType: "Equal",
   agreementStatus: "Draft",
   recordingArtist: "",
   recordingTitle: "",
@@ -323,6 +327,7 @@ export const DEFAULT_CONTRACT: ContractData = {
   designatedContactAuthority: "",
   registrationDeadline: "",
   sampleStatus: "No sample or interpolation",
+  sampleNotes: "",
   sampleOriginalWork: "",
   sampleOriginalArtist: "",
   sampleOriginalWriters: "",
