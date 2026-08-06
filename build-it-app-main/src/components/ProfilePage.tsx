@@ -1,12 +1,12 @@
 import { type ReactNode, useMemo, useState } from "react";
 import AddressSearchField from "@/components/AddressSearchField";
-import { UserProfile } from "@/components/AccountAccess";
+import { UserProfile, normalizeUsername } from "@/components/AccountAccess";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { formatNationalPhoneNumber, getPhoneInputMaxLength } from "@/lib/phone";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Check, IdCard, Mail, MapPin, Music2, Phone, Save, User } from "lucide-react";
+import { AtSign, Check, Eye, IdCard, Link2, Mail, MapPin, Music2, Save, Tags, User } from "lucide-react";
 
 const proOptions = ["ASCAP", "BMI", "SESAC", "Other"];
 const publishingStatusOptions = [
@@ -17,6 +17,9 @@ const publishingStatusOptions = [
   "Co-published",
   "Unknown",
 ];
+
+const creatorRoleOptions = ["Producer", "Writer", "Artist", "Engineer", "Topliner", "Manager", "Publisher"];
+const visibilityOptions = ["Public", "Collaborators only", "Private"];
 
 const countryOptions = [
   { value: "United States", label: "🇺🇸 United States" },
@@ -57,6 +60,7 @@ const phoneCountries = [
 type ProfilePageProps = {
   userProfile: UserProfile;
   onUpdateProfile: (profile: UserProfile) => void;
+  onBackToPublicProfile?: () => void;
 };
 
 function requiresPublishingDetails(status?: string) {
@@ -67,18 +71,29 @@ function isSimplePublishingSetup(status?: string) {
   return status === "Self-published" || status === "Unpublished";
 }
 
-export default function ProfilePage({ userProfile, onUpdateProfile }: ProfilePageProps) {
+export default function ProfilePage({ userProfile, onUpdateProfile, onBackToPublicProfile }: ProfilePageProps) {
   const [draft, setDraft] = useState<UserProfile>(userProfile);
   const [saved, setSaved] = useState(false);
 
-  const displayName = useMemo(() => buildLegalName(draft) || draft.emailAddress || "Your Profile", [draft]);
+  const displayName = useMemo(() => draft.displayName || buildLegalName(draft) || draft.emailAddress || "Your Profile", [draft]);
   const needsPublishingDetails = requiresPublishingDetails(draft.publishingStatus);
   const simplePublishingSetup = isSimplePublishingSetup(draft.publishingStatus);
   const phoneMaxLength = getPhoneInputMaxLength(draft.phoneCountryCode);
+  const usernameAvailable = draft.username.length >= 3 && !["split", "admin", "support"].includes(draft.username);
+  const selectedRoles = parseRoleTags(draft.roleTags);
 
   const update = (field: keyof UserProfile, value: string) => {
     setSaved(false);
-    setDraft((current) => ({ ...current, [field]: value }));
+    setDraft((current) => ({ ...current, [field]: field === "username" ? normalizeUsername(value) : value }));
+  };
+
+  const toggleRoleTag = (role: string) => {
+    setSaved(false);
+    setDraft((current) => {
+      const roles = parseRoleTags(current.roleTags);
+      const nextRoles = roles.includes(role) ? roles.filter((item) => item !== role) : [...roles, role];
+      return { ...current, roleTags: nextRoles.join(", ") };
+    });
   };
 
   const handleSave = () => {
@@ -91,28 +106,127 @@ export default function ProfilePage({ userProfile, onUpdateProfile }: ProfilePag
       <div className="mx-auto max-w-5xl px-4 py-5 md:px-8 md:py-8">
         <div className="mb-6 flex flex-col gap-4 md:mb-8 md:flex-row md:items-center md:justify-between">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">Your Profile</h1>
+            <h1 className="text-2xl font-bold tracking-tight">Edit Profile</h1>
             <p className="mt-1 text-sm text-muted-foreground">Manage the account details SPLIT uses across your split sheets.</p>
           </div>
-          <Button onClick={handleSave} className="h-11 md:px-6">
-            {saved ? <Check className="h-4 w-4" /> : <Save className="h-4 w-4" />}
-            {saved ? "Saved" : "Save Changes"}
-          </Button>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            {onBackToPublicProfile && (
+              <Button type="button" variant="outline" onClick={onBackToPublicProfile} className="h-11 md:px-5">
+                Back to Profile
+              </Button>
+            )}
+            <Button onClick={handleSave} className="h-11 md:px-6">
+              {saved ? <Check className="h-4 w-4" /> : <Save className="h-4 w-4" />}
+              {saved ? "Saved" : "Save Changes"}
+            </Button>
+          </div>
         </div>
 
         <section className="mb-5 rounded-lg border border-border bg-card p-5">
-          <div className="flex items-center gap-4">
-            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 text-lg font-bold text-primary">
-              {getInitials(displayName)}
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex min-w-0 items-center gap-4">
+              <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-full bg-primary/10 text-lg font-bold text-primary">
+                {getInitials(displayName)}
+              </div>
+              <div className="min-w-0">
+                <h2 className="truncate text-lg font-bold">{displayName}</h2>
+                <p className="truncate text-sm text-muted-foreground">{draft.username ? `@${draft.username}` : draft.emailAddress || "No handle saved"}</p>
+              </div>
             </div>
-            <div className="min-w-0">
-              <h2 className="truncate text-lg font-bold">{displayName}</h2>
-              <p className="truncate text-sm text-muted-foreground">{draft.emailAddress || "No email saved"}</p>
+            <div className="flex flex-wrap gap-2 lg:max-w-[58%] lg:justify-end">
+              {creatorRoleOptions.map((role) => {
+                const active = selectedRoles.includes(role);
+                return (
+                  <button
+                    key={role}
+                    type="button"
+                    onClick={() => toggleRoleTag(role)}
+                    className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${
+                      active
+                        ? "border-primary bg-primary/10 text-primary"
+                        : "border-border bg-background text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {role}
+                  </button>
+                );
+              })}
             </div>
           </div>
         </section>
 
         <div className="grid gap-5">
+          <ProfileSection icon={<AtSign className="h-4 w-4" />} title="Creator Identity">
+            <div className="grid gap-5 lg:grid-cols-[1fr_320px]">
+              <div className="space-y-4">
+                <div className="grid gap-4 md:grid-cols-2">
+                  <Field label="@Username" htmlFor="profileUsername">
+                    <div className="relative">
+                      <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-bold text-muted-foreground">@</span>
+                      <Input
+                        id="profileUsername"
+                        value={draft.username}
+                        onChange={(event) => update("username", event.target.value)}
+                        className="pl-7"
+                        placeholder="yourname"
+                      />
+                    </div>
+                    <p className={`mt-1 text-[11px] leading-4 ${usernameAvailable ? "text-[hsl(var(--split-verified))]" : "text-muted-foreground"}`}>
+                      {usernameAvailable ? `@${draft.username} is ready for beta use.` : "Use at least 3 letters or numbers."}
+                    </p>
+                  </Field>
+                  <Field label="Display Name" htmlFor="profileDisplayName">
+                    <Input
+                      id="profileDisplayName"
+                      value={draft.displayName}
+                      onChange={(event) => update("displayName", event.target.value)}
+                      placeholder="Public name"
+                    />
+                  </Field>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <Field label="Location" htmlFor="profileLocation">
+                    <Input
+                      id="profileLocation"
+                      value={draft.profileLocation}
+                      onChange={(event) => update("profileLocation", event.target.value)}
+                      placeholder="City, country"
+                    />
+                  </Field>
+                  <Field label="Visibility" htmlFor="profileVisibility">
+                    <Select value={draft.profileVisibility} onValueChange={(value) => update("profileVisibility", value)}>
+                      <SelectTrigger id="profileVisibility">
+                        <SelectValue placeholder="Choose visibility" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {visibilityOptions.map((option) => (
+                          <SelectItem key={option} value={option}>
+                            {option}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <Field label="Instagram" htmlFor="profileInstagram">
+                    <Input id="profileInstagram" value={draft.socialInstagram} onChange={(event) => update("socialInstagram", event.target.value)} placeholder="@handle or URL" />
+                  </Field>
+                  <Field label="TikTok" htmlFor="profileTikTok">
+                    <Input id="profileTikTok" value={draft.socialTikTok} onChange={(event) => update("socialTikTok", event.target.value)} placeholder="@handle or URL" />
+                  </Field>
+                  <Field label="X / Twitter" htmlFor="profileX">
+                    <Input id="profileX" value={draft.socialX} onChange={(event) => update("socialX", event.target.value)} placeholder="@handle or URL" />
+                  </Field>
+                </div>
+              </div>
+
+              <CollaboratorProfilePreview profile={draft} displayName={displayName} />
+            </div>
+          </ProfileSection>
+
           <ProfileSection icon={<User className="h-4 w-4" />} title="Legal Identity">
             <div className="grid gap-4 md:grid-cols-3">
               <Field label="Legal First Name" htmlFor="profileFirstName">
@@ -365,6 +479,16 @@ export default function ProfilePage({ userProfile, onUpdateProfile }: ProfilePag
 function normalizeProfile(profile: UserProfile): UserProfile {
   return {
     ...profile,
+    username: normalizeUsername(profile.username),
+    displayName: (profile.displayName ?? "").trim(),
+    profileImageUrl: (profile.profileImageUrl ?? "").trim(),
+    roleTags: parseRoleTags(profile.roleTags).join(", "),
+    socialInstagram: (profile.socialInstagram ?? "").trim(),
+    socialTikTok: (profile.socialTikTok ?? "").trim(),
+    socialX: (profile.socialX ?? "").trim(),
+    socialWebsite: (profile.socialWebsite ?? "").trim(),
+    profileLocation: (profile.profileLocation ?? "").trim(),
+    profileVisibility: profile.profileVisibility || "Collaborators only",
     legalName: buildLegalName(profile),
     phoneNumber: formatNationalPhoneNumber(profile.phoneNumber, profile.phoneCountryCode),
     legalAddress: [profile.addressLine, profile.city, profile.state, profile.zipCode, profile.country]
@@ -385,11 +509,84 @@ function normalizeProfile(profile: UserProfile): UserProfile {
   };
 }
 
+function parseRoleTags(value: string) {
+  return value
+    .split(",")
+    .map((role) => role.trim())
+    .filter(Boolean);
+}
+
 function buildLegalName(profile: UserProfile) {
   return [profile.legalFirstName, profile.legalMiddleName, profile.legalLastName]
     .map((part) => part.trim())
     .filter(Boolean)
     .join(" ");
+}
+
+function CollaboratorProfilePreview({ profile, displayName }: { profile: UserProfile; displayName: string }) {
+  const roles = parseRoleTags(profile.roleTags);
+  const socials = [
+    profile.socialInstagram,
+    profile.socialTikTok,
+    profile.socialX,
+  ].filter(Boolean);
+
+  return (
+    <aside className="rounded-lg border border-border bg-background p-4">
+      <div className="mb-3 flex items-center gap-2 text-xs font-semibold text-muted-foreground">
+        <Eye className="h-3.5 w-3.5" />
+        Collaborator preview
+      </div>
+      <div className="flex items-start gap-3">
+        {profile.profileImageUrl ? (
+          <img src={profile.profileImageUrl} alt="" className="h-14 w-14 rounded-full object-cover" />
+        ) : (
+          <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-full bg-primary/10 text-lg font-bold text-primary">
+            {getInitials(displayName)}
+          </div>
+        )}
+        <div className="min-w-0">
+          <h3 className="truncate text-base font-bold">{displayName}</h3>
+          <p className="truncate text-sm font-medium text-primary">{profile.username ? `@${profile.username}` : "@username"}</p>
+          <p className="mt-1 truncate text-xs text-muted-foreground">{profile.profileLocation || "Location not set"}</p>
+        </div>
+      </div>
+
+      <div className="mt-4 flex flex-wrap gap-2">
+        {roles.length > 0 ? (
+          roles.map((role) => (
+            <span key={role} className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-semibold text-primary">
+              <Tags className="h-3 w-3" />
+              {role}
+            </span>
+          ))
+        ) : (
+          <span className="text-xs text-muted-foreground">No role tags yet.</span>
+        )}
+      </div>
+
+      <div className="mt-4 rounded-lg border border-border bg-secondary/40 px-3 py-2.5">
+        <div className="flex items-center gap-2 text-xs font-semibold text-foreground">
+          <Eye className="h-3.5 w-3.5 text-muted-foreground" />
+          {profile.profileVisibility || "Collaborators only"}
+        </div>
+        <p className="mt-1 text-[11px] leading-4 text-muted-foreground">
+          This controls who can see your collaborator card and released-work credits.
+        </p>
+      </div>
+
+      {socials.length > 0 && (
+        <div className="mt-4 space-y-1.5">
+          {socials.slice(0, 4).map((social) => (
+            <div key={social} className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+              <Link2 className="h-3.5 w-3.5" />
+              <span className="truncate">{social}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </aside>
+  );
 }
 
 function getInitials(name: string) {

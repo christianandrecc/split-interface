@@ -2,27 +2,27 @@ import React, { useMemo, useState } from "react";
 import splitLogo from "@/assets/split-logo.png";
 import UserProfileSheet from "@/components/UserProfileSheet";
 import ProfilePage from "@/components/ProfilePage";
+import CreatorProfileView from "@/components/CreatorProfileView";
 import { UserProfile } from "@/components/AccountAccess";
 import type { StoredSplitSheetDocument } from "@/components/contract-builder/document";
-import AgreementsList from "@/components/AgreementsList";
+import AgreementsList, { type FilterStatus } from "@/components/AgreementsList";
 import AgreementDetail from "@/components/AgreementDetail";
 import ContractBuilder from "@/components/contract-builder/ContractBuilder";
 import CollaborationView from "@/components/CollaborationView";
 import AgreementAnalytics from "@/components/AgreementAnalytics";
 import SettingsPage from "@/components/SettingsPage";
+import ProfessionalFeed from "@/components/ProfessionalFeed";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useIsMobile } from "@/hooks/use-mobile";
 import {
   FileText,
   LayoutDashboard,
-  Users,
   Settings,
   Bell,
   Search,
   ChevronRight,
   Plus,
   Shield,
-  BarChart3,
   Menu,
   X,
   ArrowLeft,
@@ -35,7 +35,18 @@ export type Agreement = {
   id: string;
   title: string;
   type: "Split Sheet";
-  status: "Draft" | "Pending Signatures" | "Executed" | "Amended" | "Disputed";
+  status:
+    | "Draft"
+    | "Pending Collaborator Acceptance"
+    | "Pending Split Approval"
+    | "Revision Requested"
+    | "Ready to Sign"
+    | "Pending Signatures"
+    | "Fully Signed"
+    | "Verified and Stored"
+    | "Executed"
+    | "Amended"
+    | "Disputed";
   parties: string[];
   version: number;
   created: string;
@@ -144,10 +155,134 @@ function documentPartyName(party: StoredSplitSheetDocument["data"]["parties"][nu
   return party.professionalName || party.legalName || party.email || party.phoneNumber || party.splitId || "Invited writer";
 }
 
+function documentCollaboratorInvites(document: StoredSplitSheetDocument) {
+  if (Array.isArray(document.collaboratorInvites) && document.collaboratorInvites.length > 0) {
+    return document.collaboratorInvites;
+  }
+
+  return document.data.parties
+    .filter((party) => !party.isCurrentUser)
+    .map((party) => ({
+      id: party.id,
+      partyId: party.id,
+      name: documentPartyName(party),
+      inviteMethod: party.inviteMethod,
+      inviteValue: party.inviteValue || party.email || party.phoneNumber || party.splitId,
+      status: "Pending" as const,
+      profileSnapshot: {
+        displayName: party.professionalName || party.legalName || party.inviteValue,
+        role: party.role,
+        email: party.email,
+        phoneNumber: party.phoneNumber,
+        splitId: party.splitId,
+      },
+    }));
+}
+
+function documentSplitProposals(document: StoredSplitSheetDocument) {
+  if (Array.isArray(document.splitProposalVersions) && document.splitProposalVersions.length > 0) {
+    return document.splitProposalVersions;
+  }
+
+  const proposalId = document.currentProposalId || `${document.id}-proposal-1`;
+  return [
+    {
+      id: proposalId,
+      versionNumber: document.version || 1,
+      proposedBy: document.creatorProfile.displayName || document.creatorProfile.legalName || document.creatorProfile.emailAddress || "SPLIT user",
+      notes: "Initial split proposal",
+      createdAt: document.createdAt || new Date().toISOString(),
+      allocations: document.data.parties.map((party) => ({
+        partyId: party.id,
+        name: documentPartyName(party),
+        role: party.role || "Collaborator",
+        percentage: Number(party.percent) || 0,
+        notes: party.contributionDescription,
+      })),
+    },
+  ];
+}
+
+function documentSplitApprovals(document: StoredSplitSheetDocument, proposalId: string, invites: ReturnType<typeof documentCollaboratorInvites>) {
+  if (Array.isArray(document.splitApprovals) && document.splitApprovals.length > 0) {
+    return document.splitApprovals;
+  }
+
+  const creatorName = document.creatorProfile.displayName || document.creatorProfile.legalName || document.creatorProfile.emailAddress || "SPLIT user";
+  return [
+    {
+      id: `${document.id}-creator-approval`,
+      proposalVersionId: proposalId,
+      collaboratorId: "creator",
+      collaboratorName: creatorName,
+      status: "Approved" as const,
+      respondedAt: document.createdAt,
+    },
+    ...invites
+      .filter((invite) => invite.status === "Accepted")
+      .map((invite) => ({
+        id: `${document.id}-${invite.id}-approval`,
+        proposalVersionId: proposalId,
+        collaboratorId: invite.id,
+        collaboratorName: invite.name,
+        status: "Pending" as const,
+      })),
+  ];
+}
+
+function documentSplitSignatures(document: StoredSplitSheetDocument, proposalId: string, invites: ReturnType<typeof documentCollaboratorInvites>) {
+  if (Array.isArray(document.splitSignatures) && document.splitSignatures.length > 0) {
+    return document.splitSignatures;
+  }
+
+  const creatorName = document.creatorProfile.displayName || document.creatorProfile.legalName || document.creatorProfile.emailAddress || "SPLIT user";
+  const signatureStatuses = ["Pending Signatures", "Fully Signed", "Verified and Stored", "Executed"];
+  const isSignedRecord = ["Fully Signed", "Verified and Stored", "Executed"].includes(document.status);
+  const signedAt = isSignedRecord ? document.verifiedAt || document.updatedAt || document.createdAt : undefined;
+
+  if (!signatureStatuses.includes(document.status) && document.status !== "Ready to Sign") {
+    return [];
+  }
+
+  return [
+    {
+      id: `${document.id}-creator-signature`,
+      proposalVersionId: proposalId,
+      collaboratorId: "creator",
+      collaboratorName: creatorName,
+      status: isSignedRecord ? "Signed" as const : "Pending" as const,
+      signedAt,
+      signatureMethod: isSignedRecord ? "SPLIT beta acknowledgement" : undefined,
+    },
+    ...invites
+      .filter((invite) => invite.status === "Accepted")
+      .map((invite) => ({
+        id: `${document.id}-${invite.id}-signature`,
+        proposalVersionId: proposalId,
+        collaboratorId: invite.id,
+        collaboratorName: invite.name,
+        status: isSignedRecord ? "Signed" as const : "Pending" as const,
+        signedAt,
+        signatureMethod: isSignedRecord ? "SPLIT beta acknowledgement" : undefined,
+      })),
+  ];
+}
+
 function documentToAgreement(document: StoredSplitSheetDocument): Agreement {
   const parties = Array.isArray(document.data.parties) ? document.data.parties : [];
   const created = document.createdAt || new Date().toISOString();
   const updated = document.updatedAt || created;
+  const collaboratorInvites = documentCollaboratorInvites(document);
+  const splitProposalVersions = documentSplitProposals(document);
+  const currentProposalId = document.currentProposalId || splitProposalVersions[splitProposalVersions.length - 1]?.id;
+  const normalizedDocument = {
+    ...document,
+    currentProposalId,
+    collaboratorInvites,
+    splitProposalVersions,
+    splitApprovals: documentSplitApprovals(document, currentProposalId, collaboratorInvites),
+    splitSignatures: documentSplitSignatures(document, currentProposalId, collaboratorInvites),
+  };
 
   return {
     id: document.id,
@@ -163,18 +298,27 @@ function documentToAgreement(document: StoredSplitSheetDocument): Agreement {
       role: party.role || "Songwriter",
       percent: Number(party.percent) || 0,
     })),
-    document,
+    document: normalizedDocument,
   };
 }
 
-type View = "dashboard" | "agreements" | "new-agreement" | "parties" | "settings" | "collaboration" | "analytics" | "profile" | "activity";
+type View =
+  | "dashboard"
+  | "feed"
+  | "agreements"
+  | "new-agreement"
+  | "parties"
+  | "settings"
+  | "collaboration"
+  | "analytics"
+  | "profile"
+  | "profile-edit"
+  | "activity";
 
 const NAV_ITEMS = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
   { id: "agreements", label: "Split Sheets", icon: FileText },
-  { id: "collaboration", label: "Review Room", icon: FilePenLine },
-  { id: "analytics", label: "Analytics", icon: BarChart3 },
-  { id: "parties", label: "Parties", icon: Users },
+  { id: "collaboration", label: "Messages", icon: FilePenLine },
   { id: "settings", label: "Settings", icon: Settings },
 ] as const;
 
@@ -182,11 +326,11 @@ const AGREEMENT_NOTIFICATIONS = [
   {
     id: "notif-001",
     type: "executed",
-    title: "Moonlight Sessions executed",
-    detail: "All writers signed version 3. PRO/MLC export packet is ready.",
+    title: "Moonlight Sessions verified",
+    detail: "All writers signed version 3. The final split record is stored in your archive.",
     time: "12 min ago",
     agreementId: "agr-001",
-    actionLabel: "Open executed split sheet",
+    actionLabel: "Open verified record",
     icon: CheckCircle2,
     tone: "text-[hsl(var(--split-verified))] bg-[hsl(var(--split-verified)/0.1)]",
   },
@@ -236,6 +380,7 @@ export default function Dashboard({
 }) {
   const [activeView, setActiveView] = useState<View>("dashboard");
   const [selectedAgreement, setSelectedAgreement] = useState<Agreement | null>(null);
+  const [agreementFilter, setAgreementFilter] = useState<FilterStatus>("All");
   const [isNewAgreement, setIsNewAgreement] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [generatedDocuments, setGeneratedDocuments] = useState<StoredSplitSheetDocument[]>(loadGeneratedDocuments);
@@ -258,8 +403,13 @@ export default function Dashboard({
     });
   };
 
-  const executed = agreements.filter((a) => a.status === "Executed").length;
-  const pending = agreements.filter((a) => a.status === "Pending Signatures").length;
+  const updateGeneratedDocument = (document: StoredSplitSheetDocument) => {
+    saveGeneratedDocument(document);
+    setSelectedAgreement(documentToAgreement(document));
+  };
+
+  const executed = agreements.filter((a) => ["Executed", "Verified and Stored", "Fully Signed"].includes(a.status)).length;
+  const pending = agreements.filter((a) => ["Pending Collaborator Acceptance", "Pending Split Approval", "Revision Requested", "Ready to Sign", "Pending Signatures", "Amended", "Disputed"].includes(a.status)).length;
   const drafts = agreements.filter((a) => a.status === "Draft").length;
   const openAgreement = (agreementId: string) => {
     const agreement = agreements.find((item) => item.id === agreementId);
@@ -293,7 +443,7 @@ export default function Dashboard({
           <span className="text-sm font-semibold truncate flex-1">{selectedAgreement.title}</span>
         </header>
         <main className="flex-1 overflow-y-auto">
-          <AgreementDetail agreement={selectedAgreement} />
+          <AgreementDetail agreement={selectedAgreement} onUpdateDocument={updateGeneratedDocument} />
         </main>
       </div>
     );
@@ -336,6 +486,7 @@ export default function Dashboard({
                 onClick={() => {
                   setActiveView(id as View);
                   setSelectedAgreement(null);
+                  if (id === "agreements") setAgreementFilter("All");
                   if (isMobile) setSidebarOpen(false);
                 }}
                 className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
@@ -385,7 +536,7 @@ export default function Dashboard({
               />
             </div>
           </div>
-          <NotificationsPopover onViewAll={() => setActiveView("activity")} />
+          <NotificationsPopover onViewAll={() => setActiveView("activity")} onOpenAgreement={openAgreement} />
           {!isMobile && (
             <button
               onClick={() => setIsNewAgreement(true)}
@@ -401,16 +552,25 @@ export default function Dashboard({
         <main className="flex-1 overflow-hidden safe-bottom">
           {activeView === "dashboard" && (
             <DashboardHome
-              agreements={agreements}
               executed={executed}
               pending={pending}
               drafts={drafts}
-              onSelectAgreement={(a) => {
-                setSelectedAgreement(a);
+              onOpenBucket={(filter) => {
+                setAgreementFilter(filter);
+                setSelectedAgreement(null);
                 setActiveView("agreements");
               }}
               onNew={() => setIsNewAgreement(true)}
               isMobile={isMobile}
+            />
+          )}
+          {activeView === "feed" && (
+            <ProfessionalFeed
+              isMobile={isMobile}
+              onOpenProfile={() => {
+                setSelectedAgreement(null);
+                setActiveView("profile");
+              }}
             />
           )}
           {activeView === "agreements" && (
@@ -420,6 +580,8 @@ export default function Dashboard({
                 selected={selectedAgreement}
                 onSelect={setSelectedAgreement}
                 onNew={() => setIsNewAgreement(true)}
+                filter={agreementFilter}
+                onFilterChange={setAgreementFilter}
               />
             ) : (
               <div className="h-full flex">
@@ -428,10 +590,12 @@ export default function Dashboard({
                   selected={selectedAgreement}
                   onSelect={setSelectedAgreement}
                   onNew={() => setIsNewAgreement(true)}
+                  filter={agreementFilter}
+                  onFilterChange={setAgreementFilter}
                 />
                 <div className="flex-1 min-w-0 overflow-y-auto bg-background">
                   {selectedAgreement ? (
-                    <AgreementDetail agreement={selectedAgreement} />
+                    <AgreementDetail agreement={selectedAgreement} onUpdateDocument={updateGeneratedDocument} />
                   ) : (
                     <EmptyDetail onNew={() => setIsNewAgreement(true)} />
                   )}
@@ -443,7 +607,21 @@ export default function Dashboard({
           {activeView === "analytics" && <AgreementAnalytics />}
           {activeView === "parties" && <ComingSoon label="Parties" />}
           {activeView === "settings" && <SettingsPage />}
-          {activeView === "profile" && <ProfilePage userProfile={userProfile} onUpdateProfile={onUpdateProfile} />}
+          {activeView === "profile" && (
+            <CreatorProfileView
+              userProfile={userProfile}
+              mode="own"
+              onEditProfile={() => setActiveView("profile-edit")}
+              onMessage={() => setActiveView("collaboration")}
+            />
+          )}
+          {activeView === "profile-edit" && (
+            <ProfilePage
+              userProfile={userProfile}
+              onUpdateProfile={onUpdateProfile}
+              onBackToPublicProfile={() => setActiveView("profile")}
+            />
+          )}
           {activeView === "activity" && <AgreementActivityPage agreements={agreements} onOpenAgreement={openAgreement} />}
         </main>
 
@@ -463,62 +641,61 @@ export default function Dashboard({
 }
 
 function DashboardHome({
-  agreements,
   executed,
   pending,
   drafts,
-  onSelectAgreement,
+  onOpenBucket,
   onNew,
   isMobile,
 }: {
-  agreements: Agreement[];
   executed: number;
   pending: number;
   drafts: number;
-  onSelectAgreement: (a: Agreement) => void;
+  onOpenBucket: (filter: FilterStatus) => void;
   onNew: () => void;
   isMobile: boolean;
 }) {
   return (
     <div className="h-full overflow-y-auto">
       <div className={`max-w-5xl mx-auto ${isMobile ? "px-4 py-5" : "px-8 py-8"}`}>
-        <div className="flex items-center justify-between mb-6 md:mb-8">
+        <div className="mb-6 flex flex-col gap-4 md:mb-8 md:flex-row md:items-start md:justify-between">
           <div>
-            <h1 className="text-xl md:text-2xl font-bold tracking-tight">Overview</h1>
-            <p className="text-xs md:text-sm text-muted-foreground mt-0.5">Manage song ownership split sheets and registration metadata.</p>
+            <h1 className="text-xl md:text-2xl font-bold tracking-tight">Dashboard</h1>
+            <p className="mt-0.5 max-w-2xl text-xs leading-5 text-muted-foreground md:text-sm">
+              See the split sheets that need attention, then finish drafts, approvals, signatures, and verified records.
+            </p>
           </div>
+          <button
+            onClick={onNew}
+            className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg bg-primary px-3.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 md:hidden"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            New SPLIT Sheet
+          </button>
         </div>
 
-        <div className={`grid ${isMobile ? "grid-cols-3 gap-2" : "grid-cols-3 gap-4"} mb-6 md:mb-8`}>
-          <StatCard label="Executed" value={executed} accent="verified" compact={isMobile} />
-          <StatCard label="Pending" value={pending} accent="pending" compact={isMobile} />
-          <StatCard label="Drafts" value={drafts} accent="draft" compact={isMobile} />
-        </div>
-
-        <div className="mb-2 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-foreground">Recent Split Sheets</h2>
-          <button className="text-xs text-primary hover:underline font-medium">View all</button>
-        </div>
-        <div className="rounded-xl border border-border overflow-hidden bg-card">
-          {agreements.slice(0, 4).map((agr, i) => (
-            <button
-              key={agr.id}
-              onClick={() => onSelectAgreement(agr)}
-              className={`w-full flex items-center gap-3 md:gap-4 px-4 md:px-5 py-3.5 md:py-4 text-left hover:bg-secondary/40 transition-colors ${
-                i < agreements.length - 1 ? "border-b border-border" : ""
-              }`}
-            >
-              <AgreementIcon type={agr.type} />
-              <div className="flex-1 min-w-0">
-                <div className="text-xs md:text-sm font-medium text-foreground truncate">{agr.title}</div>
-                <div className="text-[10px] md:text-xs text-muted-foreground mt-0.5 truncate">
-                  {isMobile ? agr.parties.slice(0, 1).join(", ") + (agr.parties.length > 1 ? ` +${agr.parties.length - 1}` : "") : agr.parties.join(", ")} · v{agr.version}
-                </div>
-              </div>
-              <StatusBadge status={agr.status} />
-              <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/50 flex-shrink-0 hidden md:block" />
-            </button>
-          ))}
+        <div className={`mb-6 grid ${isMobile ? "grid-cols-3 gap-2" : "grid-cols-3 gap-4"} md:mb-8`}>
+          <StatCard
+            label="Needs Action"
+            value={pending}
+            accent="pending"
+            compact={isMobile}
+            onClick={() => onOpenBucket("Pending")}
+          />
+          <StatCard
+            label="Drafts"
+            value={drafts}
+            accent="draft"
+            compact={isMobile}
+            onClick={() => onOpenBucket("Draft")}
+          />
+          <StatCard
+            label="Verified"
+            value={executed}
+            accent="verified"
+            compact={isMobile}
+            onClick={() => onOpenBucket("Verified")}
+          />
         </div>
 
       </div>
@@ -526,7 +703,19 @@ function DashboardHome({
   );
 }
 
-function StatCard({ label, value, accent, compact }: { label: string; value: number; accent: "verified" | "pending" | "draft"; compact?: boolean }) {
+function StatCard({
+  label,
+  value,
+  accent,
+  compact,
+  onClick,
+}: {
+  label: string;
+  value: number;
+  accent: "verified" | "pending" | "draft";
+  compact?: boolean;
+  onClick?: () => void;
+}) {
   const accents = {
     verified: "text-[hsl(var(--split-verified))]",
     pending: "text-[hsl(var(--split-pending))]",
@@ -538,14 +727,24 @@ function StatCard({ label, value, accent, compact }: { label: string; value: num
     draft: "bg-secondary/60",
   };
   return (
-    <div className={`rounded-xl border border-border ${compact ? "p-3" : "p-5"} ${bgs[accent]}`}>
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-xl border border-border text-left transition-colors hover:border-primary/30 hover:bg-primary/5 focus:outline-none focus:ring-2 focus:ring-ring/30 ${compact ? "p-3" : "p-5"} ${bgs[accent]}`}
+    >
       <div className={`${compact ? "text-2xl" : "text-3xl"} font-bold tabular-nums ${accents[accent]}`}>{value}</div>
       <div className={`${compact ? "text-[10px]" : "text-xs"} text-muted-foreground mt-1 font-medium`}>{label}</div>
-    </div>
+    </button>
   );
 }
 
-function NotificationsPopover({ onViewAll }: { onViewAll: () => void }) {
+function NotificationsPopover({
+  onViewAll,
+  onOpenAgreement,
+}: {
+  onViewAll: () => void;
+  onOpenAgreement: (agreementId: string) => void;
+}) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -556,29 +755,40 @@ function NotificationsPopover({ onViewAll }: { onViewAll: () => void }) {
           <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-primary ring-2 ring-background" />
         </button>
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-[360px] p-0">
+      <PopoverContent align="end" className="w-[min(420px,calc(100vw-24px))] p-0">
         <div className="border-b border-border px-4 py-3">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <h2 className="text-sm font-bold">Split Sheet Updates</h2>
-              <p className="mt-0.5 text-xs text-muted-foreground">Sent, received, disputed, executed, and registration activity.</p>
+              <h2 className="text-sm font-bold">Recent Notifications</h2>
+              <p className="mt-0.5 text-xs text-muted-foreground">Signatures, approvals, invites, and split-sheet updates.</p>
             </div>
             <span className="inline-flex h-7 items-center whitespace-nowrap rounded-full bg-primary/10 px-2.5 text-xs font-semibold text-primary">
-              {AGREEMENT_NOTIFICATIONS.length} updates
+              {AGREEMENT_NOTIFICATIONS.length}
             </span>
           </div>
         </div>
 
-        <div className="max-h-[360px] overflow-y-auto">
-          {AGREEMENT_NOTIFICATIONS.map(({ id, title, detail, time, icon: Icon, tone }) => (
-            <button key={id} className="flex w-full gap-3 border-b border-border px-4 py-3 text-left last:border-b-0 hover:bg-secondary/60">
-              <span className={`mt-0.5 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg ${tone}`}>
-                <Icon className="h-4 w-4" />
+        <div className="max-h-[420px] space-y-2 overflow-y-auto px-3 py-3">
+          {AGREEMENT_NOTIFICATIONS.map(({ id, title, detail, time, agreementId, actionLabel, icon: Icon, tone }) => (
+            <button
+              key={id}
+              onClick={() => {
+                setOpen(false);
+                onOpenAgreement(agreementId);
+              }}
+              className="flex w-full items-center gap-3 rounded-lg border border-border bg-background px-3 py-2.5 text-left transition-colors hover:border-primary/25 hover:bg-secondary/50"
+            >
+              <span className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg ${tone}`}>
+                <Icon className="h-3.5 w-3.5" />
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block text-sm font-semibold text-foreground">{title}</span>
-                <span className="mt-0.5 block text-xs leading-5 text-muted-foreground">{detail}</span>
+                <span className="block truncate text-sm font-semibold text-foreground">{title}</span>
+                <span className="mt-0.5 block truncate text-xs text-muted-foreground">{detail}</span>
                 <span className="mt-1 block text-[11px] font-medium text-muted-foreground/80">{time}</span>
+              </span>
+              <span className="inline-flex flex-shrink-0 items-center gap-1 text-[11px] font-semibold text-primary">
+                <span className="hidden sm:inline">{actionLabel}</span>
+                <ChevronRight className="h-3.5 w-3.5" />
               </span>
             </button>
           ))}
@@ -656,8 +866,8 @@ function AgreementActivityPage({
           <section className="rounded-lg border border-border bg-card p-5">
             <div className="mb-4 flex items-center justify-between gap-3">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[hsl(var(--split-verified))]">Recently Executed</p>
-                <h2 className="mt-2 text-lg font-bold">Signed split sheets</h2>
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[hsl(var(--split-verified))]">Recently Verified</p>
+                <h2 className="mt-2 text-lg font-bold">Stored split records</h2>
               </div>
               <span className="inline-flex h-8 items-center rounded-full bg-[hsl(var(--split-verified)/0.12)] px-3 text-sm font-bold text-[hsl(var(--split-verified))]">
                 {executed}
@@ -739,6 +949,12 @@ function AgreementActivityPage({
 export function StatusBadge({ status }: { status: Agreement["status"] }) {
   const styles: Record<Agreement["status"], string> = {
     Executed: "bg-[hsl(var(--split-verified)/0.12)] text-[hsl(var(--split-verified))] border-[hsl(var(--split-verified)/0.25)]",
+    "Verified and Stored": "bg-[hsl(var(--split-verified)/0.12)] text-[hsl(var(--split-verified))] border-[hsl(var(--split-verified)/0.25)]",
+    "Fully Signed": "bg-[hsl(var(--split-verified)/0.12)] text-[hsl(var(--split-verified))] border-[hsl(var(--split-verified)/0.25)]",
+    "Pending Collaborator Acceptance": "bg-[hsl(var(--split-pending)/0.12)] text-[hsl(var(--split-pending))] border-[hsl(var(--split-pending)/0.25)]",
+    "Pending Split Approval": "bg-[hsl(var(--split-pending)/0.12)] text-[hsl(var(--split-pending))] border-[hsl(var(--split-pending)/0.25)]",
+    "Revision Requested": "bg-[hsl(var(--split-amended)/0.12)] text-[hsl(var(--split-amended))] border-[hsl(var(--split-amended)/0.25)]",
+    "Ready to Sign": "bg-primary/10 text-primary border-primary/20",
     "Pending Signatures": "bg-[hsl(var(--split-pending)/0.12)] text-[hsl(var(--split-pending))] border-[hsl(var(--split-pending)/0.25)]",
     Draft: "bg-secondary text-muted-foreground border-border",
     Amended: "bg-[hsl(var(--split-amended)/0.12)] text-[hsl(var(--split-amended))] border-[hsl(var(--split-amended)/0.25)]",
@@ -746,7 +962,7 @@ export function StatusBadge({ status }: { status: Agreement["status"] }) {
   };
   return (
     <span className={`inline-flex items-center rounded-full border px-2 md:px-2.5 py-0.5 text-[10px] md:text-[11px] font-semibold whitespace-nowrap ${styles[status]}`}>
-      {status === "Executed" && <span className="mr-1 md:mr-1.5 h-1.5 w-1.5 rounded-full bg-[hsl(var(--split-verified))] inline-block" />}
+      {["Executed", "Verified and Stored", "Fully Signed"].includes(status) && <span className="mr-1 md:mr-1.5 h-1.5 w-1.5 rounded-full bg-[hsl(var(--split-verified))] inline-block" />}
       {status}
     </span>
   );

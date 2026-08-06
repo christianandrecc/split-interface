@@ -1,4 +1,4 @@
-import { ArrowLeft, CheckCircle2, Download, FileText, Lock, Save, Send, Users } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Download, FileText, Save, Send, Users } from "lucide-react";
 import type { UserProfile } from "@/components/AccountAccess";
 import type { StoredSplitSheetDocument } from "./document";
 import { partyDisplayName, sumPercents } from "./types";
@@ -22,72 +22,26 @@ type SplitSheetDocumentPageProps = {
 
 function formatDate(value: string | undefined) {
   if (!value) return "Pending";
-
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-
-  return date.toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
+  return date.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 }
 
 function formatDateTime(value: string | undefined) {
   if (!value) return "Pending";
-
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-
-  return date.toLocaleString(undefined, {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-}
-
-function valueOrPending(value: string | number | undefined) {
-  if (value === 0) return "0";
-  if (!value) return "Not provided";
-  return String(value);
-}
-
-function publishingProfileRows(profile: UserProfile) {
-  const status = profile.publishingStatus || "Unknown";
-  const isSimple = status === "Self-published" || status === "Unpublished";
-
-  if (isSimple) {
-    return [
-      ["Publishing status", status],
-      ["Publishing routing", status === "Self-published" ? "Self-published / self-administered" : "No publisher attached"],
-      ["Writer PRO / society", profile.customProName || profile.proAffiliation || "Not provided"],
-      ["Publishing share", "100% of this writers share"],
-    ];
-  }
-
-  const company = profile.publisherName || profile.adminCompanyName || "Not provided";
-  const ipi = profile.publisherIpi || profile.adminIpi || "Not provided";
-
-  return [
-    ["Publishing status", status],
-    ["Publisher / admin", company],
-    ["Publisher IPI", ipi],
-    ["Publisher PRO / society", profile.publisherPro || profile.proAffiliation || "Not provided"],
-    ["Publishing share", profile.publishingShare ? profile.publishingShare + "%" : "Not provided"],
-    ["Admin collection share", profile.adminCollectionShare ? profile.adminCollectionShare + "%" : "Not provided"],
-    ["Publisher contact", profile.publisherContact || "Private account record"],
-  ];
+  return date.toLocaleString(undefined, { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
 }
 
 function StatusPill({ status }: { status: StoredSplitSheetDocument["status"] }) {
-  const className =
-    status === "Executed"
-      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-      : status === "Pending Signatures"
-        ? "border-amber-200 bg-amber-50 text-amber-700"
-        : "border-slate-200 bg-slate-50 text-slate-700";
+  const verified = ["Executed", "Verified and Stored", "Fully Signed"].includes(status);
+  const pending = status.startsWith("Pending") || status === "Revision Requested" || status === "Ready to Sign";
+  const className = verified
+    ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+    : pending
+      ? "border-amber-200 bg-amber-50 text-amber-700"
+      : "border-slate-200 bg-slate-50 text-slate-700";
 
   return (
     <span className={"inline-flex rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-[0.12em] " + className}>
@@ -96,38 +50,49 @@ function StatusPill({ status }: { status: StoredSplitSheetDocument["status"] }) 
   );
 }
 
+function InfoRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="grid gap-1 sm:grid-cols-[150px_1fr]">
+      <dt className="text-slate-500">{label}</dt>
+      <dd className="font-medium text-slate-900">{value || "Not provided"}</dd>
+    </div>
+  );
+}
+
 export function SplitSheetDocumentPage({ document: splitDocument, viewerProfile, compact = false }: SplitSheetDocumentPageProps) {
   const data = splitDocument.data;
   const writers = data.parties;
   const total = sumPercents(writers);
-  const exportDestinations = [
-    data.exportPacket ? "Registration export packet" : "",
-    data.sendToPRO ? "Linked PRO account" : "",
-    data.sendToMLC ? "Linked MLC account" : "",
-  ].filter(Boolean);
+  const hasSampleFlag = data.sampleStatus !== "No sample or interpolation";
+  const hasStructuredSample = data.sampleStatus === "Sample";
+  const isVerifiedRecord = ["Executed", "Verified and Stored", "Fully Signed"].includes(splitDocument.status);
 
   return (
     <article
       id={compact ? undefined : "split-sheet-document"}
       className={
         compact
-          ? "space-y-6 rounded-2xl border border-slate-200 bg-white p-6 text-slate-900"
-          : "mx-auto max-w-5xl space-y-8 rounded-[28px] border border-slate-200 bg-white p-8 text-slate-900 shadow-sm"
+          ? "space-y-5 rounded-2xl border border-slate-200 bg-white p-5 text-slate-900"
+          : "mx-auto max-w-5xl space-y-6 rounded-[28px] border border-slate-200 bg-white p-8 text-slate-900 shadow-sm"
       }
     >
-      <header className="flex flex-col gap-6 border-b border-slate-200 pb-6 lg:flex-row lg:items-start lg:justify-between">
+      <header className="flex flex-col gap-5 border-b border-slate-200 pb-5 lg:flex-row lg:items-start lg:justify-between">
         <div className="space-y-3">
           <div className="flex flex-wrap items-center gap-3">
             <span className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-[#31598f] text-white">
               <FileText className="h-5 w-5" />
             </span>
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Composition ownership split sheet</p>
-              <h1 className="text-3xl font-semibold tracking-tight text-slate-950">{data.songTitle || "Untitled Song"}</h1>
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+                {isVerifiedRecord ? "SPLIT verified record" : "SPLIT beta draft"}
+              </p>
+              <h1 className="text-3xl font-semibold tracking-tight text-slate-950">{data.songTitle || "Untitled Work"}</h1>
             </div>
           </div>
           <p className="max-w-3xl text-sm leading-6 text-slate-600">
-            This document records composition ownership shares, writer identity, contribution details, signature order, and account-linked registration metadata for PRO and MLC routing.
+            {isVerifiedRecord
+              ? `Verified and stored by ${viewerProfile.displayName || viewerProfile.legalName || viewerProfile.emailAddress || "SPLIT user"} as the final split record.`
+              : `Created by ${viewerProfile.displayName || viewerProfile.legalName || viewerProfile.emailAddress || "SPLIT user"} as a collaborator-approved split record in progress.`}
           </p>
         </div>
 
@@ -148,30 +113,35 @@ export function SplitSheetDocumentPage({ document: splitDocument, viewerProfile,
               <dt className="text-slate-500">Created</dt>
               <dd className="font-semibold text-slate-900">{formatDate(splitDocument.createdAt)}</dd>
             </div>
+            {splitDocument.verifiedAt && (
+              <div className="flex justify-between gap-4">
+                <dt className="text-slate-500">Verified</dt>
+                <dd className="font-semibold text-slate-900">{formatDate(splitDocument.verifiedAt)}</dd>
+              </div>
+            )}
           </dl>
         </div>
       </header>
 
       <section className="grid gap-4 md:grid-cols-2">
         <div className="rounded-2xl border border-slate-200 p-5">
-          <h2 className="mb-4 text-sm font-semibold uppercase tracking-[0.14em] text-slate-500">Song information</h2>
+          <h2 className="mb-4 text-sm font-semibold uppercase tracking-[0.14em] text-slate-500">Work info</h2>
           <dl className="grid gap-3 text-sm">
-            <InfoRow label="Primary title" value={data.songTitle || "Not provided"} />
-            <InfoRow label="Alternative titles" value={data.alternateTitles || "None listed"} />
-            <InfoRow label="Lyrics language" value={data.lyricLanguage || "Not provided"} />
+            <InfoRow label="Title" value={data.songTitle} />
+            <InfoRow label="Alternate title" value={data.alternateTitles} />
+            <InfoRow label="Artist / project" value={data.artistProjectName || data.recordingArtist} />
             <InfoRow label="Creation date" value={formatDate(data.creationDate)} />
-            <InfoRow label="Creation location" value={data.creationLocation || "Not provided"} />
+            <InfoRow label="Notes" value={data.workNotes} />
           </dl>
         </div>
 
         <div className="rounded-2xl border border-slate-200 p-5">
-          <h2 className="mb-4 text-sm font-semibold uppercase tracking-[0.14em] text-slate-500">Advanced registration fields</h2>
+          <h2 className="mb-4 text-sm font-semibold uppercase tracking-[0.14em] text-slate-500">Sample disclosure</h2>
           <dl className="grid gap-3 text-sm">
-            <InfoRow label="ISWC" value={data.iswc || "Available after registration"} />
-            <InfoRow label="Related ISRC" value={data.relatedIsrc || "Available if recording exists"} />
-            <InfoRow label="Studio" value={data.studioName || "Not provided"} />
-            <InfoRow label="Recording match" value={[data.recordingArtist, data.recordingTitle].filter(Boolean).join(" - ") || "Not attached"} />
-            <InfoRow label="Export routing" value={exportDestinations.length ? exportDestinations.join(", ") : "Manual review only"} />
+            <InfoRow label="Contains sample" value={hasStructuredSample ? "Yes" : hasSampleFlag ? data.sampleStatus : "No"} />
+            {hasStructuredSample && <InfoRow label="Sample artist" value={data.sampleOriginalArtist} />}
+            {hasStructuredSample && <InfoRow label="Sample title" value={data.sampleOriginalWork} />}
+            {hasStructuredSample && <InfoRow label="Seconds used" value={data.samplePortion} />}
           </dl>
         </div>
       </section>
@@ -179,8 +149,10 @@ export function SplitSheetDocumentPage({ document: splitDocument, viewerProfile,
       <section className="rounded-2xl border border-slate-200 p-5">
         <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
-            <h2 className="text-lg font-semibold text-slate-950">Writer ownership</h2>
-            <p className="text-sm text-slate-500">Composition ownership must total 100% before signing.</p>
+            <h2 className="text-lg font-semibold text-slate-950">Collaborators & initial split</h2>
+            <p className="text-sm text-slate-500">
+              {isVerifiedRecord ? "Final collaborator shares from the verified split record." : "This proposal can move to approval after collaborators accept participation."}
+            </p>
           </div>
           <span className={total === 100 ? "rounded-full bg-emerald-50 px-3 py-1 text-sm font-semibold text-emerald-700" : "rounded-full bg-amber-50 px-3 py-1 text-sm font-semibold text-amber-700"}>
             Total: {total}%
@@ -204,11 +176,10 @@ export function SplitSheetDocumentPage({ document: splitDocument, viewerProfile,
           <table className="w-full border-collapse text-left text-sm">
             <thead className="bg-slate-50 text-xs uppercase tracking-[0.12em] text-slate-500">
               <tr>
-                <th className="px-4 py-3 font-semibold">Writer</th>
+                <th className="px-4 py-3 font-semibold">Collaborator</th>
                 <th className="px-4 py-3 font-semibold">Contribution</th>
                 <th className="px-4 py-3 font-semibold">Share</th>
-                <th className="px-4 py-3 font-semibold">PRO</th>
-                <th className="px-4 py-3 font-semibold">IPI/CAE</th>
+                <th className="px-4 py-3 font-semibold">Invite</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
@@ -218,10 +189,9 @@ export function SplitSheetDocumentPage({ document: splitDocument, viewerProfile,
                     <div className="font-semibold text-slate-950">{partyDisplayName(party)}</div>
                     <div className="text-xs text-slate-500">{party.role || "Songwriter"}</div>
                   </td>
-                  <td className="px-4 py-4 text-slate-600">{party.contributionCategories.length ? party.contributionCategories.join(", ") : "Not specified"}</td>
+                  <td className="px-4 py-4 text-slate-600">{party.contributionCategories.length ? party.contributionCategories.join(", ") : "Pending"}</td>
                   <td className="px-4 py-4 font-semibold text-slate-950">{party.percent}%</td>
-                  <td className="px-4 py-4 text-slate-600">{party.customProName || party.proAffiliation || "Not provided"}</td>
-                  <td className="px-4 py-4 text-slate-600">{party.ipiNumber || "Missing"}</td>
+                  <td className="px-4 py-4 text-slate-600">{party.isCurrentUser ? "Creator" : party.inviteValue || party.email || "Pending"}</td>
                 </tr>
               ))}
             </tbody>
@@ -229,72 +199,25 @@ export function SplitSheetDocumentPage({ document: splitDocument, viewerProfile,
         </div>
       </section>
 
-      <section className="rounded-2xl border border-emerald-200 bg-emerald-50/60 p-5">
-        <div className="mb-5 flex items-start gap-3">
-          <span className="mt-1 rounded-full bg-white p-2 text-emerald-700">
-            <Lock className="h-4 w-4" />
-          </span>
-          <div>
-            <h2 className="text-lg font-semibold text-slate-950">Private publishing appendix</h2>
-            <p className="text-sm leading-6 text-slate-600">
-              SPLIT can include publishing routing from each users account in the final registration export. Only your own publishing details are visible in this preview.
-            </p>
-          </div>
-        </div>
-
-        <div className="grid gap-4 md:grid-cols-2">
-          {writers.map((party) => {
-            const isViewer = party.isCurrentUser || party.email === viewerProfile.emailAddress;
-
-            return (
-              <div key={party.id} className="rounded-2xl border border-emerald-200 bg-white p-4">
-                <div className="mb-3 flex items-center justify-between gap-3">
-                  <h3 className="font-semibold text-slate-950">{partyDisplayName(party)}</h3>
-                  <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
-                    {isViewer ? "Visible to you" : "Private"}
+      {splitDocument.splitSignatures.length > 0 && (
+        <section className="rounded-2xl border border-slate-200 p-5">
+          <h2 className="mb-4 text-sm font-semibold uppercase tracking-[0.14em] text-slate-500">Signatures</h2>
+          <div className="grid gap-3 md:grid-cols-2">
+            {splitDocument.splitSignatures.map((signature) => (
+              <div key={signature.id} className="rounded-xl border border-slate-200 px-4 py-3 text-sm">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="font-semibold text-slate-950">{signature.collaboratorName}</span>
+                  <span className={signature.status === "Signed" ? "rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700" : "rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700"}>
+                    {signature.status}
                   </span>
                 </div>
-
-                {isViewer ? (
-                  <dl className="space-y-2 text-sm">
-                    {publishingProfileRows(viewerProfile).map(([label, value]) => (
-                      <InfoRow key={label} label={label} value={value} />
-                    ))}
-                  </dl>
-                ) : (
-                  <p className="text-sm leading-6 text-slate-600">
-                    Publishing company, publisher IPI, admin percentages, and deal routing stay censored here. SPLIT uses that private account data only for authorized registration export after signing.
-                  </p>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </section>
-
-      <section className="grid gap-4 md:grid-cols-2">
-        <div className="rounded-2xl border border-slate-200 p-5">
-          <h2 className="mb-4 text-sm font-semibold uppercase tracking-[0.14em] text-slate-500">Signing settings</h2>
-          <div className="space-y-3 text-sm text-slate-600">
-            <p>Required signatures: {data.requireAllSignatures ? "All listed writers" : "Selected writers only"}</p>
-            <p>Signing order: writer order unless changed in the signing step.</p>
-            <p>Requested changes before signing: {data.conditionalSignatures ? "Allowed" : "Off"}</p>
-            <p>Audit trail: included automatically in every export.</p>
-          </div>
-        </div>
-
-        <div className="rounded-2xl border border-slate-200 p-5">
-          <h2 className="mb-4 text-sm font-semibold uppercase tracking-[0.14em] text-slate-500">Signature blocks</h2>
-          <div className="space-y-3">
-            {writers.map((party) => (
-              <div key={party.id} className="flex items-center justify-between rounded-xl border border-slate-200 px-4 py-3 text-sm">
-                <span className="font-semibold text-slate-950">{partyDisplayName(party)}</span>
-                <span className="text-slate-500">Order {party.signingOrder}</span>
+                <div className="mt-2 text-slate-600">{formatDateTime(signature.signedAt)}</div>
+                {signature.signatureMethod && <div className="mt-1 text-xs text-slate-500">{signature.signatureMethod}</div>}
               </div>
             ))}
           </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       <section className="rounded-2xl border border-slate-200 p-5">
         <h2 className="mb-4 text-sm font-semibold uppercase tracking-[0.14em] text-slate-500">Audit trail</h2>
@@ -312,15 +235,6 @@ export function SplitSheetDocumentPage({ document: splitDocument, viewerProfile,
   );
 }
 
-function InfoRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="grid gap-1 sm:grid-cols-[160px_1fr]">
-      <dt className="text-slate-500">{label}</dt>
-      <dd className="font-medium text-slate-900">{valueOrPending(value)}</dd>
-    </div>
-  );
-}
-
 export default function SplitSheetDocumentPreview({
   document: splitDocument,
   viewerProfile,
@@ -332,6 +246,7 @@ export default function SplitSheetDocumentPreview({
   onDone,
 }: SplitSheetDocumentPreviewProps) {
   const hasCollaborators = splitDocument.collaborators.length > 0;
+  const isVerifiedRecord = ["Executed", "Verified and Stored", "Fully Signed"].includes(splitDocument.status);
 
   return (
     <div className="min-h-screen bg-[#f6f8fb] px-4 py-6 text-slate-900 sm:px-8 lg:px-12">
@@ -349,9 +264,13 @@ export default function SplitSheetDocumentPreview({
             <ArrowLeft className="h-4 w-4" />
             Back to edit
           </button>
-          <h1 className="text-3xl font-semibold tracking-tight text-slate-950">PDF Preview</h1>
+          <h1 className="text-3xl font-semibold tracking-tight text-slate-950">
+            {isVerifiedRecord ? "Verified SPLIT Record" : "SPLIT Draft Preview"}
+          </h1>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-            Review the SPLIT Sheet before saving it to your account or sending it to collaborators.
+            {isVerifiedRecord
+              ? "Review or print the final signed split record stored in your archive."
+              : "Save this draft or send invitations so collaborators can confirm they were part of the work."}
           </p>
         </div>
 
@@ -359,20 +278,20 @@ export default function SplitSheetDocumentPreview({
           <button
             type="button"
             onClick={onStore}
-            disabled={stored}
+            disabled={stored || isVerifiedRecord}
             className={(stored ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-white text-slate-700 hover:border-[#31598f] hover:text-[#31598f]") + " inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold shadow-sm transition disabled:cursor-default"}
           >
             {stored ? <CheckCircle2 className="h-4 w-4" /> : <Save className="h-4 w-4" />}
-            {stored ? "Stored" : "Store in account"}
+            {isVerifiedRecord ? "Record stored" : stored ? "Draft stored" : "Save draft"}
           </button>
           <button
             type="button"
             onClick={onSend}
-            disabled={!hasCollaborators || sent}
-            className={(!hasCollaborators || sent ? "border-slate-200 bg-slate-100 text-slate-400" : "border-[#31598f] bg-[#31598f] text-white hover:bg-[#264772]") + " inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold shadow-sm transition disabled:cursor-default"}
+            disabled={!hasCollaborators || sent || isVerifiedRecord}
+            className={(!hasCollaborators || sent || isVerifiedRecord ? "border-slate-200 bg-slate-100 text-slate-400" : "border-[#31598f] bg-[#31598f] text-white hover:bg-[#264772]") + " inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold shadow-sm transition disabled:cursor-default"}
           >
             {sent ? <CheckCircle2 className="h-4 w-4" /> : <Send className="h-4 w-4" />}
-            {hasCollaborators ? (sent ? "Sent" : "Send to collaborators") : "No collaborators"}
+            {isVerifiedRecord ? "Finalized" : hasCollaborators ? (sent ? "Invites sent" : "Send invites") : "No collaborators"}
           </button>
           <button
             type="button"
@@ -380,7 +299,7 @@ export default function SplitSheetDocumentPreview({
             className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-[#31598f] hover:text-[#31598f]"
           >
             <Download className="h-4 w-4" />
-            Print / Save PDF
+            {isVerifiedRecord ? "Print / Save Record" : "Print / Save PDF"}
           </button>
           <button
             type="button"

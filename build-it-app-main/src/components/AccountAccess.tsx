@@ -16,6 +16,16 @@ import { ArrowLeft, ArrowRight, LogIn, UserPlus } from "lucide-react";
 
 export type UserProfile = {
   splitId: string;
+  username: string;
+  displayName: string;
+  profileImageUrl: string;
+  roleTags: string;
+  socialInstagram: string;
+  socialTikTok: string;
+  socialX: string;
+  socialWebsite: string;
+  profileLocation: string;
+  profileVisibility: string;
   legalName: string;
   legalFirstName: string;
   legalMiddleName: string;
@@ -49,9 +59,28 @@ export function createSplitId() {
   return `SPL-${Math.random().toString(36).slice(2, 6).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
 }
 
+export function normalizeUsername(value?: string) {
+  return (value ?? "")
+    .trim()
+    .replace(/^@+/, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9._]/g, "")
+    .slice(0, 24);
+}
+
 export function createEmptyProfile(): UserProfile {
   return {
     splitId: createSplitId(),
+    username: "",
+    displayName: "",
+    profileImageUrl: "",
+    roleTags: "",
+    socialInstagram: "",
+    socialTikTok: "",
+    socialX: "",
+    socialWebsite: "",
+    profileLocation: "",
+    profileVisibility: "Collaborators only",
     legalName: "",
     legalFirstName: "",
     legalMiddleName: "",
@@ -92,6 +121,16 @@ export function normalizeUserProfile(profile: Partial<UserProfile>): UserProfile
 
   return {
     ...normalized,
+    username: normalizeUsername(normalized.username),
+    displayName: (normalized.displayName ?? "").trim(),
+    profileImageUrl: (normalized.profileImageUrl ?? "").trim(),
+    roleTags: (normalized.roleTags ?? "").trim(),
+    socialInstagram: (normalized.socialInstagram ?? "").trim(),
+    socialTikTok: (normalized.socialTikTok ?? "").trim(),
+    socialX: (normalized.socialX ?? "").trim(),
+    socialWebsite: (normalized.socialWebsite ?? "").trim(),
+    profileLocation: (normalized.profileLocation ?? "").trim(),
+    profileVisibility: normalized.profileVisibility || "Collaborators only",
     phoneNumber: formatNationalPhoneNumber(normalized.phoneNumber ?? "", normalized.phoneCountryCode),
   };
 }
@@ -106,6 +145,13 @@ type AccountStep = {
 
 const accountSteps: AccountStep[] = [
   {
+    field: "username",
+    label: "@Username",
+    description: "Choose the public handle collaborators can use to find and credit you on SPLIT.",
+    placeholder: "yourname",
+    required: true,
+  },
+  {
     field: "legalName",
     label: "Legal Name",
     description: "Use one legal name consistently across split sheets, registrations, and signatures.",
@@ -117,6 +163,12 @@ const accountSteps: AccountStep[] = [
     label: "P/K/A Names",
     description: "Add artist names, producer names, aliases, or other public names.",
     placeholder: "Artist name, other names",
+  },
+  {
+    field: "roleTags",
+    label: "Role Tags",
+    description: "Select all the roles that apply to how collaborators should find and credit you.",
+    placeholder: "Select all that apply",
   },
   {
     field: "phoneNumber",
@@ -167,6 +219,8 @@ const publishingStatusOptions = [
   "Co-published",
   "Unknown",
 ];
+
+const creatorRoleOptions = ["Producer", "Writer", "Artist", "Engineer", "Topliner", "Manager", "Publisher"];
 
 const phoneCountries = [
   { value: "+1", label: "🇺🇸 +1", country: "United States" },
@@ -438,6 +492,45 @@ function renderAccountStep({
   proHelpSelected: boolean;
   setProHelpSelected: (selected: boolean) => void;
 }) {
+  if (step.field === "username") {
+    const normalizedUsername = normalizeUsername(profile.username);
+    const available = normalizedUsername.length >= 3 && !["split", "admin", "support"].includes(normalizedUsername);
+
+    return (
+      <div className="space-y-4">
+        <Field label={step.label} htmlFor={step.field}>
+          <div className="relative">
+            <span className="pointer-events-none absolute left-5 top-1/2 -translate-y-1/2 text-sm font-bold text-muted-foreground">@</span>
+            <Input
+              id={step.field}
+              value={profile.username ?? ""}
+              onChange={(event) => updateProfile("username", normalizeUsername(event.target.value))}
+              placeholder={step.placeholder}
+              required
+              className="h-12 rounded-full pl-9 pr-5 text-base shadow-sm shadow-foreground/5 md:text-sm"
+            />
+          </div>
+        </Field>
+        <Field label="Display Name" htmlFor="displayName">
+          <Input
+            id="displayName"
+            value={profile.displayName ?? ""}
+            onChange={(event) => updateProfile("displayName", event.target.value)}
+            placeholder="Artist, producer, or public name"
+            className="h-12 rounded-full px-5 text-base shadow-sm shadow-foreground/5 md:text-sm"
+          />
+        </Field>
+        <div className={`rounded-lg border px-3 py-2 text-xs leading-5 ${
+          available
+            ? "border-emerald-200 bg-emerald-50/70 text-emerald-900"
+            : "border-[hsl(var(--split-pending)/0.28)] bg-[hsl(var(--split-pending)/0.07)] text-muted-foreground"
+        }`}>
+          {available ? `@${normalizedUsername} looks available for this beta profile.` : "Use at least 3 letters or numbers. Full uniqueness will be enforced when backend auth is connected."}
+        </div>
+      </div>
+    );
+  }
+
   if (step.field === "legalName") {
     return (
       <div className="space-y-4">
@@ -476,6 +569,43 @@ function renderAccountStep({
           Stick to one legal name for your SPLIT account so contracts, royalty records, and signatures stay consistent.
         </p>
       </div>
+    );
+  }
+
+  if (step.field === "roleTags") {
+    const selectedRoles = parseRoleTags(profile.roleTags);
+
+    return (
+      <Field label="Select all that apply" htmlFor="roleTags">
+        <div id="roleTags" className="flex flex-wrap gap-2">
+          {creatorRoleOptions.map((role) => {
+            const active = selectedRoles.includes(role);
+
+            return (
+              <button
+                key={role}
+                type="button"
+                onClick={() => {
+                  const nextRoles = active
+                    ? selectedRoles.filter((item) => item !== role)
+                    : [...selectedRoles, role];
+                  updateProfile("roleTags", nextRoles.join(", "));
+                }}
+                className={`rounded-full border px-4 py-2 text-sm font-semibold transition-colors ${
+                  active
+                    ? "border-primary bg-primary/10 text-primary"
+                    : "border-border bg-background text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {role}
+              </button>
+            );
+          })}
+        </div>
+        <p className="mt-2 text-xs leading-5 text-muted-foreground">
+          These tags appear on your collaborator profile and can be changed later.
+        </p>
+      </Field>
     );
   }
 
@@ -809,6 +939,7 @@ function normalizeProfile(profile: UserProfile): UserProfile {
     ...normalized,
     legalName,
     legalAddress,
+    roleTags: parseRoleTags(profile.roleTags).join(", "),
     phoneNumber: formatNationalPhoneNumber(profile.phoneNumber ?? "", profile.phoneCountryCode),
     ipiNumber: (profile.ipiNumber ?? "").trim(),
     customProName: profile.proAffiliation === "Other" ? (profile.customProName ?? "").trim() : "",
@@ -822,6 +953,13 @@ function normalizeProfile(profile: UserProfile): UserProfile {
     adminCollectionShare: needsPublishingDetails ? (profile.adminCollectionShare ?? "").trim() : "",
     publisherContact: needsPublishingDetails ? (profile.publisherContact ?? "").trim() : "",
   };
+}
+
+function parseRoleTags(value: string) {
+  return value
+    .split(",")
+    .map((role) => role.trim())
+    .filter(Boolean);
 }
 
 function Field({ label, htmlFor, children }: { label: string; htmlFor: string; children: ReactNode }) {

@@ -2,24 +2,42 @@ import React, { useState } from "react";
 import { Agreement, StatusBadge, AgreementIcon } from "@/components/Dashboard";
 import { Plus } from "lucide-react";
 
-type FilterStatus = "All" | Agreement["status"];
+export type FilterStatus = "All" | "Pending" | "Verified" | Agreement["status"];
 
-const STATUS_FILTERS: FilterStatus[] = ["All", "Executed", "Pending Signatures", "Draft", "Amended", "Disputed"];
+const STATUS_FILTERS: FilterStatus[] = ["All", "Pending", "Draft", "Verified"];
+const FILTER_LABELS: Partial<Record<FilterStatus, string>> = {
+  Verified: "Verified",
+};
+
+function matchesFilter(agreement: Agreement, filter: FilterStatus) {
+  if (filter === "All") return true;
+  if (filter === "Pending") {
+    return ["Pending Collaborator Acceptance", "Pending Split Approval", "Revision Requested", "Ready to Sign", "Pending Signatures", "Amended", "Disputed"].includes(agreement.status);
+  }
+  if (filter === "Verified" || filter === "Executed") return ["Executed", "Verified and Stored", "Fully Signed"].includes(agreement.status);
+  return agreement.status === filter;
+}
 
 export default function AgreementsList({
   agreements,
   selected,
   onSelect,
   onNew,
+  filter,
+  onFilterChange,
 }: {
   agreements: Agreement[];
   selected: Agreement | null;
   onSelect: (a: Agreement) => void;
   onNew: () => void;
+  filter?: FilterStatus;
+  onFilterChange?: (filter: FilterStatus) => void;
 }) {
-  const [filter, setFilter] = useState<FilterStatus>("All");
+  const [localFilter, setLocalFilter] = useState<FilterStatus>("All");
+  const activeFilter = filter ?? localFilter;
+  const setActiveFilter = onFilterChange ?? setLocalFilter;
 
-  const filtered = filter === "All" ? agreements : agreements.filter((a) => a.status === filter);
+  const filtered = agreements.filter((agreement) => matchesFilter(agreement, activeFilter));
 
   return (
     <div className="w-full md:w-[320px] flex-shrink-0 md:border-r border-border flex flex-col bg-card overflow-hidden h-full">
@@ -38,17 +56,17 @@ export default function AgreementsList({
 
         {/* Filter pills */}
         <div className="flex gap-1.5 flex-wrap">
-          {STATUS_FILTERS.slice(0, 4).map((s) => (
+          {STATUS_FILTERS.map((s) => (
             <button
               key={s}
-              onClick={() => setFilter(s)}
+              onClick={() => setActiveFilter(s)}
               className={`rounded-full px-2.5 py-1 text-[11px] font-semibold border transition-colors ${
-                filter === s
+                activeFilter === s
                   ? "bg-primary text-primary-foreground border-primary"
                   : "border-border text-muted-foreground hover:text-foreground hover:border-foreground/30"
               }`}
             >
-              {s}
+              {FILTER_LABELS[s] ?? s}
             </button>
           ))}
         </div>

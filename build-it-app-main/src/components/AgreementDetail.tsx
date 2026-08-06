@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Agreement, StatusBadge, AgreementIcon } from "@/components/Dashboard";
 import { SplitSheetDocumentPage } from "@/components/contract-builder/SplitSheetDocumentPreview";
+import { addDocumentAuditTrail, type StoredSplitSheetDocument } from "@/components/contract-builder/document";
 import {
   Shield,
   GitBranch,
@@ -31,12 +32,271 @@ const FAKE_VERSIONS = [
 ];
 
 const FAKE_HASH = "sha256:a3f9b2c1d8e47f6a9b0c3d5e7f8a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8";
+const FINAL_STATUSES: Agreement["status"][] = ["Executed", "Verified and Stored", "Fully Signed"];
 
-export default function AgreementDetail({ agreement }: { agreement: Agreement }) {
+function documentActorName(document: StoredSplitSheetDocument) {
+  return document.creatorProfile.displayName || document.creatorProfile.legalName || document.creatorProfile.emailAddress || "SPLIT user";
+}
+
+function formatDisplayDateTime(value: string | undefined) {
+  if (!value) return "Pending";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString(undefined, { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
+}
+
+function buildSignatureRecords(document: StoredSplitSheetDocument, proposalId: string) {
+  const existingSignatures = Array.isArray(document.splitSignatures) ? document.splitSignatures : [];
+  const currentSignatures = existingSignatures.filter((signature) => signature.proposalVersionId === proposalId);
+  const signers = [
+    { id: "creator", name: documentActorName(document) },
+    ...document.collaboratorInvites
+      .filter((invite) => invite.status === "Accepted")
+      .map((invite) => ({ id: invite.id, name: invite.name })),
+  ];
+  const missingSignatures = signers
+    .filter((signer) => !currentSignatures.some((signature) => signature.collaboratorId === signer.id))
+    .map((signer) => ({
+      id: `${document.id}-${proposalId}-${signer.id}-signature`,
+      proposalVersionId: proposalId,
+      collaboratorId: signer.id,
+      collaboratorName: signer.name,
+      status: "Pending" as const,
+    }));
+
+  return [...existingSignatures, ...missingSignatures];
+}
+
+export default function AgreementDetail({
+  agreement,
+  onUpdateDocument,
+}: {
+  agreement: Agreement;
+  onUpdateDocument?: (document: StoredSplitSheetDocument) => void;
+}) {
   const [showHistory, setShowHistory] = useState(false);
   const [showAudit, setShowAudit] = useState(false);
+  const [proposalNote, setProposalNote] = useState("");
+  const [proposalPercents, setProposalPercents] = useState<Record<string, string>>(() =>
+    Object.fromEntries((agreement.document?.data.parties ?? []).map((party) => [party.id, String(party.percent)])),
+  );
 
   const totalPercent = agreement.splits.reduce((s, p) => s + p.percent, 0);
+  const isFinalRecord = FINAL_STATUSES.includes(agreement.status);
+  const invites = agreement.document?.collaboratorInvites ?? [];
+  const canUpdateInvites = Boolean(agreement.document && onUpdateDocument && !isFinalRecord);
+  const currentProposal = agreement.document?.splitProposalVersions.find((proposal) => proposal.id === agreement.document?.currentProposalId) ?? agreement.document?.splitProposalVersions.at(-1);
+  const currentApprovals = agreement.document?.splitApprovals.filter((approval) => approval.proposalVersionId === currentProposal?.id) ?? [];
+  const currentSignatures = agreement.document?.splitSignatures.filter((signature) => signature.proposalVersionId === currentProposal?.id) ?? [];
+  const visibleSignatures = currentSignatures.length > 0
+    ? currentSignatures
+    : agreement.document && currentProposal && ["Ready to Sign", "Pending Signatures"].includes(agreement.status)
+      ? buildSignatureRecords(agreement.document, currentProposal.id).filter((signature) => signature.proposalVersionId === currentProposal.id)
+      : [];
+  const proposalTotal = Object.values(proposalPercents).reduce((sum, value) => sum + (Number(value) || 0), 0);
+  const canNegotiate = Boolean(agreement.document && onUpdateDocument && !isFinalRecord && agreement.status !== "Draft" && agreement.status !== "Pending Collaborator Acceptance");
+  const canSign = Boolean(agreement.document && onUpdateDocument && ["Ready to Sign", "Pending Signatures"].includes(agreement.status));
+  const versionItems = agreement.document?.splitProposalVersions.map((proposal) => ({
+    version: proposal.versionNumber,
+    date: new Date(proposal.createdAt).toLocaleDateString(),
+    note: proposal.notes || "Split proposal",
+    active: proposal.id === agreement.document?.currentProposalId,
+  })) ?? FAKE_VERSIONS;
+  const auditItems = agreement.document?.auditTrail
+    .map((entry) => ({
+      date: new Date(entry.timestamp).toLocaleString(),
+      event: entry.action,
+      actor: entry.actor,
+    }))
+    .reverse() ?? FAKE_AUDIT;
+
+  const updateInviteStatus = (inviteId: string, status: "Accepted" | "Declined") => {
+    if (!agreement.document || !onUpdateDocument || isFinalRecord) return;
+
+    const now = new Date().toISOString();
+    const collaboratorInvites = invites.map((invite) =>
+      invite.id === inviteId
+        ? {
+            ...invite,
+            status,
+            respondedAt: now,
+            profileSnapshot: {
+              ...invite.profileSnapshot,
+              displayName: invite.profileSnapshot?.displayName || invite.name,
+            },
+          }
+        : invite,
+    );
+    const allResponded = collaboratorInvites.length > 0 && collaboratorInvites.every((invite) => invite.status !== "Pending");
+    const acceptedCount = collaboratorInvites.filter((invite) => invite.status === "Accepted").length;
+    const nextStatus = allResponded && acceptedCount > 0 ? "Pending Split Approval" : agreement.document.status;
+    const actor = collaboratorInvites.find((invite) => invite.id === inviteId)?.name || "Collaborator";
+    const currentProposalId = agreement.document.currentProposalId || agreement.document.splitProposalVersions.at(-1)?.id || "";
+    const splitApprovals = status === "Accepted" && currentProposalId && !agreement.document.splitApprovals.some((approval) => approval.collaboratorId === inviteId && approval.proposalVersionId === currentProposalId)
+      ? [
+          ...agreement.document.splitApprovals,
+          {
+            id: `${agreement.document.id}-${inviteId}-${Date.now()}`,
+            proposalVersionId: currentProposalId,
+            collaboratorId: inviteId,
+            collaboratorName: actor,
+            status: "Pending" as const,
+          },
+        ]
+      : agreement.document.splitApprovals;
+    const updatedDocument = addDocumentAuditTrail(
+      {
+        ...agreement.document,
+        status: nextStatus,
+        collaboratorInvites,
+        splitApprovals,
+      },
+      actor,
+      `${actor} ${status.toLowerCase()} the collaboration invite`,
+    );
+
+    onUpdateDocument(updatedDocument);
+  };
+
+  const updateApprovalStatus = (approvalId: string, status: "Approved" | "Rejected") => {
+    if (!agreement.document || !onUpdateDocument || !currentProposal || isFinalRecord) return;
+
+    const now = new Date().toISOString();
+    const approval = currentApprovals.find((item) => item.id === approvalId);
+    const splitApprovals = agreement.document.splitApprovals.map((item) =>
+      item.id === approvalId
+        ? {
+            ...item,
+            status,
+            respondedAt: now,
+            notes: status === "Rejected" ? proposalNote.trim() : item.notes,
+          }
+        : item,
+    );
+    const nextCurrentApprovals = splitApprovals.filter((item) => item.proposalVersionId === currentProposal.id);
+    const allApproved = nextCurrentApprovals.length > 0 && nextCurrentApprovals.every((item) => item.status === "Approved");
+    const baseDocument = {
+      ...agreement.document,
+      status: status === "Rejected" ? "Revision Requested" as const : allApproved ? "Ready to Sign" as const : agreement.document.status,
+      splitApprovals,
+    };
+    const documentWithSignatures = status !== "Rejected" && allApproved
+      ? { ...baseDocument, splitSignatures: buildSignatureRecords(baseDocument, currentProposal.id) }
+      : baseDocument;
+    const updatedDocument = addDocumentAuditTrail(
+      documentWithSignatures,
+      approval?.collaboratorName || "Collaborator",
+      status === "Rejected" ? "Requested a split revision" : "Approved the current split proposal",
+    );
+
+    onUpdateDocument(updatedDocument);
+    setProposalNote("");
+  };
+
+  const signSplitSheet = (signatureId: string) => {
+    if (!agreement.document || !onUpdateDocument || !currentProposal || !canSign) return;
+
+    const now = new Date().toISOString();
+    const preparedSignatures = buildSignatureRecords(agreement.document, currentProposal.id);
+    const signature = preparedSignatures.find((item) => item.id === signatureId);
+    const splitSignatures = preparedSignatures.map((item) =>
+      item.id === signatureId
+        ? {
+            ...item,
+            status: "Signed" as const,
+            signedAt: now,
+            signatureMethod: "SPLIT beta acknowledgement",
+          }
+        : item,
+    );
+    const proposalSignatures = splitSignatures.filter((item) => item.proposalVersionId === currentProposal.id);
+    const allSigned = proposalSignatures.length > 0 && proposalSignatures.every((item) => item.status === "Signed");
+    const updatedDocument = addDocumentAuditTrail(
+      {
+        ...agreement.document,
+        status: allSigned ? "Verified and Stored" : "Pending Signatures",
+        storedAt: allSigned ? now : agreement.document.storedAt,
+        verifiedAt: allSigned ? now : agreement.document.verifiedAt,
+        splitSignatures,
+      },
+      signature?.collaboratorName || "Collaborator",
+      allSigned ? "Signed and verified the split sheet" : "Signed the split sheet",
+    );
+
+    onUpdateDocument(updatedDocument);
+  };
+
+  const createRevisionProposal = () => {
+    if (!agreement.document || !onUpdateDocument || !canNegotiate) return;
+
+    const nextTotal = Math.round(proposalTotal * 100) / 100;
+    if (Math.abs(nextTotal - 100) > 0.01) return;
+
+    const now = new Date().toISOString();
+    const proposalId = `${agreement.document.id}-proposal-${Date.now()}`;
+    const versionNumber = (agreement.document.splitProposalVersions.at(-1)?.versionNumber || agreement.document.version || 1) + 1;
+    const allocations = agreement.document.data.parties.map((party) => ({
+      partyId: party.id,
+      name: party.professionalName || party.legalName || party.email || party.phoneNumber || party.splitId || "Invited writer",
+      role: party.role || "Collaborator",
+      percentage: Number(proposalPercents[party.id]) || 0,
+      notes: party.contributionDescription,
+    }));
+    const acceptedApprovals = agreement.document.collaboratorInvites
+      .filter((invite) => invite.status === "Accepted")
+      .map((invite) => ({
+        id: `${proposalId}-${invite.id}`,
+        proposalVersionId: proposalId,
+        collaboratorId: invite.id,
+        collaboratorName: invite.name,
+        status: "Pending" as const,
+      }));
+    const creatorName = agreement.document.creatorProfile.displayName || agreement.document.creatorProfile.legalName || agreement.document.creatorProfile.emailAddress || "SPLIT user";
+    const updatedParties = agreement.document.data.parties.map((party) => ({
+      ...party,
+      percent: Number(proposalPercents[party.id]) || 0,
+    }));
+    const updatedDocument = addDocumentAuditTrail(
+      {
+        ...agreement.document,
+        status: "Pending Split Approval",
+        version: versionNumber,
+        currentProposalId: proposalId,
+        data: {
+          ...agreement.document.data,
+          parties: updatedParties,
+        },
+        splitProposalVersions: [
+          ...agreement.document.splitProposalVersions,
+          {
+            id: proposalId,
+            versionNumber,
+            proposedBy: creatorName,
+            notes: proposalNote.trim() || "Updated split proposal",
+            createdAt: now,
+            allocations,
+          },
+        ],
+        splitApprovals: [
+          ...agreement.document.splitApprovals,
+          {
+            id: `${proposalId}-creator`,
+            proposalVersionId: proposalId,
+            collaboratorId: "creator",
+            collaboratorName: creatorName,
+            status: "Approved" as const,
+            respondedAt: now,
+          },
+          ...acceptedApprovals,
+        ],
+      },
+      creatorName,
+      `Created split proposal v${versionNumber}`,
+    );
+
+    onUpdateDocument(updatedDocument);
+    setProposalNote("");
+  };
 
   return (
     <div className="max-w-3xl mx-auto px-4 md:px-8 py-6 md:py-8">
@@ -55,14 +315,29 @@ export default function AgreementDetail({ agreement }: { agreement: Agreement })
           </div>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
-          <button className="flex items-center gap-1.5 border border-border rounded-lg px-3 py-2 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-colors">
+          <button
+            type="button"
+            onClick={() => window.print()}
+            className="flex items-center gap-1.5 border border-border rounded-lg px-3 py-2 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+          >
             <Download className="h-3.5 w-3.5" />
-            Export Packet
+            {isFinalRecord ? "Print Record" : "Export Packet"}
           </button>
-          <button className="flex items-center gap-1.5 bg-primary text-primary-foreground rounded-lg px-3 py-2 text-xs font-semibold hover:bg-primary/90 transition-colors">
-            <PenLine className="h-3.5 w-3.5" />
-            Sign
-          </button>
+          {isFinalRecord ? (
+            <span className="flex items-center gap-1.5 rounded-lg border border-[hsl(var(--split-verified)/0.25)] bg-[hsl(var(--split-verified)/0.08)] px-3 py-2 text-xs font-semibold text-[hsl(var(--split-verified))]">
+              <Shield className="h-3.5 w-3.5" />
+              Read-only
+            </span>
+          ) : (
+            <button
+              type="button"
+              disabled={!canSign}
+              className="flex items-center gap-1.5 bg-primary text-primary-foreground rounded-lg px-3 py-2 text-xs font-semibold hover:bg-primary/90 transition-colors disabled:cursor-default disabled:opacity-40"
+            >
+              <PenLine className="h-3.5 w-3.5" />
+              Sign
+            </button>
+          )}
         </div>
       </div>
 
@@ -76,7 +351,61 @@ export default function AgreementDetail({ agreement }: { agreement: Agreement })
       )}
 
       <div className="mt-6 space-y-4">
+        {isFinalRecord && (
+          <Section title="Verified Archive" icon={Shield}>
+            <div className="rounded-xl border border-[hsl(var(--split-verified)/0.25)] bg-[hsl(var(--split-verified)/0.07)] p-4">
+              <div className="grid gap-3 md:grid-cols-3">
+                <MetaCell label="Document" value={agreement.document?.documentNumber || agreement.id} />
+                <MetaCell label="Verified" value={formatDisplayDateTime(agreement.document?.verifiedAt || agreement.document?.storedAt || agreement.document?.updatedAt || agreement.updated)} />
+                <MetaCell label="Signers" value={String(visibleSignatures.filter((signature) => signature.status === "Signed").length || agreement.parties.length)} />
+              </div>
+              <p className="mt-3 text-xs leading-5 text-muted-foreground">
+                This split sheet is stored as the final verified record. Create a new version if the split needs to change later.
+              </p>
+            </div>
+          </Section>
+        )}
+
         {/* Parties */}
+        {invites.length > 0 && (
+          <Section title="Collaborator Invitations" icon={Users}>
+            <div className="divide-y divide-border rounded-xl border border-border overflow-hidden">
+              {invites.map((invite) => (
+                <div key={invite.id} className="grid gap-3 bg-card px-3 py-3 md:grid-cols-[1fr_auto] md:items-center md:px-4">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="text-sm font-semibold">{invite.name}</div>
+                      <InviteStatus status={invite.status} />
+                    </div>
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      Invited by {invite.inviteMethod}: {invite.inviteValue || "Not provided"}
+                      {invite.respondedAt && ` · ${new Date(invite.respondedAt).toLocaleDateString()}`}
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      disabled={!canUpdateInvites || invite.status === "Accepted"}
+                      onClick={() => updateInviteStatus(invite.id, "Accepted")}
+                      className="rounded-lg border border-[hsl(var(--split-verified)/0.25)] bg-[hsl(var(--split-verified)/0.08)] px-3 py-2 text-xs font-semibold text-[hsl(var(--split-verified))] disabled:cursor-default disabled:opacity-50"
+                    >
+                      Accept
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!canUpdateInvites || invite.status === "Declined"}
+                      onClick={() => updateInviteStatus(invite.id, "Declined")}
+                      className="rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-2 text-xs font-semibold text-destructive disabled:cursor-default disabled:opacity-50"
+                    >
+                      Decline
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Section>
+        )}
+
         <Section title="Writers" icon={Users}>
           <div className="divide-y divide-border rounded-xl border border-border overflow-hidden">
             {agreement.parties.map((party, i) => {
@@ -98,6 +427,156 @@ export default function AgreementDetail({ agreement }: { agreement: Agreement })
             })}
           </div>
         </Section>
+
+        {agreement.document && currentProposal && (
+          <Section title="Split Proposal" icon={GitBranch}>
+            <div className="rounded-xl border border-border bg-card p-4">
+              <div className="mb-4 flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                <div>
+                  <div className="text-sm font-bold">Current proposal v{currentProposal.versionNumber}</div>
+                  <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                    {currentProposal.notes || "No proposal note"} · Proposed by {currentProposal.proposedBy}
+                  </p>
+                </div>
+                <span className={`w-fit rounded-full px-2.5 py-1 text-xs font-bold ${Math.abs(sumProposalAllocations(currentProposal.allocations) - 100) < 0.01 ? "bg-[hsl(var(--split-verified)/0.12)] text-[hsl(var(--split-verified))]" : "bg-destructive/10 text-destructive"}`}>
+                  {sumProposalAllocations(currentProposal.allocations)}%
+                </span>
+              </div>
+
+              <div className="mb-4 grid gap-2">
+                {currentApprovals.map((approval) => (
+                  <div key={approval.id} className="grid gap-3 rounded-lg border border-border bg-background px-3 py-3 md:grid-cols-[1fr_auto] md:items-center">
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-sm font-semibold">{approval.collaboratorName}</span>
+                        <ApprovalStatus status={approval.status} />
+                      </div>
+                      {approval.notes && <p className="mt-1 text-xs text-muted-foreground">{approval.notes}</p>}
+                    </div>
+                    {approval.status === "Pending" && (
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          disabled={!canNegotiate}
+                          onClick={() => updateApprovalStatus(approval.id, "Approved")}
+                          className="rounded-lg border border-[hsl(var(--split-verified)/0.25)] bg-[hsl(var(--split-verified)/0.08)] px-3 py-2 text-xs font-semibold text-[hsl(var(--split-verified))] disabled:cursor-default disabled:opacity-50"
+                        >
+                          Approve
+                        </button>
+                        <button
+                          type="button"
+                          disabled={!canNegotiate}
+                          onClick={() => updateApprovalStatus(approval.id, "Rejected")}
+                          className="rounded-lg border border-[hsl(var(--split-amended)/0.25)] bg-[hsl(var(--split-amended)/0.08)] px-3 py-2 text-xs font-semibold text-[hsl(var(--split-amended))] disabled:cursor-default disabled:opacity-50"
+                        >
+                          Request revision
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              {!isFinalRecord ? (
+                <div className="rounded-lg border border-border bg-background p-3">
+                  <div className="mb-3 text-xs font-bold uppercase tracking-wider text-muted-foreground">Create a revised proposal</div>
+                  <div className="grid gap-3 md:grid-cols-2">
+                    {agreement.document.data.parties.map((party) => (
+                      <label key={party.id} className="text-xs font-semibold text-muted-foreground">
+                        {party.professionalName || party.legalName || party.email || party.phoneNumber || party.splitId || "Invited writer"}
+                        <div className="mt-1 flex items-center gap-2">
+                          <input
+                            type="number"
+                            min="0"
+                            max="100"
+                            value={proposalPercents[party.id] ?? ""}
+                            onChange={(event) => setProposalPercents((current) => ({ ...current, [party.id]: event.target.value }))}
+                            className="h-10 w-full rounded-lg border border-border bg-card px-3 text-sm font-bold tabular-nums outline-none focus:ring-2 focus:ring-ring/30"
+                          />
+                          <span>%</span>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                  <textarea
+                    value={proposalNote}
+                    onChange={(event) => setProposalNote(event.target.value)}
+                    placeholder="Optional reason for this proposal or revision request."
+                    className="mt-3 min-h-[72px] w-full resize-none rounded-lg border border-border bg-card px-3 py-2.5 text-sm outline-none placeholder:text-muted-foreground/50 focus:ring-2 focus:ring-ring/30"
+                  />
+                  <div className="mt-3 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                    <span className={`text-xs font-bold ${Math.abs(proposalTotal - 100) < 0.01 ? "text-[hsl(var(--split-verified))]" : "text-destructive"}`}>
+                      Proposal total: {Math.round(proposalTotal * 100) / 100}%
+                    </span>
+                    <button
+                      type="button"
+                      disabled={!canNegotiate || Math.abs(proposalTotal - 100) > 0.01}
+                      onClick={createRevisionProposal}
+                      className="rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      Propose updated split
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="rounded-lg border border-border bg-background px-3 py-3 text-xs leading-5 text-muted-foreground">
+                  This proposal is locked because the split sheet has been verified and stored.
+                </div>
+              )}
+            </div>
+          </Section>
+        )}
+
+        {agreement.document && currentProposal && visibleSignatures.length > 0 && (
+          <Section title="Signature & Verification" icon={Shield}>
+            <div className="rounded-xl border border-border bg-card p-4">
+              <div className="mb-4 flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                <div>
+                  <div className="text-sm font-bold">Signature packet v{currentProposal.versionNumber}</div>
+                  <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                    Each approved collaborator signs the current split proposal before SPLIT stores the verified record.
+                  </p>
+                </div>
+                <span className="w-fit rounded-full bg-secondary px-2.5 py-1 text-xs font-bold text-muted-foreground">
+                  {visibleSignatures.filter((signature) => signature.status === "Signed").length}/{visibleSignatures.length} signed
+                </span>
+              </div>
+
+              <div className="grid gap-2">
+                {visibleSignatures.map((signature) => (
+                  <div key={signature.id} className="grid gap-3 rounded-lg border border-border bg-background px-3 py-3 md:grid-cols-[1fr_auto] md:items-center">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-sm font-semibold">{signature.collaboratorName}</span>
+                        <SignatureRecordStatus status={signature.status} />
+                      </div>
+                      <div className="mt-1 text-xs text-muted-foreground">
+                        {signature.signedAt
+                          ? `Signed ${new Date(signature.signedAt).toLocaleString()}`
+                          : "Awaiting signature"}
+                        {signature.signatureMethod && ` · ${signature.signatureMethod}`}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={!canSign || signature.status === "Signed"}
+                      onClick={() => signSplitSheet(signature.id)}
+                      className="rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground hover:bg-primary/90 disabled:cursor-default disabled:opacity-40"
+                    >
+                      {signature.status === "Signed" ? "Signed" : "Sign"}
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              {agreement.document.verifiedAt && (
+                <div className="mt-3 rounded-lg border border-[hsl(var(--split-verified)/0.25)] bg-[hsl(var(--split-verified)/0.08)] px-3 py-2 text-xs font-semibold text-[hsl(var(--split-verified))]">
+                  Verified and stored {new Date(agreement.document.verifiedAt).toLocaleString()}
+                </div>
+              )}
+            </div>
+          </Section>
+        )}
 
         {/* Splits */}
         <Section title="Ownership Splits" icon={FileText}>
@@ -137,6 +616,8 @@ export default function AgreementDetail({ agreement }: { agreement: Agreement })
             <MetaCell label="Last Updated" value={agreement.updated} />
             <MetaCell label="Version" value={`v${agreement.version}`} />
             <MetaCell label="Type" value={agreement.type} />
+            {agreement.document?.documentNumber && <MetaCell label="Document" value={agreement.document.documentNumber} />}
+            {agreement.document?.verifiedAt && <MetaCell label="Verified" value={formatDisplayDateTime(agreement.document.verifiedAt)} />}
           </div>
           <div className="mt-3 rounded-lg border border-border bg-secondary/30 px-3 md:px-4 py-2.5">
             <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">Version Hash</div>
@@ -145,9 +626,9 @@ export default function AgreementDetail({ agreement }: { agreement: Agreement })
         </Section>
 
         {/* Version History */}
-        <CollapsibleSection title="Version History" icon={GitBranch} open={showHistory} onToggle={() => setShowHistory((v) => !v)} count={FAKE_VERSIONS.length}>
+        <CollapsibleSection title="Version History" icon={GitBranch} open={showHistory} onToggle={() => setShowHistory((v) => !v)} count={versionItems.length}>
           <div className="space-y-2">
-            {FAKE_VERSIONS.map((v) => (
+            {versionItems.map((v) => (
               <div key={v.version} className={`flex items-start gap-3 rounded-lg px-3 md:px-4 py-3 border ${v.active ? "border-primary/30 bg-primary/5" : "border-border bg-card"}`}>
                 <div className={`h-5 w-5 rounded-full flex items-center justify-center text-[9px] font-bold flex-shrink-0 mt-0.5 ${v.active ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground"}`}>
                   {v.version}
@@ -166,10 +647,10 @@ export default function AgreementDetail({ agreement }: { agreement: Agreement })
         </CollapsibleSection>
 
         {/* Audit Trail */}
-        <CollapsibleSection title="Audit Trail" icon={Clock} open={showAudit} onToggle={() => setShowAudit((v) => !v)} count={FAKE_AUDIT.length}>
+        <CollapsibleSection title="Audit Trail" icon={Clock} open={showAudit} onToggle={() => setShowAudit((v) => !v)} count={auditItems.length}>
           <div className="relative pl-4">
             <div className="absolute left-[7px] top-2 bottom-2 w-px bg-border" />
-            {FAKE_AUDIT.map((entry, i) => (
+            {auditItems.map((entry, i) => (
               <div key={i} className="relative flex gap-3 pb-4 last:pb-0">
                 <div className="absolute -left-4 mt-0.5 h-3.5 w-3.5 rounded-full border-2 border-border bg-background flex-shrink-0" />
                 <div className="ml-2 min-w-0">
@@ -186,13 +667,46 @@ export default function AgreementDetail({ agreement }: { agreement: Agreement })
 }
 
 function VerificationBanner({ status, hash }: { status: Agreement["status"]; hash: string }) {
-  if (status === "Executed") {
+  if (status === "Pending Collaborator Acceptance") {
+    return (
+      <div className="flex items-center gap-3 rounded-xl border border-[hsl(var(--split-pending)/0.3)] bg-[hsl(var(--split-pending)/0.07)] px-3 md:px-4 py-3">
+        <AlertCircle className="h-4 w-4 text-[hsl(var(--split-pending))] flex-shrink-0" />
+        <div className="flex-1 min-w-0">
+          <div className="text-xs font-semibold text-[hsl(var(--split-pending))]">Waiting for collaborator acceptance</div>
+          <div className="text-[11px] text-muted-foreground mt-0.5">Invited collaborators need to confirm they were part of this work.</div>
+        </div>
+      </div>
+    );
+  }
+  if (status === "Pending Split Approval") {
+    return (
+      <div className="flex items-center gap-3 rounded-xl border border-primary/20 bg-primary/5 px-3 md:px-4 py-3">
+        <CheckCircle2 className="h-4 w-4 text-primary flex-shrink-0" />
+        <div className="flex-1 min-w-0">
+          <div className="text-xs font-semibold text-primary">Ready for split approval</div>
+          <div className="text-[11px] text-muted-foreground mt-0.5">Collaborators have responded. Next phase will handle proposal approval.</div>
+        </div>
+      </div>
+    );
+  }
+  if (status === "Ready to Sign") {
+    return (
+      <div className="flex items-center gap-3 rounded-xl border border-primary/20 bg-primary/5 px-3 md:px-4 py-3">
+        <PenLine className="h-4 w-4 text-primary flex-shrink-0" />
+        <div className="flex-1 min-w-0">
+          <div className="text-xs font-semibold text-primary">Ready to sign</div>
+          <div className="text-[11px] text-muted-foreground mt-0.5">All split approvals are in. Collect signatures to verify and store the record.</div>
+        </div>
+      </div>
+    );
+  }
+  if (["Executed", "Verified and Stored", "Fully Signed"].includes(status)) {
     return (
       <div className="flex items-center gap-3 rounded-xl border border-[hsl(var(--split-verified)/0.3)] bg-[hsl(var(--split-verified)/0.07)] px-3 md:px-4 py-3">
         <CheckCircle2 className="h-4 w-4 text-[hsl(var(--split-verified))] flex-shrink-0" />
         <div className="flex-1 min-w-0">
-          <div className="text-xs font-semibold text-[hsl(var(--split-verified))]">Executed & Registration Ready</div>
-          <div className="text-[11px] text-muted-foreground mt-0.5">All writers signed. PRO/MLC export metadata is ready for review.</div>
+          <div className="text-xs font-semibold text-[hsl(var(--split-verified))]">Verified and stored</div>
+          <div className="text-[11px] text-muted-foreground mt-0.5">All approved collaborators signed. This split sheet is stored as the verified record.</div>
         </div>
         <Shield className="h-4 w-4 text-[hsl(var(--split-verified)/0.5)] flex-shrink-0 hidden md:block" />
       </div>
@@ -223,8 +737,53 @@ function VerificationBanner({ status, hash }: { status: Agreement["status"]; has
   return null;
 }
 
+function InviteStatus({ status }: { status: "Pending" | "Accepted" | "Declined" }) {
+  const styles = {
+    Pending: "bg-[hsl(var(--split-pending)/0.12)] text-[hsl(var(--split-pending))] border-[hsl(var(--split-pending)/0.25)]",
+    Accepted: "bg-[hsl(var(--split-verified)/0.12)] text-[hsl(var(--split-verified))] border-[hsl(var(--split-verified)/0.25)]",
+    Declined: "bg-destructive/10 text-destructive border-destructive/20",
+  };
+
+  return (
+    <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold ${styles[status]}`}>
+      {status}
+    </span>
+  );
+}
+
+function ApprovalStatus({ status }: { status: "Pending" | "Approved" | "Rejected" }) {
+  const styles = {
+    Pending: "bg-[hsl(var(--split-pending)/0.12)] text-[hsl(var(--split-pending))] border-[hsl(var(--split-pending)/0.25)]",
+    Approved: "bg-[hsl(var(--split-verified)/0.12)] text-[hsl(var(--split-verified))] border-[hsl(var(--split-verified)/0.25)]",
+    Rejected: "bg-[hsl(var(--split-amended)/0.12)] text-[hsl(var(--split-amended))] border-[hsl(var(--split-amended)/0.25)]",
+  };
+
+  return (
+    <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold ${styles[status]}`}>
+      {status}
+    </span>
+  );
+}
+
+function SignatureRecordStatus({ status }: { status: "Pending" | "Signed" }) {
+  const styles = {
+    Pending: "bg-[hsl(var(--split-pending)/0.12)] text-[hsl(var(--split-pending))] border-[hsl(var(--split-pending)/0.25)]",
+    Signed: "bg-[hsl(var(--split-verified)/0.12)] text-[hsl(var(--split-verified))] border-[hsl(var(--split-verified)/0.25)]",
+  };
+
+  return (
+    <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold ${styles[status]}`}>
+      {status}
+    </span>
+  );
+}
+
+function sumProposalAllocations(allocations: Array<{ percentage: number }>) {
+  return Math.round(allocations.reduce((sum, allocation) => sum + (Number(allocation.percentage) || 0), 0) * 100) / 100;
+}
+
 function SignatureStatus({ index, status }: { index: number; status: Agreement["status"] }) {
-  if (status === "Executed") {
+  if (["Executed", "Verified and Stored", "Fully Signed"].includes(status)) {
     return (
       <div className="flex items-center gap-1.5 text-[11px] font-semibold text-[hsl(var(--split-verified))]">
         <CheckCircle2 className="h-3.5 w-3.5" />
