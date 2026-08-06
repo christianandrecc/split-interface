@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { UserProfile } from "@/components/AccountAccess";
+import type { UserProfile } from "@/lib/userProfile";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -20,14 +20,14 @@ import {
   Repeat2,
   Share2,
   UserPlus,
+  UserRound,
   X,
 } from "lucide-react";
-import {
+import type {
   CreatorCredit,
   CreatorProfile,
   CreatorSpotlightItem,
-  mayaCreatorProfile,
-} from "@/data/mockCreatorProfiles";
+} from "@/types/creatorProfile";
 import { cn } from "@/lib/utils";
 
 type CreatorProfileViewProps = {
@@ -38,9 +38,24 @@ type CreatorProfileViewProps = {
   onMessage?: () => void;
 };
 
+const EMPTY_CREATOR_PROFILE: CreatorProfile = {
+  id: "current-user",
+  displayName: "",
+  username: "",
+  verified: false,
+  profileImage: "",
+  roles: [],
+  bio: "",
+  location: "",
+  verifiedCredits: 0,
+  socials: {},
+  credits: [],
+  spotlight: [],
+};
+
 export default function CreatorProfileView({
   userProfile,
-  creatorProfile = mayaCreatorProfile,
+  creatorProfile = EMPTY_CREATOR_PROFILE,
   mode = "own",
   onEditProfile,
   onMessage,
@@ -120,11 +135,21 @@ export default function CreatorProfileView({
           )}
           <div className="flex flex-col gap-6 lg:grid lg:grid-cols-[240px_minmax(0,1fr)] lg:items-center xl:grid-cols-[248px_minmax(0,1fr)]">
             <div className="w-full max-w-[240px] overflow-hidden rounded-xl border border-border bg-card shadow-sm xl:max-w-[248px]">
-              <img
-                src={profile.profileImage}
-                alt={`${profile.displayName} profile portrait`}
-                className="aspect-square h-full w-full object-cover"
-              />
+              {profile.profileImage ? (
+                <img
+                  src={profile.profileImage}
+                  alt={`${profile.displayName} profile portrait`}
+                  className="aspect-square h-full w-full object-cover"
+                />
+              ) : (
+                <div className="flex aspect-square h-full w-full items-center justify-center bg-primary/10 text-primary">
+                  {profile.displayName || profile.username ? (
+                    <span className="text-4xl font-bold tracking-tight">{getInitials(profile.displayName || profile.username)}</span>
+                  ) : (
+                    <UserRound className="h-12 w-12" />
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="min-w-0 lg:pt-1">
@@ -132,26 +157,30 @@ export default function CreatorProfileView({
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
                     <h1 className="text-2xl font-bold tracking-tight text-foreground md:text-[2rem] md:leading-tight">
-                      {profile.displayName}
+                      {profile.displayName || "Your profile"}
                     </h1>
                     {profile.verified && (
                       <BadgeCheck className="h-5 w-5 text-primary" aria-label="Verified creator" />
                     )}
                   </div>
-                  <p className="mt-1.5 text-sm font-medium text-muted-foreground">@{profile.username}</p>
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    {profile.roles.map((role) => (
-                      <span
-                        key={role}
-                        className="inline-flex h-7 items-center rounded-full border border-primary/15 bg-primary/10 px-2.5 text-xs font-bold text-primary"
-                      >
-                        {role}
-                      </span>
-                    ))}
-                  </div>
-                  <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">
-                    {profile.bio}
-                  </p>
+                  {profile.username && <p className="mt-1.5 text-sm font-medium text-muted-foreground">@{profile.username}</p>}
+                  {profile.roles.length > 0 && (
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      {profile.roles.map((role) => (
+                        <span
+                          key={role}
+                          className="inline-flex h-7 items-center rounded-full border border-primary/15 bg-primary/10 px-2.5 text-xs font-bold text-primary"
+                        >
+                          {role}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  {profile.bio && (
+                    <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">
+                      {profile.bio}
+                    </p>
+                  )}
                 </div>
 
                 {mode === "collaborator" && (
@@ -187,11 +216,15 @@ export default function CreatorProfileView({
                   <span className="text-lg font-bold tabular-nums">{profile.verifiedCredits}</span>
                   <span className="text-sm text-muted-foreground">verified credits</span>
                 </div>
-                <div className="hidden h-6 w-px bg-border sm:block" />
-                <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                  <MapPin className="h-4 w-4" />
-                  <span>{profile.location}</span>
-                </div>
+                {profile.location && (
+                  <>
+                    <div className="hidden h-6 w-px bg-border sm:block" />
+                    <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                      <MapPin className="h-4 w-4" />
+                      <span>{profile.location}</span>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           </div>
@@ -200,54 +233,72 @@ export default function CreatorProfileView({
         <section className="mt-7 md:mt-8">
           <div className="mb-4 flex items-center justify-between gap-3">
             <h2 className="text-2xl font-bold tracking-tight">Credits</h2>
-            <button
-              type="button"
-              onClick={() => setShowAllCredits(true)}
-              className="rounded-full px-3 py-1.5 text-sm font-semibold text-primary transition-colors hover:bg-primary/10 focus:outline-none focus:ring-2 focus:ring-ring/30"
-            >
-              View all {profile.verifiedCredits}
-            </button>
+            {completeCreditList.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setShowAllCredits(true)}
+                className="rounded-full px-3 py-1.5 text-sm font-semibold text-primary transition-colors hover:bg-primary/10 focus:outline-none focus:ring-2 focus:ring-ring/30"
+              >
+                View all {profile.verifiedCredits}
+              </button>
+            )}
           </div>
 
-          <div
-            role="list"
-            aria-label={`${profile.displayName} verified credits`}
-            className="-mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto overscroll-x-contain scroll-px-[calc((100vw-78vw)/2)] px-[11vw] pb-4 md:-mx-8 md:scroll-px-8 md:px-8"
-          >
-            {profile.credits.map((credit) => (
-              <div
-                key={credit.id}
-                role="listitem"
-                className="w-[78vw] max-w-[360px] shrink-0 snap-center sm:w-[260px] md:w-[220px] lg:w-[210px] xl:w-[220px]"
-              >
-                <CreditCard credit={credit} onOpen={() => setSelectedCredit(credit)} />
-              </div>
-            ))}
-          </div>
+          {profile.credits.length === 0 ? (
+            <EmptyProfileSection
+              title="No verified credits yet"
+              description="Credits will appear here after real split sheets are verified and stored."
+            />
+          ) : (
+            <div
+              role="list"
+              aria-label={`${profile.displayName || "Your profile"} verified credits`}
+              className="-mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto overscroll-x-contain scroll-px-[calc((100vw-78vw)/2)] px-[11vw] pb-4 md:-mx-8 md:scroll-px-8 md:px-8"
+            >
+              {profile.credits.map((credit) => (
+                <div
+                  key={credit.id}
+                  role="listitem"
+                  className="w-[78vw] max-w-[360px] shrink-0 snap-center sm:w-[260px] md:w-[220px] lg:w-[210px] xl:w-[220px]"
+                >
+                  <CreditCard credit={credit} onOpen={() => setSelectedCredit(credit)} />
+                </div>
+              ))}
+            </div>
+          )}
         </section>
 
         <section className="mt-9 pb-10 md:mt-11">
           <div className="mb-4 flex items-center justify-between gap-3">
             <h2 className="text-2xl font-bold tracking-tight">Spotlight</h2>
-            <button
-              type="button"
-              onClick={() => setShowAllSpotlights(true)}
-              className="rounded-full px-3 py-1.5 text-sm font-semibold text-primary transition-colors hover:bg-primary/10 focus:outline-none focus:ring-2 focus:ring-ring/30"
-            >
-              View all
-            </button>
+            {profile.spotlight.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setShowAllSpotlights(true)}
+                className="rounded-full px-3 py-1.5 text-sm font-semibold text-primary transition-colors hover:bg-primary/10 focus:outline-none focus:ring-2 focus:ring-ring/30"
+              >
+                View all
+              </button>
+            )}
           </div>
 
-          <div className="grid gap-4 lg:grid-cols-2">
-            {featuredSpotlights.map((item) => (
-              <SpotlightCard
-                key={item.id}
-                item={item}
-                featured
-                onOpen={() => setSelectedStory(item)}
-              />
-            ))}
-          </div>
+          {featuredSpotlights.length === 0 ? (
+            <EmptyProfileSection
+              title="No spotlight stories yet"
+              description="Stories will appear after real creator credits and editorial records are connected."
+            />
+          ) : (
+            <div className="grid gap-4 lg:grid-cols-2">
+              {featuredSpotlights.map((item) => (
+                <SpotlightCard
+                  key={item.id}
+                  item={item}
+                  featured
+                  onOpen={() => setSelectedStory(item)}
+                />
+              ))}
+            </div>
+          )}
         </section>
       </div>
 
@@ -273,6 +324,18 @@ export default function CreatorProfileView({
           setSelectedStory(story);
         }}
       />
+    </div>
+  );
+}
+
+function EmptyProfileSection({ title, description }: { title: string; description: string }) {
+  return (
+    <div className="rounded-xl border border-dashed border-border bg-card px-5 py-8 text-center">
+      <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-primary/10 text-primary">
+        <BadgeCheck className="h-5 w-5" />
+      </div>
+      <h3 className="mt-3 text-sm font-bold text-foreground">{title}</h3>
+      <p className="mx-auto mt-1 max-w-sm text-xs leading-5 text-muted-foreground">{description}</p>
     </div>
   );
 }
@@ -495,7 +558,7 @@ function createFallbackStory(story: CreatorSpotlightItem, creatorName: string) {
     paragraphs: [
       `${story.title} follows ${creatorName} through the choices behind the public credit, from the first session notes to the finished release.`,
       "The piece uses SPLIT's verified records as a starting point, then opens up the human context around the work: what changed in the room, what collaborators heard, and why the final contribution mattered.",
-      "This mock story is a preview of how creator profiles can turn credits into living context without exposing private contract details.",
+      "Creator profiles can turn credits into living context without exposing private contract details.",
     ],
   };
 }
@@ -608,7 +671,7 @@ function AllCreditsDialog({
         <DialogHeader>
           <DialogTitle>Verified Credits</DialogTitle>
           <DialogDescription>
-            A reviewable mock list for the public credit archive. Showing featured records from {total} verified credits.
+            Showing public records from {total} verified credits.
           </DialogDescription>
         </DialogHeader>
         <div className="mt-2 divide-y divide-border">
@@ -710,48 +773,19 @@ function mergeUserProfileWithCreatorProfile(base: CreatorProfile, userProfile?: 
     ...base,
     displayName,
     username: userProfile.username || base.username,
-    roles: roles.length > 0 ? roles : base.roles,
-    location: userProfile.profileLocation || base.location,
+    profileImage: userProfile.profileImageUrl || base.profileImage,
+    roles,
+    location: userProfile.profileLocation || buildLocationLabel(userProfile) || base.location,
     socials: {
-      instagram: userProfile.socialInstagram || base.socials.instagram,
-      tiktok: userProfile.socialTikTok || base.socials.tiktok,
-      x: userProfile.socialX || base.socials.x,
+      instagram: userProfile.socialInstagram || undefined,
+      tiktok: userProfile.socialTikTok || undefined,
+      x: userProfile.socialX || undefined,
     },
   };
 }
 
 function buildCompleteCreditList(profile: CreatorProfile) {
-  const extraCredits: CreatorCredit[] = [
-    {
-      ...profile.credits[0],
-      id: "credit-late-light",
-      title: "Late Light",
-      artist: "Nia Stone",
-      year: "2021",
-      releaseType: "Single",
-      contribution: "Vocal production",
-    },
-    {
-      ...profile.credits[1],
-      id: "credit-ordinary-magic",
-      title: "Ordinary Magic",
-      artist: "June Vale",
-      year: "2020",
-      releaseType: "EP",
-      contribution: "Co-writer",
-    },
-    {
-      ...profile.credits[2],
-      id: "credit-clean-break",
-      title: "Clean Break",
-      artist: "Theo Grant",
-      year: "2019",
-      releaseType: "Album",
-      contribution: "Producer",
-    },
-  ];
-
-  return [...profile.credits, ...extraCredits];
+  return profile.credits;
 }
 
 function parseRoleTags(value?: string) {
@@ -766,4 +800,22 @@ function buildPublicName(profile: UserProfile) {
     .map((part) => part.trim())
     .filter(Boolean)
     .join(" ");
+}
+
+function buildLocationLabel(profile: UserProfile) {
+  return [profile.city, profile.state]
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .join(", ");
+}
+
+function getInitials(value: string) {
+  return value
+    .split(/\s|@/)
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
 }

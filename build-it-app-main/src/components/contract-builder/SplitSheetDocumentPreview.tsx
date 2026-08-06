@@ -1,7 +1,8 @@
 import { ArrowLeft, CheckCircle2, Download, FileText, Save, Send, Users } from "lucide-react";
-import type { UserProfile } from "@/components/AccountAccess";
+import type { UserProfile } from "@/lib/userProfile";
 import type { StoredSplitSheetDocument } from "./document";
 import { partyDisplayName, sumPercents } from "./types";
+import { getSplitWorkflowLabel, PENDING_SPLIT_STATUSES, VERIFIED_SPLIT_STATUSES } from "@/lib/splitWorkflow";
 
 type SplitSheetDocumentPreviewProps = {
   document: StoredSplitSheetDocument;
@@ -35,17 +36,18 @@ function formatDateTime(value: string | undefined) {
 }
 
 function StatusPill({ status }: { status: StoredSplitSheetDocument["status"] }) {
-  const verified = ["Executed", "Verified and Stored", "Fully Signed"].includes(status);
-  const pending = status.startsWith("Pending") || status === "Revision Requested" || status === "Ready to Sign";
-  const className = verified
-    ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-    : pending
-      ? "border-amber-200 bg-amber-50 text-amber-700"
-      : "border-slate-200 bg-slate-50 text-slate-700";
+  const verified = VERIFIED_SPLIT_STATUSES.includes(status);
+  const pending = PENDING_SPLIT_STATUSES.includes(status);
+  let className = "border-slate-200 bg-slate-50 text-slate-700";
+
+  if (verified) className = "border-emerald-200 bg-emerald-50 text-emerald-700";
+  else if (status === "Disputed") className = "border-red-200 bg-red-50 text-red-700";
+  else if (status === "Archived") className = "border-slate-200 bg-slate-50 text-slate-600";
+  else if (pending) className = "border-amber-200 bg-amber-50 text-amber-700";
 
   return (
     <span className={"inline-flex rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-[0.12em] " + className}>
-      {status}
+      {getSplitWorkflowLabel(status)}
     </span>
   );
 }
@@ -65,7 +67,7 @@ export function SplitSheetDocumentPage({ document: splitDocument, viewerProfile,
   const total = sumPercents(writers);
   const hasSampleFlag = data.sampleStatus !== "No sample or interpolation";
   const hasStructuredSample = data.sampleStatus === "Sample";
-  const isVerifiedRecord = ["Executed", "Verified and Stored", "Fully Signed"].includes(splitDocument.status);
+  const isVerifiedRecord = VERIFIED_SPLIT_STATUSES.includes(splitDocument.status) || splitDocument.status === "Archived";
 
   return (
     <article
@@ -246,7 +248,7 @@ export default function SplitSheetDocumentPreview({
   onDone,
 }: SplitSheetDocumentPreviewProps) {
   const hasCollaborators = splitDocument.collaborators.length > 0;
-  const isVerifiedRecord = ["Executed", "Verified and Stored", "Fully Signed"].includes(splitDocument.status);
+  const isVerifiedRecord = VERIFIED_SPLIT_STATUSES.includes(splitDocument.status) || splitDocument.status === "Archived";
 
   return (
     <div className="min-h-screen bg-[#f6f8fb] px-4 py-6 text-slate-900 sm:px-8 lg:px-12">

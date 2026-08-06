@@ -1,5 +1,6 @@
 import { partyDisplayName, sumPercents, type ContractData } from "./types";
 import { CircleAlert, FileText, Music, Users } from "lucide-react";
+import { getSplitWorkflowLabel } from "@/lib/splitWorkflow";
 
 interface Props {
   data: ContractData;
@@ -39,6 +40,7 @@ export default function StepReview({ data }: Props) {
   const invitedCollaborators = data.parties.filter((party) => !party.isCurrentUser);
   const hasSampleFlag = data.sampleStatus !== "No sample or interpolation";
   const hasStructuredSample = data.sampleStatus === "Sample";
+  const awaitingInvitesLabel = getSplitWorkflowLabel("Pending Collaborator Acceptance");
 
   return (
     <div>
@@ -83,7 +85,7 @@ export default function StepReview({ data }: Props) {
             <span className={`text-sm font-bold tabular-nums ${total === 100 ? "text-[hsl(var(--split-verified))]" : "text-destructive"}`}>{total}%</span>
           </div>
           <p className="mt-3 text-xs leading-5 text-muted-foreground">
-            Sending invites moves this split to Pending Collaborator Acceptance for {invitedCollaborators.length} collaborator{invitedCollaborators.length === 1 ? "" : "s"}.
+            Sending invites moves this split to {awaitingInvitesLabel} for {invitedCollaborators.length} collaborator{invitedCollaborators.length === 1 ? "" : "s"}.
           </p>
         </Section>
       </div>

@@ -1,4 +1,4 @@
-import type { UserProfile } from "@/components/AccountAccess";
+import type { UserProfile } from "@/lib/userProfile";
 import type { ContractData } from "./types";
 import { partyDisplayName } from "./types";
 
@@ -11,7 +11,10 @@ export type StoredSplitSheetStatus =
   | "Pending Signatures"
   | "Fully Signed"
   | "Verified and Stored"
-  | "Executed";
+  | "Executed"
+  | "Amended"
+  | "Disputed"
+  | "Archived";
 
 export type StoredSplitSheetDocument = {
   id: string;

@@ -16,61 +16,157 @@ export type Database = {
     Tables: {
       profiles: {
         Row: {
+          address_line: string | null
           address_city: string | null
           address_country: string | null
           address_state: string | null
           address_street: string | null
           address_zip: string | null
+          admin_collection_share: string | null
+          admin_company_name: string | null
+          admin_ipi: string | null
+          city: string | null
+          country: string | null
+          custom_pro_name: string | null
           created_at: string
+          display_name: string | null
           email: string | null
           id: string
           ipi_number: string | null
+          legal_address: string | null
+          legal_first_name: string | null
+          legal_last_name: string | null
+          legal_middle_name: string | null
           legal_name: string | null
+          mlc_number: string | null
+          phone_country_code: string | null
           phone_number: string | null
+          pka_names: string | null
           pro_affiliation: string | null
+          profile_data: Json
+          profile_image_url: string | null
+          profile_location: string | null
+          profile_visibility: string | null
+          publisher_contact: string | null
+          publisher_ipi: string | null
           publisher_name: string | null
+          publisher_pro: string | null
+          publishing_share: string | null
+          publishing_status: string | null
+          role_tags: string | null
+          social_instagram: string | null
+          social_tiktok: string | null
+          social_website: string | null
+          social_x: string | null
           stage_name: string | null
+          state: string | null
           tax_id: string | null
           updated_at: string
           user_id: string
+          username: string | null
+          zip_code: string | null
         }
         Insert: {
+          address_line?: string | null
           address_city?: string | null
           address_country?: string | null
           address_state?: string | null
           address_street?: string | null
           address_zip?: string | null
+          admin_collection_share?: string | null
+          admin_company_name?: string | null
+          admin_ipi?: string | null
+          city?: string | null
+          country?: string | null
+          custom_pro_name?: string | null
           created_at?: string
+          display_name?: string | null
           email?: string | null
           id?: string
           ipi_number?: string | null
+          legal_address?: string | null
+          legal_first_name?: string | null
+          legal_last_name?: string | null
+          legal_middle_name?: string | null
           legal_name?: string | null
+          mlc_number?: string | null
+          phone_country_code?: string | null
           phone_number?: string | null
+          pka_names?: string | null
           pro_affiliation?: string | null
+          profile_data?: Json
+          profile_image_url?: string | null
+          profile_location?: string | null
+          profile_visibility?: string | null
+          publisher_contact?: string | null
+          publisher_ipi?: string | null
           publisher_name?: string | null
+          publisher_pro?: string | null
+          publishing_share?: string | null
+          publishing_status?: string | null
+          role_tags?: string | null
+          social_instagram?: string | null
+          social_tiktok?: string | null
+          social_website?: string | null
+          social_x?: string | null
           stage_name?: string | null
+          state?: string | null
           tax_id?: string | null
           updated_at?: string
           user_id: string
+          username?: string | null
+          zip_code?: string | null
         }
         Update: {
+          address_line?: string | null
           address_city?: string | null
           address_country?: string | null
           address_state?: string | null
           address_street?: string | null
           address_zip?: string | null
+          admin_collection_share?: string | null
+          admin_company_name?: string | null
+          admin_ipi?: string | null
+          city?: string | null
+          country?: string | null
+          custom_pro_name?: string | null
           created_at?: string
+          display_name?: string | null
           email?: string | null
           id?: string
           ipi_number?: string | null
+          legal_address?: string | null
+          legal_first_name?: string | null
+          legal_last_name?: string | null
+          legal_middle_name?: string | null
           legal_name?: string | null
+          mlc_number?: string | null
+          phone_country_code?: string | null
           phone_number?: string | null
+          pka_names?: string | null
           pro_affiliation?: string | null
+          profile_data?: Json
+          profile_image_url?: string | null
+          profile_location?: string | null
+          profile_visibility?: string | null
+          publisher_contact?: string | null
+          publisher_ipi?: string | null
           publisher_name?: string | null
+          publisher_pro?: string | null
+          publishing_share?: string | null
+          publishing_status?: string | null
+          role_tags?: string | null
+          social_instagram?: string | null
+          social_tiktok?: string | null
+          social_website?: string | null
+          social_x?: string | null
           stage_name?: string | null
+          state?: string | null
           tax_id?: string | null
           updated_at?: string
           user_id?: string
+          username?: string | null
+          zip_code?: string | null
         }
         Relationships: []
       }

@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { formatNationalPhoneNumber, getPhoneInputMaxLength } from "@/lib/phone";
+import { createEmptyProfile, normalizeUserProfile, normalizeUsername, type UserProfile } from "@/lib/userProfile";
 import {
   Select,
   SelectContent,
@@ -13,127 +14,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ArrowLeft, ArrowRight, LogIn, UserPlus } from "lucide-react";
-
-export type UserProfile = {
-  splitId: string;
-  username: string;
-  displayName: string;
-  profileImageUrl: string;
-  roleTags: string;
-  socialInstagram: string;
-  socialTikTok: string;
-  socialX: string;
-  socialWebsite: string;
-  profileLocation: string;
-  profileVisibility: string;
-  legalName: string;
-  legalFirstName: string;
-  legalMiddleName: string;
-  legalLastName: string;
-  pkaNames: string;
-  phoneCountryCode: string;
-  phoneNumber: string;
-  emailAddress: string;
-  legalAddress: string;
-  addressLine: string;
-  zipCode: string;
-  city: string;
-  state: string;
-  country: string;
-  mlcNumber: string;
-  proAffiliation: string;
-  ipiNumber: string;
-  customProName: string;
-  publishingStatus: string;
-  publisherName: string;
-  publisherIpi: string;
-  publisherPro: string;
-  publishingShare: string;
-  adminCompanyName: string;
-  adminIpi: string;
-  adminCollectionShare: string;
-  publisherContact: string;
-};
-
-export function createSplitId() {
-  return `SPL-${Math.random().toString(36).slice(2, 6).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
-}
-
-export function normalizeUsername(value?: string) {
-  return (value ?? "")
-    .trim()
-    .replace(/^@+/, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9._]/g, "")
-    .slice(0, 24);
-}
-
-export function createEmptyProfile(): UserProfile {
-  return {
-    splitId: createSplitId(),
-    username: "",
-    displayName: "",
-    profileImageUrl: "",
-    roleTags: "",
-    socialInstagram: "",
-    socialTikTok: "",
-    socialX: "",
-    socialWebsite: "",
-    profileLocation: "",
-    profileVisibility: "Collaborators only",
-    legalName: "",
-    legalFirstName: "",
-    legalMiddleName: "",
-    legalLastName: "",
-    pkaNames: "",
-    phoneCountryCode: "+1",
-    phoneNumber: "",
-    emailAddress: "",
-    legalAddress: "",
-    addressLine: "",
-    zipCode: "",
-    city: "",
-    state: "",
-    country: "United States",
-    mlcNumber: "",
-    proAffiliation: "",
-    ipiNumber: "",
-    customProName: "",
-    publishingStatus: "",
-    publisherName: "",
-    publisherIpi: "",
-    publisherPro: "",
-    publishingShare: "",
-    adminCompanyName: "",
-    adminIpi: "",
-    adminCollectionShare: "",
-    publisherContact: "",
-  };
-}
-
-export function normalizeUserProfile(profile: Partial<UserProfile>): UserProfile {
-  const base = createEmptyProfile();
-  const normalized = {
-    ...base,
-    ...profile,
-    splitId: profile.splitId || base.splitId,
-  };
-
-  return {
-    ...normalized,
-    username: normalizeUsername(normalized.username),
-    displayName: (normalized.displayName ?? "").trim(),
-    profileImageUrl: (normalized.profileImageUrl ?? "").trim(),
-    roleTags: (normalized.roleTags ?? "").trim(),
-    socialInstagram: (normalized.socialInstagram ?? "").trim(),
-    socialTikTok: (normalized.socialTikTok ?? "").trim(),
-    socialX: (normalized.socialX ?? "").trim(),
-    socialWebsite: (normalized.socialWebsite ?? "").trim(),
-    profileLocation: (normalized.profileLocation ?? "").trim(),
-    profileVisibility: normalized.profileVisibility || "Collaborators only",
-    phoneNumber: formatNationalPhoneNumber(normalized.phoneNumber ?? "", normalized.phoneCountryCode),
-  };
-}
 
 type AccountStep = {
   field: keyof UserProfile;
@@ -303,8 +183,8 @@ const countryOptions = [
 
 type AccountAccessProps = {
   initialProfile?: UserProfile | null;
-  onCreateAccount: (profile: UserProfile) => void;
-  onSignIn: (emailAddress: string) => void;
+  onCreateAccount: (profile: UserProfile, password: string) => Promise<void>;
+  onSignIn: (emailAddress: string, password: string) => Promise<void>;
 };
 
 export default function AccountAccess({ initialProfile, onCreateAccount, onSignIn }: AccountAccessProps) {
@@ -313,8 +193,13 @@ export default function AccountAccess({ initialProfile, onCreateAccount, onSignI
     initialProfile ? normalizeUserProfile(initialProfile) : createEmptyProfile()
   );
   const [signInEmail, setSignInEmail] = useState("");
+  const [signInPassword, setSignInPassword] = useState("");
+  const [accountPassword, setAccountPassword] = useState("");
+  const [accountPasswordConfirm, setAccountPasswordConfirm] = useState("");
   const [accountStep, setAccountStep] = useState(0);
   const [proHelpSelected, setProHelpSelected] = useState(false);
+  const [formError, setFormError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   const currentStep = accountSteps[accountStep];
   const progress = ((accountStep + 1) / accountSteps.length) * 100;
@@ -324,20 +209,47 @@ export default function AccountAccess({ initialProfile, onCreateAccount, onSignI
     setProfile((current) => ({ ...current, [field]: value }));
   };
 
-  const handleCreateAccount = (event: FormEvent<HTMLFormElement>) => {
+  const handleCreateAccount = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    setFormError("");
 
     if (!isLastStep) {
       setAccountStep((step) => step + 1);
       return;
     }
 
-    onCreateAccount(normalizeProfile(profile));
+    if (accountPassword.length < 8) {
+      setFormError("Use at least 8 characters for your password.");
+      return;
+    }
+
+    if (accountPassword !== accountPasswordConfirm) {
+      setFormError("The passwords do not match.");
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      await onCreateAccount(normalizeProfile(profile), accountPassword);
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : "Could not create the Supabase account.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  const handleSignIn = (event: FormEvent<HTMLFormElement>) => {
+  const handleSignIn = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    onSignIn(signInEmail);
+    setFormError("");
+
+    try {
+      setSubmitting(true);
+      await onSignIn(signInEmail, signInPassword);
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : "Could not sign in to Supabase.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -372,7 +284,10 @@ export default function AccountAccess({ initialProfile, onCreateAccount, onSignI
             <div className="mb-5 grid grid-cols-2 rounded-lg border border-border bg-secondary p-1">
               <button
                 type="button"
-                onClick={() => setMode("create")}
+                onClick={() => {
+                  setMode("create");
+                  setFormError("");
+                }}
                 className={`flex h-10 items-center justify-center gap-2 rounded-md text-sm font-semibold transition-colors ${
                   mode === "create" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
                 }`}
@@ -382,7 +297,10 @@ export default function AccountAccess({ initialProfile, onCreateAccount, onSignI
               </button>
               <button
                 type="button"
-                onClick={() => setMode("signin")}
+                onClick={() => {
+                  setMode("signin");
+                  setFormError("");
+                }}
                 className={`flex h-10 items-center justify-center gap-2 rounded-md text-sm font-semibold transition-colors ${
                   mode === "signin" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
                 }`}
@@ -420,7 +338,50 @@ export default function AccountAccess({ initialProfile, onCreateAccount, onSignI
                       setProHelpSelected,
                     })}
                   </div>
+
+                  {isLastStep && (
+                    <div className="mt-7 rounded-xl border border-border bg-secondary/40 p-4">
+                      <div className="mb-4">
+                        <h3 className="text-sm font-bold">Secure Sign In</h3>
+                        <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                          Create a password so Supabase can store this profile under your account.
+                        </p>
+                      </div>
+                      <div className="grid gap-3 md:grid-cols-2">
+                        <Field label="Password" htmlFor="accountPassword">
+                          <Input
+                            id="accountPassword"
+                            type="password"
+                            value={accountPassword}
+                            onChange={(event) => setAccountPassword(event.target.value)}
+                            placeholder="8 characters minimum"
+                            minLength={8}
+                            required
+                            className="h-12 text-base md:text-sm"
+                          />
+                        </Field>
+                        <Field label="Confirm Password" htmlFor="accountPasswordConfirm">
+                          <Input
+                            id="accountPasswordConfirm"
+                            type="password"
+                            value={accountPasswordConfirm}
+                            onChange={(event) => setAccountPasswordConfirm(event.target.value)}
+                            placeholder="Repeat password"
+                            minLength={8}
+                            required
+                            className="h-12 text-base md:text-sm"
+                          />
+                        </Field>
+                      </div>
+                    </div>
+                  )}
                 </div>
+
+                {formError && (
+                  <div className="mt-5 rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-2 text-xs leading-5 text-destructive">
+                    {formError}
+                  </div>
+                )}
 
                 <div className="mt-6 flex items-center justify-between gap-3">
                   <Button
@@ -433,8 +394,8 @@ export default function AccountAccess({ initialProfile, onCreateAccount, onSignI
                     <ArrowLeft className="h-4 w-4" />
                     Back
                   </Button>
-                  <Button type="submit" className="h-11 flex-1 md:flex-none md:px-8">
-                    {isLastStep ? "Continue to SPLIT" : "Next"}
+                  <Button type="submit" disabled={submitting} className="h-11 flex-1 md:flex-none md:px-8">
+                    {submitting ? "Saving…" : isLastStep ? "Create Account" : "Next"}
                     {!isLastStep && <ArrowRight className="h-4 w-4" />}
                   </Button>
                 </div>
@@ -455,12 +416,25 @@ export default function AccountAccess({ initialProfile, onCreateAccount, onSignI
                   </Field>
 
                   <Field label="Password" htmlFor="signInPassword">
-                    <Input id="signInPassword" type="password" placeholder="Enter password" required />
+                    <Input
+                      id="signInPassword"
+                      type="password"
+                      value={signInPassword}
+                      onChange={(event) => setSignInPassword(event.target.value)}
+                      placeholder="Enter password"
+                      required
+                    />
                   </Field>
                 </div>
 
-                <Button type="submit" className="mt-6 h-11 w-full">
-                  Sign In
+                {formError && (
+                  <div className="mt-5 rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-2 text-xs leading-5 text-destructive">
+                    {formError}
+                  </div>
+                )}
+
+                <Button type="submit" disabled={submitting} className="mt-6 h-11 w-full">
+                  {submitting ? "Signing in…" : "Sign In"}
                 </Button>
               </form>
             )}

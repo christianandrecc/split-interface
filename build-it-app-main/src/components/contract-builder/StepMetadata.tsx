@@ -87,7 +87,7 @@ export default function StepMetadata({ data, signedInArtistName, onChange }: Pro
           <TextInput
             value={data.songTitle}
             onChange={(value) => onChange({ songTitle: value })}
-            placeholder="e.g. Moonlight Sessions"
+            placeholder="e.g. Work title"
           />
         </FieldGroup>
 

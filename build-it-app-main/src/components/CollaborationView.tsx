@@ -14,25 +14,45 @@ import {
   X,
 } from "lucide-react";
 import {
-  currentUserId,
-  mockNegotiationDeals,
   type DealParticipant,
   type NegotiationDeal,
   type NegotiationMessage,
   type SplitAllocation,
   type SplitVersion,
-} from "@/data/mockDeals";
+} from "@/types/negotiation";
+
+const currentUserId = "current-user";
 
 export default function CollaborationView() {
-  const [deals, setDeals] = useState<NegotiationDeal[]>(mockNegotiationDeals);
-  const [selectedDealId, setSelectedDealId] = useState(mockNegotiationDeals[0]?.id ?? "");
+  const [deals, setDeals] = useState<NegotiationDeal[]>([]);
+  const [selectedDealId, setSelectedDealId] = useState("");
   const [composerText, setComposerText] = useState("");
   const [counterPercent, setCounterPercent] = useState("40");
   const [counterOpen, setCounterOpen] = useState(false);
   const [contextOpen, setContextOpen] = useState(true);
   const [mobileChatOpen, setMobileChatOpen] = useState(false);
 
-  const selectedDeal = deals.find((deal) => deal.id === selectedDealId) ?? deals[0];
+  const selectedDeal = deals.find((deal) => deal.id === selectedDealId) ?? deals[0] ?? null;
+
+  if (!selectedDeal) {
+    return (
+      <div className="flex h-full min-h-0 bg-background">
+        <ChatListSidebar
+          deals={deals}
+          selectedDealId=""
+          onSelect={(dealId) => {
+            setSelectedDealId(dealId);
+            setMobileChatOpen(true);
+          }}
+          mobileChatOpen={mobileChatOpen}
+        />
+        <section className={`${mobileChatOpen ? "flex" : "hidden"} min-h-0 min-w-0 flex-1 flex-col md:flex`}>
+          <EmptyMessagesPanel />
+        </section>
+      </div>
+    );
+  }
+
   const currentVersion = selectedDeal.splitVersions.find((version) => version.id === selectedDeal.currentVersionId) ?? selectedDeal.splitVersions.at(-1);
   const currentUser = selectedDeal.participants.find((participant) => participant.id === currentUserId) ?? selectedDeal.participants[0];
   const acceptedCount = selectedDeal.acceptedBy.length;
@@ -310,7 +330,17 @@ function ChatListSidebar({
         </div>
       </div>
       <div className="flex-1 overflow-y-auto">
-        {deals.map((deal) => {
+        {deals.length === 0 ? (
+          <div className="px-4 py-8 text-center">
+            <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-primary/10 text-primary">
+              <FileSignature className="h-5 w-5" />
+            </div>
+            <p className="mt-3 text-sm font-semibold text-foreground">No deal chats yet</p>
+            <p className="mt-1 text-xs leading-5 text-muted-foreground">
+              Pending split negotiations will appear here after real collaborator invites are connected.
+            </p>
+          </div>
+        ) : deals.map((deal) => {
           const active = deal.id === selectedDealId;
           const latestMessage = deal.messages.at(-1);
           const primaryParticipant = deal.participants.find((participant) => participant.id !== currentUserId) ?? deal.participants[0];
@@ -349,6 +379,22 @@ function ChatListSidebar({
         })}
       </div>
     </aside>
+  );
+}
+
+function EmptyMessagesPanel() {
+  return (
+    <div className="flex h-full min-h-0 flex-1 items-center justify-center px-6 text-center">
+      <div className="max-w-sm rounded-xl border border-dashed border-border bg-card px-6 py-8">
+        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
+          <FileSignature className="h-5 w-5" />
+        </div>
+        <h2 className="mt-4 text-base font-bold text-foreground">No messages yet</h2>
+        <p className="mt-2 text-sm leading-6 text-muted-foreground">
+          Real split negotiations, counter-offers, approvals, and signatures will show up here once the backend is connected.
+        </p>
+      </div>
+    </div>
   );
 }
 

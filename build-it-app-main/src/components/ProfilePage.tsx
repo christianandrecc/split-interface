@@ -1,6 +1,6 @@
 import { type ReactNode, useMemo, useState } from "react";
 import AddressSearchField from "@/components/AddressSearchField";
-import { UserProfile, normalizeUsername } from "@/components/AccountAccess";
+import { normalizeUsername, type UserProfile } from "@/lib/userProfile";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -59,7 +59,7 @@ const phoneCountries = [
 
 type ProfilePageProps = {
   userProfile: UserProfile;
-  onUpdateProfile: (profile: UserProfile) => void;
+  onUpdateProfile: (profile: UserProfile) => Promise<void>;
   onBackToPublicProfile?: () => void;
 };
 
@@ -74,6 +74,8 @@ function isSimplePublishingSetup(status?: string) {
 export default function ProfilePage({ userProfile, onUpdateProfile, onBackToPublicProfile }: ProfilePageProps) {
   const [draft, setDraft] = useState<UserProfile>(userProfile);
   const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
 
   const displayName = useMemo(() => draft.displayName || buildLegalName(draft) || draft.emailAddress || "Your Profile", [draft]);
   const needsPublishingDetails = requiresPublishingDetails(draft.publishingStatus);
@@ -96,9 +98,18 @@ export default function ProfilePage({ userProfile, onUpdateProfile, onBackToPubl
     });
   };
 
-  const handleSave = () => {
-    onUpdateProfile(normalizeProfile(draft));
-    setSaved(true);
+  const handleSave = async () => {
+    setSaveError("");
+    setSaving(true);
+
+    try {
+      await onUpdateProfile(normalizeProfile(draft));
+      setSaved(true);
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "Could not save profile to Supabase.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -115,12 +126,18 @@ export default function ProfilePage({ userProfile, onUpdateProfile, onBackToPubl
                 Back to Profile
               </Button>
             )}
-            <Button onClick={handleSave} className="h-11 md:px-6">
+            <Button onClick={handleSave} disabled={saving} className="h-11 md:px-6">
               {saved ? <Check className="h-4 w-4" /> : <Save className="h-4 w-4" />}
-              {saved ? "Saved" : "Save Changes"}
+              {saving ? "Saving…" : saved ? "Saved" : "Save Changes"}
             </Button>
           </div>
         </div>
+
+        {saveError && (
+          <div className="mb-5 rounded-lg border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm leading-6 text-destructive">
+            {saveError}
+          </div>
+        )}
 
         <section className="mb-5 rounded-lg border border-border bg-card p-5">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">

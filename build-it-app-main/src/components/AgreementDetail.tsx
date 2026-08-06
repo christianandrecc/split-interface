@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Agreement, StatusBadge, AgreementIcon } from "@/components/Dashboard";
 import { SplitSheetDocumentPage } from "@/components/contract-builder/SplitSheetDocumentPreview";
 import { addDocumentAuditTrail, type StoredSplitSheetDocument } from "@/components/contract-builder/document";
+import { getSplitWorkflowLabel, VERIFIED_SPLIT_STATUSES } from "@/lib/splitWorkflow";
 import {
   Shield,
   GitBranch,
@@ -17,22 +18,7 @@ import {
   Download,
 } from "lucide-react";
 
-const FAKE_AUDIT: { date: string; event: string; actor: string }[] = [
-  { date: "2025-01-14", event: "Split sheet executed (v3)", actor: "All writers" },
-  { date: "2025-01-10", event: "Writer share amendment submitted", actor: "Jordan Rivers" },
-  { date: "2024-12-20", event: "Registration metadata approved", actor: "Marcus Webb" },
-  { date: "2024-12-18", event: "Signature requested", actor: "Jordan Rivers" },
-  { date: "2024-11-15", event: "Split sheet created (v1)", actor: "Jordan Rivers" },
-];
-
-const FAKE_VERSIONS = [
-  { version: 3, date: "2025-01-10", note: "IPI and publisher routing added", active: true },
-  { version: 2, date: "2024-12-05", note: "Writer split adjusted after review", active: false },
-  { version: 1, date: "2024-11-02", note: "Initial draft", active: false },
-];
-
-const FAKE_HASH = "sha256:a3f9b2c1d8e47f6a9b0c3d5e7f8a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8";
-const FINAL_STATUSES: Agreement["status"][] = ["Executed", "Verified and Stored", "Fully Signed"];
+const FINAL_STATUSES = [...VERIFIED_SPLIT_STATUSES, "Archived"] as Agreement["status"][];
 
 function documentActorName(document: StoredSplitSheetDocument) {
   return document.creatorProfile.displayName || document.creatorProfile.legalName || document.creatorProfile.emailAddress || "SPLIT user";
@@ -101,14 +87,14 @@ export default function AgreementDetail({
     date: new Date(proposal.createdAt).toLocaleDateString(),
     note: proposal.notes || "Split proposal",
     active: proposal.id === agreement.document?.currentProposalId,
-  })) ?? FAKE_VERSIONS;
+  })) ?? [];
   const auditItems = agreement.document?.auditTrail
     .map((entry) => ({
       date: new Date(entry.timestamp).toLocaleString(),
       event: entry.action,
       actor: entry.actor,
     }))
-    .reverse() ?? FAKE_AUDIT;
+    .reverse() ?? [];
 
   const updateInviteStatus = (inviteId: string, status: "Accepted" | "Declined") => {
     if (!agreement.document || !onUpdateDocument || isFinalRecord) return;
@@ -342,7 +328,7 @@ export default function AgreementDetail({
       </div>
 
       {/* Execution banner */}
-      <VerificationBanner status={agreement.status} hash={FAKE_HASH} />
+      <VerificationBanner status={agreement.status} />
 
       {agreement.document && (
         <div className="mt-6">
@@ -352,7 +338,7 @@ export default function AgreementDetail({
 
       <div className="mt-6 space-y-4">
         {isFinalRecord && (
-          <Section title="Verified Archive" icon={Shield}>
+          <Section title={agreement.status === "Archived" ? "Archived Record" : "Verified Archive"} icon={Shield}>
             <div className="rounded-xl border border-[hsl(var(--split-verified)/0.25)] bg-[hsl(var(--split-verified)/0.07)] p-4">
               <div className="grid gap-3 md:grid-cols-3">
                 <MetaCell label="Document" value={agreement.document?.documentNumber || agreement.id} />
@@ -619,10 +605,6 @@ export default function AgreementDetail({
             {agreement.document?.documentNumber && <MetaCell label="Document" value={agreement.document.documentNumber} />}
             {agreement.document?.verifiedAt && <MetaCell label="Verified" value={formatDisplayDateTime(agreement.document.verifiedAt)} />}
           </div>
-          <div className="mt-3 rounded-lg border border-border bg-secondary/30 px-3 md:px-4 py-2.5">
-            <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">Version Hash</div>
-            <div className="text-[10px] md:text-[11px] font-mono text-foreground/70 break-all leading-relaxed">{FAKE_HASH}</div>
-          </div>
         </Section>
 
         {/* Version History */}
@@ -666,13 +648,13 @@ export default function AgreementDetail({
   );
 }
 
-function VerificationBanner({ status, hash }: { status: Agreement["status"]; hash: string }) {
+function VerificationBanner({ status }: { status: Agreement["status"] }) {
   if (status === "Pending Collaborator Acceptance") {
     return (
       <div className="flex items-center gap-3 rounded-xl border border-[hsl(var(--split-pending)/0.3)] bg-[hsl(var(--split-pending)/0.07)] px-3 md:px-4 py-3">
         <AlertCircle className="h-4 w-4 text-[hsl(var(--split-pending))] flex-shrink-0" />
         <div className="flex-1 min-w-0">
-          <div className="text-xs font-semibold text-[hsl(var(--split-pending))]">Waiting for collaborator acceptance</div>
+          <div className="text-xs font-semibold text-[hsl(var(--split-pending))]">{getSplitWorkflowLabel(status)}</div>
           <div className="text-[11px] text-muted-foreground mt-0.5">Invited collaborators need to confirm they were part of this work.</div>
         </div>
       </div>
@@ -683,8 +665,8 @@ function VerificationBanner({ status, hash }: { status: Agreement["status"]; has
       <div className="flex items-center gap-3 rounded-xl border border-primary/20 bg-primary/5 px-3 md:px-4 py-3">
         <CheckCircle2 className="h-4 w-4 text-primary flex-shrink-0" />
         <div className="flex-1 min-w-0">
-          <div className="text-xs font-semibold text-primary">Ready for split approval</div>
-          <div className="text-[11px] text-muted-foreground mt-0.5">Collaborators have responded. Next phase will handle proposal approval.</div>
+          <div className="text-xs font-semibold text-primary">{getSplitWorkflowLabel(status)}</div>
+          <div className="text-[11px] text-muted-foreground mt-0.5">Collaborators have responded. Everyone can review the proposed split before signing.</div>
         </div>
       </div>
     );
@@ -694,19 +676,19 @@ function VerificationBanner({ status, hash }: { status: Agreement["status"]; has
       <div className="flex items-center gap-3 rounded-xl border border-primary/20 bg-primary/5 px-3 md:px-4 py-3">
         <PenLine className="h-4 w-4 text-primary flex-shrink-0" />
         <div className="flex-1 min-w-0">
-          <div className="text-xs font-semibold text-primary">Ready to sign</div>
+          <div className="text-xs font-semibold text-primary">{getSplitWorkflowLabel(status)}</div>
           <div className="text-[11px] text-muted-foreground mt-0.5">All split approvals are in. Collect signatures to verify and store the record.</div>
         </div>
       </div>
     );
   }
-  if (["Executed", "Verified and Stored", "Fully Signed"].includes(status)) {
+  if (VERIFIED_SPLIT_STATUSES.includes(status)) {
     return (
       <div className="flex items-center gap-3 rounded-xl border border-[hsl(var(--split-verified)/0.3)] bg-[hsl(var(--split-verified)/0.07)] px-3 md:px-4 py-3">
         <CheckCircle2 className="h-4 w-4 text-[hsl(var(--split-verified))] flex-shrink-0" />
         <div className="flex-1 min-w-0">
-          <div className="text-xs font-semibold text-[hsl(var(--split-verified))]">Verified and stored</div>
-          <div className="text-[11px] text-muted-foreground mt-0.5">All approved collaborators signed. This split sheet is stored as the verified record.</div>
+          <div className="text-xs font-semibold text-[hsl(var(--split-verified))]">{getSplitWorkflowLabel(status)}</div>
+          <div className="text-[11px] text-muted-foreground mt-0.5">All required parties signed. This split sheet is locked as the verified record.</div>
         </div>
         <Shield className="h-4 w-4 text-[hsl(var(--split-verified)/0.5)] flex-shrink-0 hidden md:block" />
       </div>
@@ -717,8 +699,41 @@ function VerificationBanner({ status, hash }: { status: Agreement["status"]; has
       <div className="flex items-center gap-3 rounded-xl border border-[hsl(var(--split-pending)/0.3)] bg-[hsl(var(--split-pending)/0.07)] px-3 md:px-4 py-3">
         <AlertCircle className="h-4 w-4 text-[hsl(var(--split-pending))] flex-shrink-0" />
         <div className="flex-1 min-w-0">
-          <div className="text-xs font-semibold text-[hsl(var(--split-pending))]">Awaiting Signatures</div>
+          <div className="text-xs font-semibold text-[hsl(var(--split-pending))]">{getSplitWorkflowLabel(status)}</div>
           <div className="text-[11px] text-muted-foreground mt-0.5">One or more writers have not yet signed.</div>
+        </div>
+      </div>
+    );
+  }
+  if (status === "Disputed") {
+    return (
+      <div className="flex items-center gap-3 rounded-xl border border-destructive/20 bg-destructive/5 px-3 md:px-4 py-3">
+        <AlertCircle className="h-4 w-4 text-destructive flex-shrink-0" />
+        <div className="flex-1 min-w-0">
+          <div className="text-xs font-semibold text-destructive">{getSplitWorkflowLabel(status)}</div>
+          <div className="text-[11px] text-muted-foreground mt-0.5">A collaborator disputed the proposal. Send a revised split to restart review.</div>
+        </div>
+      </div>
+    );
+  }
+  if (status === "Revision Requested" || status === "Amended") {
+    return (
+      <div className="flex items-center gap-3 rounded-xl border border-[hsl(var(--split-amended)/0.25)] bg-[hsl(var(--split-amended)/0.08)] px-3 md:px-4 py-3">
+        <GitBranch className="h-4 w-4 text-[hsl(var(--split-amended))] flex-shrink-0" />
+        <div className="flex-1 min-w-0">
+          <div className="text-xs font-semibold text-[hsl(var(--split-amended))]">{getSplitWorkflowLabel(status)}</div>
+          <div className="text-[11px] text-muted-foreground mt-0.5">This split needs a revised proposal before the agreement can move forward.</div>
+        </div>
+      </div>
+    );
+  }
+  if (status === "Archived") {
+    return (
+      <div className="flex items-center gap-3 rounded-xl border border-border bg-secondary/40 px-3 md:px-4 py-3">
+        <Shield className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+        <div className="flex-1 min-w-0">
+          <div className="text-xs font-semibold text-foreground">{getSplitWorkflowLabel(status)}</div>
+          <div className="text-[11px] text-muted-foreground mt-0.5">This split sheet is closed and kept for record history.</div>
         </div>
       </div>
     );
@@ -728,7 +743,7 @@ function VerificationBanner({ status, hash }: { status: Agreement["status"]; has
       <div className="flex items-center gap-3 rounded-xl border border-border bg-secondary/40 px-3 md:px-4 py-3">
         <FileText className="h-4 w-4 text-muted-foreground flex-shrink-0" />
         <div className="flex-1 min-w-0">
-          <div className="text-xs font-semibold text-foreground">Draft</div>
+          <div className="text-xs font-semibold text-foreground">{getSplitWorkflowLabel(status)}</div>
           <div className="text-[11px] text-muted-foreground mt-0.5">This split sheet has not been sent for signatures yet.</div>
         </div>
       </div>
@@ -783,13 +798,16 @@ function sumProposalAllocations(allocations: Array<{ percentage: number }>) {
 }
 
 function SignatureStatus({ index, status }: { index: number; status: Agreement["status"] }) {
-  if (["Executed", "Verified and Stored", "Fully Signed"].includes(status)) {
+  if (VERIFIED_SPLIT_STATUSES.includes(status)) {
     return (
       <div className="flex items-center gap-1.5 text-[11px] font-semibold text-[hsl(var(--split-verified))]">
         <CheckCircle2 className="h-3.5 w-3.5" />
         Signed
       </div>
     );
+  }
+  if (status === "Archived") {
+    return <div className="text-[11px] text-muted-foreground">Archived</div>;
   }
   if (status === "Pending Signatures" && index === 0) {
     return (

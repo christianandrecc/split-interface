@@ -8,7 +8,7 @@ import StepClauses from "./StepClauses";
 import StepReview from "./StepReview";
 import SplitSheetDocumentPreview from "./SplitSheetDocumentPreview";
 import { createSplitSheetDocument, addDocumentAuditTrail, type StoredSplitSheetDocument } from "./document";
-import { UserProfile } from "@/components/AccountAccess";
+import type { UserProfile } from "@/lib/userProfile";
 import {
   STEPS,
   type StepId,

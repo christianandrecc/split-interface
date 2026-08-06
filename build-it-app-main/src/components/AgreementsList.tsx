@@ -1,10 +1,11 @@
 import React, { useState } from "react";
 import { Agreement, StatusBadge, AgreementIcon } from "@/components/Dashboard";
+import { PENDING_SPLIT_STATUSES, VERIFIED_SPLIT_STATUSES } from "@/lib/splitWorkflow";
 import { Plus } from "lucide-react";
 
 export type FilterStatus = "All" | "Pending" | "Verified" | Agreement["status"];
 
-const STATUS_FILTERS: FilterStatus[] = ["All", "Pending", "Draft", "Verified"];
+const STATUS_FILTERS: FilterStatus[] = ["All", "Pending", "Draft", "Verified", "Archived"];
 const FILTER_LABELS: Partial<Record<FilterStatus, string>> = {
   Verified: "Verified",
 };
@@ -12,9 +13,9 @@ const FILTER_LABELS: Partial<Record<FilterStatus, string>> = {
 function matchesFilter(agreement: Agreement, filter: FilterStatus) {
   if (filter === "All") return true;
   if (filter === "Pending") {
-    return ["Pending Collaborator Acceptance", "Pending Split Approval", "Revision Requested", "Ready to Sign", "Pending Signatures", "Amended", "Disputed"].includes(agreement.status);
+    return PENDING_SPLIT_STATUSES.includes(agreement.status);
   }
-  if (filter === "Verified" || filter === "Executed") return ["Executed", "Verified and Stored", "Fully Signed"].includes(agreement.status);
+  if (filter === "Verified" || filter === "Executed") return VERIFIED_SPLIT_STATUSES.includes(agreement.status);
   return agreement.status === filter;
 }
 
@@ -88,7 +89,7 @@ export default function AgreementsList({
               key={agr.id}
               onClick={() => onSelect(agr)}
               className={`w-full text-left px-4 py-3.5 border-b border-border transition-colors ${
-                isSelected ? "bg-primary/8 border-l-2 border-l-primary" : "hover:bg-secondary/40"
+                isSelected ? "bg-primary/10 border-l-2 border-l-primary" : "hover:bg-secondary/40"
               }`}
             >
               <div className="flex items-start gap-3">

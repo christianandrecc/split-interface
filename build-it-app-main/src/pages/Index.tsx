@@ -1,5 +1,5 @@
 import Dashboard from "@/components/Dashboard";
-import { UserProfile } from "@/components/AccountAccess";
+import type { UserProfile } from "@/lib/userProfile";
 
 const Index = ({
   userProfile,
@@ -7,7 +7,7 @@ const Index = ({
   onOpenAccountCreation,
 }: {
   userProfile: UserProfile;
-  onUpdateProfile: (profile: UserProfile) => void;
+  onUpdateProfile: (profile: UserProfile) => Promise<void>;
   onOpenAccountCreation: () => void;
 }) => {
   return (
