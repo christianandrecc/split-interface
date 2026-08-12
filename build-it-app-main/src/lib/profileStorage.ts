@@ -77,6 +77,64 @@ function fullPhoneForMetadata(profile: UserProfile) {
   return [profile.phoneCountryCode, number].map((part) => part.trim()).filter(Boolean).join(" ");
 }
 
+function profileStoragePayload(profile: UserProfile): Omit<ProfileInsert, "user_id"> {
+  const normalized = normalizeUserProfile(profile);
+  const legalName = clean(normalized.legalName) ?? clean(buildLegalName(normalized));
+  const legalAddress = clean(normalized.legalAddress) ?? clean(buildLegalAddress(normalized));
+  const stageName = clean(normalized.pkaNames.split(",")[0]) ?? clean(normalized.displayName);
+
+  return {
+    username: clean(normalized.username),
+    display_name: clean(normalized.displayName),
+    profile_image_url: clean(normalized.profileImageUrl),
+    role_tags: clean(normalized.roleTags),
+    social_instagram: clean(normalized.socialInstagram),
+    social_tiktok: clean(normalized.socialTikTok),
+    social_x: clean(normalized.socialX),
+    social_website: clean(normalized.socialWebsite),
+    profile_location: clean(normalized.profileLocation),
+    profile_visibility: clean(normalized.profileVisibility),
+    email: clean(normalized.emailAddress),
+    phone_country_code: clean(normalized.phoneCountryCode),
+    phone_number: clean(phoneNumberForStorage(normalized)),
+    legal_name: legalName,
+    legal_first_name: clean(normalized.legalFirstName),
+    legal_middle_name: clean(normalized.legalMiddleName),
+    legal_last_name: clean(normalized.legalLastName),
+    pka_names: clean(normalized.pkaNames),
+    stage_name: stageName,
+    legal_address: legalAddress,
+    address_street: clean(normalized.addressLine),
+    address_line: clean(normalized.addressLine),
+    address_city: clean(normalized.city),
+    address_state: clean(normalized.state),
+    address_zip: clean(normalized.zipCode),
+    address_country: clean(normalized.country),
+    zip_code: clean(normalized.zipCode),
+    city: clean(normalized.city),
+    state: clean(normalized.state),
+    country: clean(normalized.country),
+    mlc_number: clean(normalized.mlcNumber),
+    pro_affiliation: clean(normalized.proAffiliation),
+    ipi_number: clean(normalized.ipiNumber),
+    custom_pro_name: clean(normalized.customProName),
+    publishing_status: clean(normalized.publishingStatus),
+    publisher_name: clean(normalized.publisherName),
+    publisher_ipi: clean(normalized.publisherIpi),
+    publisher_pro: clean(normalized.publisherPro),
+    publishing_share: clean(normalized.publishingShare),
+    admin_company_name: clean(normalized.adminCompanyName),
+    admin_ipi: clean(normalized.adminIpi),
+    admin_collection_share: clean(normalized.adminCollectionShare),
+    publisher_contact: clean(normalized.publisherContact),
+    terms_accepted_at: clean(normalized.termsAcceptedAt),
+    terms_version: clean(normalized.termsVersion),
+    privacy_acknowledged_at: clean(normalized.privacyAcknowledgedAt),
+    privacy_policy_version: clean(normalized.privacyPolicyVersion),
+    profile_data: normalized as unknown as Json,
+  };
+}
+
 function rowToProfile(row: ProfileRow): UserProfile {
   const payload = row.profile_data && typeof row.profile_data === "object" && !Array.isArray(row.profile_data)
     ? row.profile_data as Partial<UserProfile>
@@ -133,61 +191,16 @@ export function profileFromStoredRowForTest(row: ProfileRow): UserProfile {
 }
 
 function profileToRow(userId: string, profile: UserProfile): ProfileInsert {
-  const normalized = normalizeUserProfile(profile);
-  const legalName = clean(normalized.legalName) ?? clean(buildLegalName(normalized));
-  const legalAddress = clean(normalized.legalAddress) ?? clean(buildLegalAddress(normalized));
-  const stageName = clean(normalized.pkaNames.split(",")[0]) ?? clean(normalized.displayName);
-
   return {
     user_id: userId,
-    username: clean(normalized.username),
-    display_name: clean(normalized.displayName),
-    profile_image_url: clean(normalized.profileImageUrl),
-    role_tags: clean(normalized.roleTags),
-    social_instagram: clean(normalized.socialInstagram),
-    social_tiktok: clean(normalized.socialTikTok),
-    social_x: clean(normalized.socialX),
-    social_website: clean(normalized.socialWebsite),
-    profile_location: clean(normalized.profileLocation),
-    profile_visibility: clean(normalized.profileVisibility),
-    email: clean(normalized.emailAddress),
-    phone_country_code: clean(normalized.phoneCountryCode),
-    phone_number: clean(phoneNumberForStorage(normalized)),
-    legal_name: legalName,
-    legal_first_name: clean(normalized.legalFirstName),
-    legal_middle_name: clean(normalized.legalMiddleName),
-    legal_last_name: clean(normalized.legalLastName),
-    pka_names: clean(normalized.pkaNames),
-    stage_name: stageName,
-    legal_address: legalAddress,
-    address_street: clean(normalized.addressLine),
-    address_line: clean(normalized.addressLine),
-    address_city: clean(normalized.city),
-    address_state: clean(normalized.state),
-    address_zip: clean(normalized.zipCode),
-    address_country: clean(normalized.country),
-    zip_code: clean(normalized.zipCode),
-    city: clean(normalized.city),
-    state: clean(normalized.state),
-    country: clean(normalized.country),
-    mlc_number: clean(normalized.mlcNumber),
-    pro_affiliation: clean(normalized.proAffiliation),
-    ipi_number: clean(normalized.ipiNumber),
-    custom_pro_name: clean(normalized.customProName),
-    publishing_status: clean(normalized.publishingStatus),
-    publisher_name: clean(normalized.publisherName),
-    publisher_ipi: clean(normalized.publisherIpi),
-    publisher_pro: clean(normalized.publisherPro),
-    publishing_share: clean(normalized.publishingShare),
-    admin_company_name: clean(normalized.adminCompanyName),
-    admin_ipi: clean(normalized.adminIpi),
-    admin_collection_share: clean(normalized.adminCollectionShare),
-    publisher_contact: clean(normalized.publisherContact),
-    terms_accepted_at: clean(normalized.termsAcceptedAt),
-    terms_version: clean(normalized.termsVersion),
-    privacy_acknowledged_at: clean(normalized.privacyAcknowledgedAt),
-    privacy_policy_version: clean(normalized.privacyPolicyVersion),
-    profile_data: normalized as unknown as Json,
+    ...profileStoragePayload(profile),
+  };
+}
+
+export function profileSignupMetadata(profile: UserProfile) {
+  return {
+    ...profileStoragePayload(profile),
+    full_phone_number: clean(fullPhoneForMetadata(profile)),
   };
 }
 
@@ -253,18 +266,7 @@ export async function createSupabaseAccountProfile(profile: UserProfile, passwor
     email,
     password,
     options: {
-      data: {
-        username: normalized.username,
-        display_name: normalized.displayName || normalized.pkaNames || normalized.legalName,
-        email,
-        phone_country_code: clean(normalized.phoneCountryCode),
-        phone_number: clean(phoneNumberForStorage(normalized)),
-        full_phone_number: clean(fullPhoneForMetadata(normalized)),
-        terms_accepted_at: clean(normalized.termsAcceptedAt),
-        terms_version: clean(normalized.termsVersion),
-        privacy_acknowledged_at: clean(normalized.privacyAcknowledgedAt),
-        privacy_policy_version: clean(normalized.privacyPolicyVersion),
-      },
+      data: profileSignupMetadata(normalized),
     },
   });
 

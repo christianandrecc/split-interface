@@ -20,6 +20,24 @@ import { toast } from "sonner";
 const queryClient = new QueryClient();
 const PROFILE_STORAGE_KEY = "split.userProfile.v6";
 
+function hasRicherProfileData(profile: UserProfile | null) {
+  if (!profile) return false;
+
+  return Boolean(
+    profile.legalName ||
+      profile.legalFirstName ||
+      profile.legalLastName ||
+      profile.phoneNumber ||
+      profile.roleTags ||
+      profile.proAffiliation ||
+      profile.ipiNumber ||
+      profile.addressLine ||
+      profile.city ||
+      profile.publisherName ||
+      profile.publishingStatus,
+  );
+}
+
 function hasPasswordRecoveryUrl() {
   if (typeof window === "undefined") return false;
   return window.location.hash.includes("type=recovery") || window.location.search.includes("type=recovery");
@@ -109,7 +127,7 @@ const App = () => {
         : null;
     const result = await signInAndLoadSupabaseProfile(emailAddress, password);
     const profile =
-      pendingProfile && (pendingProfile.phoneNumber || pendingProfile.legalName || pendingProfile.roleTags)
+      hasRicherProfileData(pendingProfile)
         ? await saveSupabaseProfile({
             ...result.profile,
             ...pendingProfile,
