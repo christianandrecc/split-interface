@@ -42,7 +42,7 @@ describe("profile phone storage", () => {
 
   it("keeps phone-based split invites working with separated phone columns", () => {
     expect(phoneMigrationSql).toContain("profiles_phone_full_digits_lookup_idx");
-    expect(phoneMigrationSql).toContain("concat_ws(' ', profile.phone_country_code, profile.phone_number)");
+    expect(phoneMigrationSql).toContain("coalesce(profile.phone_country_code, '') || ' ' || coalesce(profile.phone_number, '')");
     expect(phoneMigrationSql).toContain("after insert or update of username, email, phone_number, phone_country_code");
   });
 });

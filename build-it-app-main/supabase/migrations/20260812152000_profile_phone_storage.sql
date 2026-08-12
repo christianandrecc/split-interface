@@ -20,7 +20,7 @@ where phone_country_code is not null
   and phone_number ~ '^\+\d+\s+';
 
 create index if not exists profiles_phone_full_digits_lookup_idx
-  on public.profiles ((public.split_invite_digits(concat_ws(' ', phone_country_code, phone_number))))
+  on public.profiles ((public.split_invite_digits(coalesce(phone_country_code, '') || ' ' || coalesce(phone_number, ''))))
   where phone_number is not null and phone_number <> '';
 
 create or replace function public.resolve_split_invite_user_id(
@@ -52,9 +52,9 @@ as $$
     invite_method = 'phone'
     and length(public.split_invite_digits(coalesce(invite_phone, invite_value, ''))) >= 7
     and (
-      public.split_invite_digits(concat_ws(' ', profile.phone_country_code, profile.phone_number)) = public.split_invite_digits(coalesce(invite_phone, invite_value, ''))
+      public.split_invite_digits(coalesce(profile.phone_country_code, '') || ' ' || coalesce(profile.phone_number, '')) = public.split_invite_digits(coalesce(invite_phone, invite_value, ''))
       or public.split_invite_digits(profile.phone_number) = public.split_invite_digits(coalesce(invite_phone, invite_value, ''))
-      or right(public.split_invite_digits(concat_ws(' ', profile.phone_country_code, profile.phone_number)), 10) = right(public.split_invite_digits(coalesce(invite_phone, invite_value, '')), 10)
+      or right(public.split_invite_digits(coalesce(profile.phone_country_code, '') || ' ' || coalesce(profile.phone_number, '')), 10) = right(public.split_invite_digits(coalesce(invite_phone, invite_value, '')), 10)
     )
   )
   order by profile.updated_at desc
@@ -139,10 +139,10 @@ begin
       )
       or (
         length(public.split_invite_digits(coalesce(collaborator.invite_phone, collaborator.invite_value, ''))) >= 7
-        and length(public.split_invite_digits(concat_ws(' ', new.phone_country_code, new.phone_number))) >= 7
+        and length(public.split_invite_digits(coalesce(new.phone_country_code, '') || ' ' || coalesce(new.phone_number, ''))) >= 7
         and (
-          public.split_invite_digits(coalesce(collaborator.invite_phone, collaborator.invite_value, '')) = public.split_invite_digits(concat_ws(' ', new.phone_country_code, new.phone_number))
-          or right(public.split_invite_digits(coalesce(collaborator.invite_phone, collaborator.invite_value, '')), 10) = right(public.split_invite_digits(concat_ws(' ', new.phone_country_code, new.phone_number)), 10)
+          public.split_invite_digits(coalesce(collaborator.invite_phone, collaborator.invite_value, '')) = public.split_invite_digits(coalesce(new.phone_country_code, '') || ' ' || coalesce(new.phone_number, ''))
+          or right(public.split_invite_digits(coalesce(collaborator.invite_phone, collaborator.invite_value, '')), 10) = right(public.split_invite_digits(coalesce(new.phone_country_code, '') || ' ' || coalesce(new.phone_number, '')), 10)
         )
       )
     );
