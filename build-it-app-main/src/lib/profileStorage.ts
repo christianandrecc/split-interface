@@ -37,7 +37,29 @@ function buildLegalAddress(profile: UserProfile) {
     .join(", ");
 }
 
-function phoneForStorage(profile: UserProfile) {
+export function phoneNumberForStorage(profile: UserProfile) {
+  return formatNationalPhoneNumber(profile.phoneNumber, profile.phoneCountryCode);
+}
+
+export function stripStoredCountryCode(phoneNumber: string, countryCode: string) {
+  const digits = phoneNumber.replace(/\D/g, "");
+  const countryDigits = countryCode.replace(/\D/g, "");
+
+  if (countryDigits && digits.startsWith(countryDigits) && digits.length > countryDigits.length) {
+    return digits.slice(countryDigits.length);
+  }
+
+  return phoneNumber;
+}
+
+export function phoneNumberFromRow(row: Pick<ProfileRow, "phone_country_code" | "phone_number">, payload: Partial<UserProfile>) {
+  const countryCode = row.phone_country_code ?? payload.phoneCountryCode ?? "+1";
+  const storedPhone = row.phone_number ?? payload.phoneNumber ?? "";
+
+  return formatNationalPhoneNumber(stripStoredCountryCode(storedPhone, countryCode), countryCode);
+}
+
+function fullPhoneForMetadata(profile: UserProfile) {
   const number = formatNationalPhoneNumber(profile.phoneNumber, profile.phoneCountryCode);
   return [profile.phoneCountryCode, number].map((part) => part.trim()).filter(Boolean).join(" ");
 }
@@ -65,7 +87,7 @@ function rowToProfile(row: ProfileRow): UserProfile {
     legalLastName: row.legal_last_name ?? payload.legalLastName,
     pkaNames: row.pka_names ?? row.stage_name ?? payload.pkaNames,
     phoneCountryCode: row.phone_country_code ?? payload.phoneCountryCode,
-    phoneNumber: row.phone_number ?? payload.phoneNumber,
+    phoneNumber: phoneNumberFromRow(row, payload),
     emailAddress: row.email ?? payload.emailAddress,
     legalAddress: row.legal_address ?? payload.legalAddress,
     addressLine: row.address_line ?? row.address_street ?? payload.addressLine,
@@ -109,7 +131,7 @@ function profileToRow(userId: string, profile: UserProfile): ProfileInsert {
     profile_visibility: clean(normalized.profileVisibility),
     email: clean(normalized.emailAddress),
     phone_country_code: clean(normalized.phoneCountryCode),
-    phone_number: clean(phoneForStorage(normalized)),
+    phone_number: clean(phoneNumberForStorage(normalized)),
     legal_name: legalName,
     legal_first_name: clean(normalized.legalFirstName),
     legal_middle_name: clean(normalized.legalMiddleName),
@@ -204,6 +226,11 @@ export async function createSupabaseAccountProfile(profile: UserProfile, passwor
       data: {
         username: normalized.username,
         display_name: normalized.displayName || normalized.pkaNames || normalized.legalName,
+        email,
+        phone_country_code: clean(normalized.phoneCountryCode),
+        phone_number: clean(phoneNumberForStorage(normalized)),
+        full_phone_number: clean(fullPhoneForMetadata(normalized)),
+        profile_data: normalized,
       },
     },
   });
