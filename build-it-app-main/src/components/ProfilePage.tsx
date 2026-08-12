@@ -6,20 +6,68 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { formatNationalPhoneNumber, getPhoneInputMaxLength } from "@/lib/phone";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { AtSign, Check, Eye, IdCard, Link2, Mail, MapPin, Music2, Save, Tags, User } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { AtSign, Check, Eye, HelpCircle, IdCard, Link2, Mail, MapPin, Music2, Save, Tags, User } from "lucide-react";
 
-const proOptions = ["ASCAP", "BMI", "SESAC", "Other"];
-const publishingStatusOptions = [
-  "Self-published",
-  "Unpublished",
-  "Signed to publisher",
-  "Admin by third party",
-  "Co-published",
-  "Unknown",
-];
+const proOptions = ["ASCAP", "BMI", "SESAC", "Other", "Skip PRO Registration"];
+const publishingStatusOptions = ["Self-published", "Signed to publisher", "Co-published"];
 
-const creatorRoleOptions = ["Producer", "Writer", "Artist", "Engineer", "Topliner", "Manager", "Publisher"];
+const creatorRoleOptions = ["Producer", "Writer", "Artist", "Engineer", "Topliner"];
 const visibilityOptions = ["Public", "Collaborators only", "Private"];
+
+const usStateOptions = [
+  "Alabama",
+  "Alaska",
+  "Arizona",
+  "Arkansas",
+  "California",
+  "Colorado",
+  "Connecticut",
+  "Delaware",
+  "District of Columbia",
+  "Florida",
+  "Georgia",
+  "Hawaii",
+  "Idaho",
+  "Illinois",
+  "Indiana",
+  "Iowa",
+  "Kansas",
+  "Kentucky",
+  "Louisiana",
+  "Maine",
+  "Maryland",
+  "Massachusetts",
+  "Michigan",
+  "Minnesota",
+  "Mississippi",
+  "Missouri",
+  "Montana",
+  "Nebraska",
+  "Nevada",
+  "New Hampshire",
+  "New Jersey",
+  "New Mexico",
+  "New York",
+  "North Carolina",
+  "North Dakota",
+  "Ohio",
+  "Oklahoma",
+  "Oregon",
+  "Pennsylvania",
+  "Rhode Island",
+  "South Carolina",
+  "South Dakota",
+  "Tennessee",
+  "Texas",
+  "Utah",
+  "Vermont",
+  "Virginia",
+  "Washington",
+  "West Virginia",
+  "Wisconsin",
+  "Wyoming",
+];
 
 const countryOptions = [
   { value: "United States", label: "🇺🇸 United States" },
@@ -64,11 +112,11 @@ type ProfilePageProps = {
 };
 
 function requiresPublishingDetails(status?: string) {
-  return ["Signed to publisher", "Admin by third party", "Co-published"].includes(status ?? "");
+  return ["Signed to publisher", "Co-published"].includes(status ?? "");
 }
 
 function isSimplePublishingSetup(status?: string) {
-  return status === "Self-published" || status === "Unpublished";
+  return status === "Self-published";
 }
 
 export default function ProfilePage({ userProfile, onUpdateProfile, onBackToPublicProfile }: ProfilePageProps) {
@@ -86,7 +134,35 @@ export default function ProfilePage({ userProfile, onUpdateProfile, onBackToPubl
 
   const update = (field: keyof UserProfile, value: string) => {
     setSaved(false);
-    setDraft((current) => ({ ...current, [field]: field === "username" ? normalizeUsername(value) : value }));
+    setDraft((current) => {
+      const next = { ...current, [field]: field === "username" ? normalizeUsername(value) : value };
+
+      if (field === "country" && value !== current.country) {
+        next.state = "";
+      }
+
+      if (field === "proAffiliation") {
+        if (value === "Skip PRO Registration") {
+          next.ipiNumber = "";
+          next.customProName = "";
+        } else if (value !== "Other") {
+          next.customProName = "";
+        }
+      }
+
+      if (field === "publishingStatus" && !requiresPublishingDetails(value)) {
+        next.publisherName = "";
+        next.publisherIpi = "";
+        next.publisherPro = "";
+        next.adminCompanyName = "";
+        next.adminIpi = "";
+        next.adminCollectionShare = "";
+        next.publisherContact = "";
+        next.publishingShare = isSimplePublishingSetup(value) ? "100" : "";
+      }
+
+      return next;
+    });
   };
 
   const toggleRoleTag = (role: string) => {
@@ -256,8 +332,8 @@ export default function ProfilePage({ userProfile, onUpdateProfile, onBackToPubl
                 <Input id="profileLastName" value={draft.legalLastName} onChange={(event) => update("legalLastName", event.target.value)} />
               </Field>
             </div>
-            <Field label="P/K/A Names" htmlFor="profilePkaNames">
-              <Input id="profilePkaNames" value={draft.pkaNames} onChange={(event) => update("pkaNames", event.target.value)} />
+            <Field label="Artist Name" htmlFor="profilePkaNames" help="Optional public artist, producer, or songwriter name. Use the name collaborators know you by.">
+              <Input id="profilePkaNames" value={draft.pkaNames} onChange={(event) => update("pkaNames", event.target.value)} placeholder="Artist name, producer name, alias" />
             </Field>
           </ProfileSection>
 
@@ -325,9 +401,26 @@ export default function ProfilePage({ userProfile, onUpdateProfile, onBackToPubl
               <Field label="City" htmlFor="profileCity">
                 <Input id="profileCity" value={draft.city} onChange={(event) => update("city", event.target.value)} />
               </Field>
-              <Field label="State" htmlFor="profileState">
-                <Input id="profileState" value={draft.state} onChange={(event) => update("state", event.target.value)} />
-              </Field>
+              {draft.country === "United States" ? (
+                <Field label="State" htmlFor="profileState" help="Use the U.S. state tied to your legal address. SPLIT clears this when you change to a non-U.S. country.">
+                  <Select value={draft.state} onValueChange={(value) => update("state", value)}>
+                    <SelectTrigger id="profileState">
+                      <SelectValue placeholder="Select state" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {usStateOptions.map((state) => (
+                        <SelectItem key={state} value={state}>
+                          {state}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </Field>
+              ) : (
+                <Field label="Province / Region" htmlFor="profileState" help="Use the province, region, state, or administrative area for your legal address.">
+                  <Input id="profileState" value={draft.state} onChange={(event) => update("state", event.target.value)} />
+                </Field>
+              )}
               <Field label="Country" htmlFor="profileCountry">
                 <Select value={draft.country} onValueChange={(value) => update("country", value)}>
                   <SelectTrigger id="profileCountry">
@@ -346,11 +439,8 @@ export default function ProfilePage({ userProfile, onUpdateProfile, onBackToPubl
           </ProfileSection>
 
           <ProfileSection icon={<Music2 className="h-4 w-4" />} title="Music Registration">
-            <Field label="MLC Number" htmlFor="profileMlc">
-              <Input id="profileMlc" value={draft.mlcNumber} onChange={(event) => update("mlcNumber", event.target.value)} />
-            </Field>
             <div className="grid gap-4 md:grid-cols-2">
-              <Field label="PRO Affiliation" htmlFor="profilePro">
+              <Field label="PRO Affiliation" htmlFor="profilePro" help="A PRO collects public performance royalties. You can find this in your ASCAP, BMI, SESAC, or society account. Choose Skip if you have not registered yet.">
                 <Select value={draft.proAffiliation} onValueChange={(value) => update("proAffiliation", value)}>
                   <SelectTrigger id="profilePro">
                     <SelectValue placeholder="Select PRO" />
@@ -364,16 +454,17 @@ export default function ProfilePage({ userProfile, onUpdateProfile, onBackToPubl
                   </SelectContent>
                 </Select>
               </Field>
-              <Field label="IPI / CAE Number" htmlFor="profileIpi">
+              <Field label="IPI / CAE Number" htmlFor="profileIpi" help="Your songwriter identifier inside your PRO account. Leave it blank if you have not registered yet.">
                 <Input
                   id="profileIpi"
                   value={draft.ipiNumber ?? ""}
                   onChange={(event) => update("ipiNumber", event.target.value)}
-                  placeholder="Optional"
+                  placeholder={draft.proAffiliation === "Skip PRO Registration" ? "Skipped for now" : "Optional"}
+                  disabled={draft.proAffiliation === "Skip PRO Registration"}
                 />
               </Field>
               {draft.proAffiliation === "Other" && (
-                <Field label="PRO Name" htmlFor="profileCustomPro">
+                <Field label="PRO Name" htmlFor="profileCustomPro" help="Use this if your society is not listed above. Enter the society name from your registration account.">
                   <Input id="profileCustomPro" value={draft.customProName ?? ""} onChange={(event) => update("customProName", event.target.value)} />
                 </Field>
               )}
@@ -388,7 +479,7 @@ export default function ProfilePage({ userProfile, onUpdateProfile, onBackToPubl
               </div>
               <div className="space-y-4">
                 <div className="md:max-w-md">
-                  <Field label="Publishing Status" htmlFor="profilePublishingStatus">
+                  <Field label="Publishing Status" htmlFor="profilePublishingStatus" help="Publishing details tell SPLIT whether you control your own publishing or work through a publisher. You can find this in your publishing/admin agreement.">
                     <Select value={draft.publishingStatus ?? ""} onValueChange={(value) => update("publishingStatus", value)}>
                       <SelectTrigger id="profilePublishingStatus">
                         <SelectValue placeholder="Select publishing setup" />
@@ -412,7 +503,7 @@ export default function ProfilePage({ userProfile, onUpdateProfile, onBackToPubl
 
                 {needsPublishingDetails && (
                   <div className="grid gap-4 md:grid-cols-2">
-                    <Field label="Publisher / Admin Company" htmlFor="profilePublisherName">
+                    <Field label="Publisher / Admin Company" htmlFor="profilePublisherName" help="The company that controls or administers your publishing. Look at your publishing or admin agreement.">
                       <Input
                         id="profilePublisherName"
                         value={draft.publisherName ?? ""}
@@ -420,7 +511,7 @@ export default function ProfilePage({ userProfile, onUpdateProfile, onBackToPubl
                         placeholder="Company name"
                       />
                     </Field>
-                    <Field label="Publisher IPI" htmlFor="profilePublisherIpi">
+                    <Field label="Publisher IPI" htmlFor="profilePublisherIpi" help="The publisher identifier from the publisher's PRO or society account.">
                       <Input
                         id="profilePublisherIpi"
                         value={draft.publisherIpi ?? ""}
@@ -428,7 +519,7 @@ export default function ProfilePage({ userProfile, onUpdateProfile, onBackToPubl
                         placeholder="Publisher IPI/CAE"
                       />
                     </Field>
-                    <Field label="Publisher PRO / Society" htmlFor="profilePublisherPro">
+                    <Field label="Publisher PRO / Society" htmlFor="profilePublisherPro" help="The society your publisher uses, such as ASCAP, BMI, PRS, SGAE, or another PRO.">
                       <Input
                         id="profilePublisherPro"
                         value={draft.publisherPro ?? ""}
@@ -436,7 +527,7 @@ export default function ProfilePage({ userProfile, onUpdateProfile, onBackToPubl
                         placeholder="ASCAP, BMI, SESAC, PRS..."
                       />
                     </Field>
-                    <Field label="Your Publishing Share %" htmlFor="profilePublishingShare">
+                    <Field label="Your Publishing Share %" htmlFor="profilePublishingShare" help="The percentage of publishing you control for your writer share. Check your publishing agreement if you have one.">
                       <Input
                         id="profilePublishingShare"
                         type="number"
@@ -466,7 +557,7 @@ export default function ProfilePage({ userProfile, onUpdateProfile, onBackToPubl
                         placeholder="Example: 10"
                       />
                     </Field>
-                    <Field label="Publisher / Admin Contact" htmlFor="profilePublisherContact">
+                    <Field label="Publisher / Admin Contact" htmlFor="profilePublisherContact" help="Registration email or contact for your publisher/admin team. This can usually be found in your agreement or company portal.">
                       <Input
                         id="profilePublisherContact"
                         value={draft.publisherContact ?? ""}
@@ -482,7 +573,7 @@ export default function ProfilePage({ userProfile, onUpdateProfile, onBackToPubl
 
           <ProfileSection icon={<IdCard className="h-4 w-4" />} title="Sign In Details">
             <div className="grid gap-4 md:grid-cols-2">
-              <ReadOnlyDetail label="SPLIT ID" value={draft.splitId || "Generating..."} />
+              <ReadOnlyDetail label="@Username" value={draft.username ? `@${draft.username}` : "Not set"} />
               <ReadOnlyDetail label="Account Email" value={draft.emailAddress || "Not set"} />
               <ReadOnlyDetail label="Password" value="Managed by sign in" />
             </div>
@@ -506,13 +597,13 @@ function normalizeProfile(profile: UserProfile): UserProfile {
     socialWebsite: (profile.socialWebsite ?? "").trim(),
     profileLocation: (profile.profileLocation ?? "").trim(),
     profileVisibility: profile.profileVisibility || "Collaborators only",
-    legalName: buildLegalName(profile),
+    legalName: buildLegalName(profile) || (profile.legalName ?? "").trim(),
     phoneNumber: formatNationalPhoneNumber(profile.phoneNumber, profile.phoneCountryCode),
     legalAddress: [profile.addressLine, profile.city, profile.state, profile.zipCode, profile.country]
       .map((part) => part.trim())
       .filter(Boolean)
       .join(", "),
-    ipiNumber: (profile.ipiNumber ?? "").trim(),
+    ipiNumber: profile.proAffiliation === "Skip PRO Registration" ? "" : (profile.ipiNumber ?? "").trim(),
     customProName: profile.proAffiliation === "Other" ? (profile.customProName ?? "").trim() : "",
     publishingStatus: (profile.publishingStatus ?? "").trim(),
     publisherName: requiresPublishingDetails(profile.publishingStatus) ? (profile.publisherName ?? "").trim() : "",
@@ -623,14 +714,46 @@ function ProfileSection({ icon, title, children }: { icon: ReactNode; title: str
   );
 }
 
-function Field({ label, htmlFor, children }: { label: string; htmlFor: string; children: ReactNode }) {
+function Field({
+  label,
+  htmlFor,
+  children,
+  help,
+}: {
+  label: string;
+  htmlFor: string;
+  children: ReactNode;
+  help?: string;
+}) {
   return (
     <div className="space-y-2">
-      <Label htmlFor={htmlFor} className="text-xs font-semibold text-muted-foreground">
-        {label}
-      </Label>
+      <div className="flex items-center gap-1.5">
+        <Label htmlFor={htmlFor} className="text-xs font-semibold text-muted-foreground">
+          {label}
+        </Label>
+        {help && <HelpTip content={help} />}
+      </div>
       {children}
     </div>
+  );
+}
+
+function HelpTip({ content }: { content: string }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          aria-label="Help"
+          className="inline-flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <HelpCircle className="h-3.5 w-3.5" />
+        </button>
+      </TooltipTrigger>
+      <TooltipContent className="max-w-xs text-xs leading-5">
+        {content}
+      </TooltipContent>
+    </Tooltip>
   );
 }
 

@@ -12,6 +12,10 @@ export type ProfileStorageResult = {
   needsEmailConfirmation?: boolean;
 };
 
+export type PasswordResetResult = {
+  sent: boolean;
+};
+
 function requireSupabaseConfig() {
   if (!isSupabaseConfigured) {
     throw new Error("Supabase is not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY to .env.local.");
@@ -21,6 +25,15 @@ function requireSupabaseConfig() {
 function clean(value?: string | null) {
   const next = (value ?? "").trim();
   return next || null;
+}
+
+export function normalizeEmailAddress(value?: string | null) {
+  return (value ?? "").trim().toLowerCase();
+}
+
+export function isValidEmailAddress(value?: string | null) {
+  const email = normalizeEmailAddress(value);
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
 function buildLegalName(profile: UserProfile) {
@@ -108,7 +121,15 @@ function rowToProfile(row: ProfileRow): UserProfile {
     adminIpi: row.admin_ipi ?? payload.adminIpi,
     adminCollectionShare: row.admin_collection_share ?? payload.adminCollectionShare,
     publisherContact: row.publisher_contact ?? payload.publisherContact,
+    termsAcceptedAt: row.terms_accepted_at ?? payload.termsAcceptedAt,
+    termsVersion: row.terms_version ?? payload.termsVersion,
+    privacyAcknowledgedAt: row.privacy_acknowledged_at ?? payload.privacyAcknowledgedAt,
+    privacyPolicyVersion: row.privacy_policy_version ?? payload.privacyPolicyVersion,
   });
+}
+
+export function profileFromStoredRowForTest(row: ProfileRow): UserProfile {
+  return rowToProfile(row);
 }
 
 function profileToRow(userId: string, profile: UserProfile): ProfileInsert {
@@ -162,12 +183,20 @@ function profileToRow(userId: string, profile: UserProfile): ProfileInsert {
     admin_ipi: clean(normalized.adminIpi),
     admin_collection_share: clean(normalized.adminCollectionShare),
     publisher_contact: clean(normalized.publisherContact),
+    terms_accepted_at: clean(normalized.termsAcceptedAt),
+    terms_version: clean(normalized.termsVersion),
+    privacy_acknowledged_at: clean(normalized.privacyAcknowledgedAt),
+    privacy_policy_version: clean(normalized.privacyPolicyVersion),
     profile_data: normalized as unknown as Json,
   };
 }
 
 function explainStorageError(error: { message?: string }) {
   const message = error.message ?? "Supabase profile storage failed.";
+
+  if (/already registered|already exists|user already|duplicate key|profiles_username_unique_idx|unique constraint/i.test(message)) {
+    return "We could not complete account creation with those details. Try signing in or use different account details.";
+  }
 
   if (/schema cache|profile_data|username|display_name|profiles/i.test(message)) {
     return "Supabase profile table is not ready yet. Run the profile storage SQL migration in Supabase, then try again.";
@@ -215,8 +244,9 @@ export async function createSupabaseAccountProfile(profile: UserProfile, passwor
   requireSupabaseConfig();
 
   const normalized = normalizeUserProfile(profile);
-  const email = clean(normalized.emailAddress);
+  const email = clean(normalizeEmailAddress(normalized.emailAddress));
   if (!email) throw new Error("Add an email address before creating the account.");
+  if (!isValidEmailAddress(email)) throw new Error("Enter a valid email address.");
   if (password.length < 8) throw new Error("Use at least 8 characters for your password.");
 
   const { data, error } = await supabase.auth.signUp({
@@ -230,12 +260,15 @@ export async function createSupabaseAccountProfile(profile: UserProfile, passwor
         phone_country_code: clean(normalized.phoneCountryCode),
         phone_number: clean(phoneNumberForStorage(normalized)),
         full_phone_number: clean(fullPhoneForMetadata(normalized)),
-        profile_data: normalized,
+        terms_accepted_at: clean(normalized.termsAcceptedAt),
+        terms_version: clean(normalized.termsVersion),
+        privacy_acknowledged_at: clean(normalized.privacyAcknowledgedAt),
+        privacy_policy_version: clean(normalized.privacyPolicyVersion),
       },
     },
   });
 
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(explainStorageError(error));
 
   if (!data.session || !data.user) {
     return {
@@ -254,8 +287,9 @@ export async function createSupabaseAccountProfile(profile: UserProfile, passwor
 export async function signInAndLoadSupabaseProfile(emailAddress: string, password: string): Promise<ProfileStorageResult> {
   requireSupabaseConfig();
 
-  const email = clean(emailAddress);
+  const email = clean(normalizeEmailAddress(emailAddress));
   if (!email) throw new Error("Enter the email address for this SPLIT account.");
+  if (!isValidEmailAddress(email)) throw new Error("Enter a valid email address.");
 
   const { data, error } = await supabase.auth.signInWithPassword({
     email,
@@ -291,4 +325,30 @@ export async function saveSupabaseProfile(profile: UserProfile) {
   if (error || !data.user) throw new Error("Sign in before saving profile changes to Supabase.");
 
   return upsertProfileForUser(data.user.id, profile);
+}
+
+export async function requestSupabasePasswordReset(emailAddress: string): Promise<PasswordResetResult> {
+  requireSupabaseConfig();
+
+  const email = clean(normalizeEmailAddress(emailAddress));
+  if (!email || !isValidEmailAddress(email)) {
+    throw new Error("Enter a valid email address.");
+  }
+
+  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: `${window.location.origin}/`,
+  });
+
+  if (error) throw new Error("If this account can receive reset emails, Supabase will send one shortly.");
+
+  return { sent: true };
+}
+
+export async function updateSupabasePassword(password: string) {
+  requireSupabaseConfig();
+
+  if (password.length < 8) throw new Error("Use at least 8 characters for your password.");
+
+  const { error } = await supabase.auth.updateUser({ password });
+  if (error) throw new Error(error.message);
 }

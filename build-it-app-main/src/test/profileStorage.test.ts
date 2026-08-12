@@ -2,8 +2,11 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
+  isValidEmailAddress,
+  normalizeEmailAddress,
   phoneNumberForStorage,
   phoneNumberFromRow,
+  profileFromStoredRowForTest,
   stripStoredCountryCode,
 } from "@/lib/profileStorage";
 import { createEmptyProfile } from "@/lib/userProfile";
@@ -12,8 +15,18 @@ const phoneMigrationSql = readFileSync(
   resolve(process.cwd(), "supabase/migrations/20260812152000_profile_phone_storage.sql"),
   "utf8",
 );
+const consentMigrationSql = readFileSync(
+  resolve(process.cwd(), "supabase/migrations/20260812162000_account_consent_profile_fields.sql"),
+  "utf8",
+);
 
 describe("profile phone storage", () => {
+  it("normalizes and validates account emails before Supabase Auth calls", () => {
+    expect(normalizeEmailAddress(" CHORI@Example.COM ")).toBe("chori@example.com");
+    expect(isValidEmailAddress("chori@example.com")).toBe(true);
+    expect(isValidEmailAddress("not-an-email")).toBe(false);
+  });
+
   it("stores phone country code separately from the national number", () => {
     const profile = {
       ...createEmptyProfile(),
@@ -32,6 +45,24 @@ describe("profile phone storage", () => {
     )).toBe("216-857-8164");
   });
 
+  it("normalizes sparse Supabase profile rows without crashing on missing strings", () => {
+    const profile = profileFromStoredRowForTest({
+      user_id: "00000000-0000-0000-0000-000000000000",
+      email: "chori@example.com",
+      username: "chori",
+      display_name: null,
+      phone_country_code: null,
+      phone_number: null,
+      profile_data: {},
+    } as Parameters<typeof profileFromStoredRowForTest>[0]);
+
+    expect(profile.emailAddress).toBe("chori@example.com");
+    expect(profile.username).toBe("chori");
+    expect(profile.legalFirstName).toBe("");
+    expect(profile.phoneCountryCode).toBe("+1");
+    expect(profile.country).toBe("United States");
+  });
+
   it("updates the auth signup trigger to save phone metadata into profiles", () => {
     expect(phoneMigrationSql).toContain("metadata_phone_country_code");
     expect(phoneMigrationSql).toContain("metadata_phone_number");
@@ -44,5 +75,14 @@ describe("profile phone storage", () => {
     expect(phoneMigrationSql).toContain("profiles_phone_full_digits_lookup_idx");
     expect(phoneMigrationSql).toContain("coalesce(profile.phone_country_code, '') || ' ' || coalesce(profile.phone_number, '')");
     expect(phoneMigrationSql).toContain("after insert or update of username, email, phone_number, phone_country_code");
+  });
+
+  it("adds account consent columns and stores minimal signup metadata through the auth trigger", () => {
+    expect(consentMigrationSql).toContain("add column if not exists terms_accepted_at timestamptz");
+    expect(consentMigrationSql).toContain("add column if not exists terms_version text");
+    expect(consentMigrationSql).toContain("add column if not exists privacy_acknowledged_at timestamptz");
+    expect(consentMigrationSql).toContain("add column if not exists privacy_policy_version text");
+    expect(consentMigrationSql).toContain("metadata_terms_accepted_at::timestamptz");
+    expect(consentMigrationSql).toContain("drop trigger if exists on_auth_user_created on auth.users");
   });
 });

@@ -42,6 +42,8 @@ export type Database = {
           phone_country_code: string | null
           phone_number: string | null
           pka_names: string | null
+          privacy_acknowledged_at: string | null
+          privacy_policy_version: string | null
           pro_affiliation: string | null
           profile_data: Json
           profile_image_url: string | null
@@ -61,6 +63,8 @@ export type Database = {
           stage_name: string | null
           state: string | null
           tax_id: string | null
+          terms_accepted_at: string | null
+          terms_version: string | null
           updated_at: string
           user_id: string
           username: string | null
@@ -93,6 +97,8 @@ export type Database = {
           phone_country_code?: string | null
           phone_number?: string | null
           pka_names?: string | null
+          privacy_acknowledged_at?: string | null
+          privacy_policy_version?: string | null
           pro_affiliation?: string | null
           profile_data?: Json
           profile_image_url?: string | null
@@ -112,6 +118,8 @@ export type Database = {
           stage_name?: string | null
           state?: string | null
           tax_id?: string | null
+          terms_accepted_at?: string | null
+          terms_version?: string | null
           updated_at?: string
           user_id: string
           username?: string | null
@@ -144,6 +152,8 @@ export type Database = {
           phone_country_code?: string | null
           phone_number?: string | null
           pka_names?: string | null
+          privacy_acknowledged_at?: string | null
+          privacy_policy_version?: string | null
           pro_affiliation?: string | null
           profile_data?: Json
           profile_image_url?: string | null
@@ -163,6 +173,8 @@ export type Database = {
           stage_name?: string | null
           state?: string | null
           tax_id?: string | null
+          terms_accepted_at?: string | null
+          terms_version?: string | null
           updated_at?: string
           user_id?: string
           username?: string | null

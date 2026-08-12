@@ -1,11 +1,9 @@
-import { type FormEvent, type ReactNode, useState } from "react";
+import { type FormEvent, type ReactNode, useEffect, useMemo, useState } from "react";
 import splitLogo from "@/assets/split-logo.png";
-import AddressSearchField from "@/components/AddressSearchField";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { formatNationalPhoneNumber, getPhoneInputMaxLength } from "@/lib/phone";
-import { createEmptyProfile, normalizeUserProfile, normalizeUsername, type UserProfile } from "@/lib/userProfile";
 import {
   Select,
   SelectContent,
@@ -13,94 +11,48 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ArrowLeft, ArrowRight, LogIn, UserPlus } from "lucide-react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { supabase } from "@/integrations/supabase/client";
+import { formatNationalPhoneNumber, getPhoneInputMaxLength } from "@/lib/phone";
+import {
+  isValidEmailAddress,
+  normalizeEmailAddress,
+  requestSupabasePasswordReset,
+  updateSupabasePassword,
+} from "@/lib/profileStorage";
+import { createEmptyProfile, normalizeUserProfile, normalizeUsername, type UserProfile } from "@/lib/userProfile";
+import { ArrowLeft, ArrowRight, HelpCircle, LogIn, ShieldCheck, UserPlus } from "lucide-react";
 
-type AccountStep = {
-  field: keyof UserProfile;
-  label: string;
-  description: string;
-  placeholder: string;
-  required?: boolean;
-};
+const TERMS_VERSION = "split-terms-2026-08-12";
+const PRIVACY_VERSION = "split-privacy-2026-08-12";
+const TERMS_URL = "/legal/terms.html";
+const PRIVACY_URL = "/legal/privacy.html";
 
-const accountSteps: AccountStep[] = [
+const accountPages = [
   {
-    field: "username",
-    label: "@Username",
-    description: "Choose the public handle collaborators can use to find and credit you on SPLIT.",
-    placeholder: "yourname",
-    required: true,
+    title: "Personal information",
+    eyebrow: "Account Creation",
+    description: "Set the public handle and contact details collaborators will use to find you on SPLIT.",
   },
   {
-    field: "legalName",
-    label: "Legal Name",
-    description: "Use one legal name consistently across split sheets, registrations, and signatures.",
-    placeholder: "John Doe",
-    required: true,
+    title: "Professional information",
+    eyebrow: "Creator Details",
+    description: "Add the role, PRO, and publishing details SPLIT can use when split sheets become registration-ready.",
   },
   {
-    field: "pkaNames",
-    label: "P/K/A Names",
-    description: "Add artist names, producer names, aliases, or other public names.",
-    placeholder: "Artist name, other names",
-  },
-  {
-    field: "roleTags",
-    label: "Role Tags",
-    description: "Select all the roles that apply to how collaborators should find and credit you.",
-    placeholder: "Select all that apply",
-  },
-  {
-    field: "phoneNumber",
-    label: "Phone Number",
-    description: "Add the best contact number for account and split sheet updates.",
-    placeholder: "(555) 000-0000",
-    required: true,
-  },
-  {
-    field: "emailAddress",
-    label: "Email Address",
-    description: "This email will be used for sign in, notifications, and signatures.",
-    placeholder: "name@example.com",
-    required: true,
-  },
-  {
-    field: "legalAddress",
-    label: "Legal Address",
-    description: "Use the legal mailing address for contract records. Choose a suggested address to auto-fill the rest.",
-    placeholder: "123 Main St",
-    required: true,
-  },
-  {
-    field: "mlcNumber",
-    label: "MLC Number",
-    description: "Add this if you have it. You can leave it blank for now.",
-    placeholder: "Optional",
-  },
-  {
-    field: "proAffiliation",
-    label: "PRO Affiliation",
-    description: "Choose your performing rights organization and add your IPI / CAE number if you have it.",
-    placeholder: "Select PRO affiliation",
-  },
-  {
-    field: "publishingStatus",
-    label: "Publishing Info",
-    description: "Add the private publishing details SPLIT should use in the background for registration-ready exports.",
-    placeholder: "Select publishing setup",
+    title: "Security and consent",
+    eyebrow: "Secure Sign In",
+    description: "Create your password and confirm the policies attached to this SPLIT account.",
   },
 ];
 
-const publishingStatusOptions = [
-  "Self-published",
-  "Unpublished",
-  "Signed to publisher",
-  "Admin by third party",
-  "Co-published",
-  "Unknown",
-];
-
-const creatorRoleOptions = ["Producer", "Writer", "Artist", "Engineer", "Topliner", "Manager", "Publisher"];
+const creatorRoleOptions = ["Producer", "Writer", "Artist", "Engineer", "Topliner"];
+const proOptions = ["ASCAP", "BMI", "SESAC", "Other", "Skip PRO Registration"];
+const publishingStatusOptions = ["Self-published", "Signed to publisher", "Co-published"];
 
 const phoneCountries = [
   { value: "+1", label: "🇺🇸 +1", country: "United States" },
@@ -141,96 +93,86 @@ const phoneCountries = [
   { value: "+57", label: "🇨🇴 +57", country: "Colombia" },
 ];
 
-const countryOptions = [
-  { value: "United States", label: "🇺🇸 United States" },
-  { value: "Canada", label: "🇨🇦 Canada" },
-  { value: "Argentina", label: "🇦🇷 Argentina" },
-  { value: "Australia", label: "🇦🇺 Australia" },
-  { value: "Brazil", label: "🇧🇷 Brazil" },
-  { value: "Chile", label: "🇨🇱 Chile" },
-  { value: "China", label: "🇨🇳 China" },
-  { value: "Colombia", label: "🇨🇴 Colombia" },
-  { value: "Costa Rica", label: "🇨🇷 Costa Rica" },
-  { value: "Dominican Republic", label: "🇩🇴 Dominican Republic" },
-  { value: "Ecuador", label: "🇪🇨 Ecuador" },
-  { value: "El Salvador", label: "🇸🇻 El Salvador" },
-  { value: "France", label: "🇫🇷 France" },
-  { value: "Germany", label: "🇩🇪 Germany" },
-  { value: "Guatemala", label: "🇬🇹 Guatemala" },
-  { value: "Honduras", label: "🇭🇳 Honduras" },
-  { value: "India", label: "🇮🇳 India" },
-  { value: "Ireland", label: "🇮🇪 Ireland" },
-  { value: "Italy", label: "🇮🇹 Italy" },
-  { value: "Jamaica", label: "🇯🇲 Jamaica" },
-  { value: "Japan", label: "🇯🇵 Japan" },
-  { value: "South Korea", label: "🇰🇷 South Korea" },
-  { value: "United Kingdom", label: "🇬🇧 United Kingdom" },
-  { value: "Mexico", label: "🇲🇽 Mexico" },
-  { value: "Nicaragua", label: "🇳🇮 Nicaragua" },
-  { value: "Panama", label: "🇵🇦 Panama" },
-  { value: "Peru", label: "🇵🇪 Peru" },
-  { value: "Portugal", label: "🇵🇹 Portugal" },
-  { value: "Puerto Rico", label: "🇵🇷 Puerto Rico" },
-  { value: "South Africa", label: "🇿🇦 South Africa" },
-  { value: "Spain", label: "🇪🇸 Spain" },
-  { value: "Sweden", label: "🇸🇪 Sweden" },
-  { value: "Switzerland", label: "🇨🇭 Switzerland" },
-  { value: "United Arab Emirates", label: "🇦🇪 United Arab Emirates" },
-  { value: "Uruguay", label: "🇺🇾 Uruguay" },
-  { value: "Venezuela", label: "🇻🇪 Venezuela" },
-  { value: "Other", label: "🌐 Other" },
-];
-
 type AccountAccessProps = {
   initialProfile?: UserProfile | null;
+  forcePasswordReset?: boolean;
   onCreateAccount: (profile: UserProfile, password: string) => Promise<void>;
   onSignIn: (emailAddress: string, password: string) => Promise<void>;
+  onPasswordResetComplete?: () => void;
 };
 
-export default function AccountAccess({ initialProfile, onCreateAccount, onSignIn }: AccountAccessProps) {
-  const [mode, setMode] = useState<"create" | "signin">("create");
+export default function AccountAccess({
+  initialProfile,
+  forcePasswordReset = false,
+  onCreateAccount,
+  onSignIn,
+  onPasswordResetComplete,
+}: AccountAccessProps) {
+  const [mode, setMode] = useState<"create" | "signin" | "forgot" | "reset">(
+    forcePasswordReset || hasRecoveryUrl() ? "reset" : "create",
+  );
   const [profile, setProfile] = useState<UserProfile>(() =>
     initialProfile ? normalizeUserProfile(initialProfile) : createEmptyProfile()
   );
   const [signInEmail, setSignInEmail] = useState("");
   const [signInPassword, setSignInPassword] = useState("");
+  const [resetEmail, setResetEmail] = useState("");
   const [accountPassword, setAccountPassword] = useState("");
   const [accountPasswordConfirm, setAccountPasswordConfirm] = useState("");
-  const [accountStep, setAccountStep] = useState(0);
-  const [proHelpSelected, setProHelpSelected] = useState(false);
+  const [resetPassword, setResetPassword] = useState("");
+  const [resetPasswordConfirm, setResetPasswordConfirm] = useState("");
+  const [acceptedTerms, setAcceptedTerms] = useState(Boolean(initialProfile?.termsAcceptedAt));
+  const [acknowledgedPrivacy, setAcknowledgedPrivacy] = useState(Boolean(initialProfile?.privacyAcknowledgedAt));
+  const [accountPage, setAccountPage] = useState(0);
   const [formError, setFormError] = useState("");
+  const [formNotice, setFormNotice] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  const currentStep = accountSteps[accountStep];
-  const progress = ((accountStep + 1) / accountSteps.length) * 100;
-  const isLastStep = accountStep === accountSteps.length - 1;
+  const currentPage = accountPages[accountPage];
+  const progress = ((accountPage + 1) / accountPages.length) * 100;
+  const isLastPage = accountPage === accountPages.length - 1;
+
+  useEffect(() => {
+    if (forcePasswordReset) setMode("reset");
+  }, [forcePasswordReset]);
+
+  useEffect(() => {
+    const { data } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "PASSWORD_RECOVERY") {
+        setMode("reset");
+        setFormError("");
+        setFormNotice("Enter a new password for your SPLIT account.");
+      }
+    });
+
+    return () => data.subscription.unsubscribe();
+  }, []);
+
+  const selectedRoles = useMemo(() => parseRoleTags(profile.roleTags), [profile.roleTags]);
 
   const updateProfile = (field: keyof UserProfile, value: string) => {
-    setProfile((current) => ({ ...current, [field]: value }));
+    setProfile((current) => ({ ...current, [field]: field === "username" ? normalizeUsername(value) : value }));
   };
 
   const handleCreateAccount = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setFormError("");
+    setFormNotice("");
 
-    if (!isLastStep) {
-      setAccountStep((step) => step + 1);
+    const pageError = validateAccountPage(accountPage, profile, accountPassword, accountPasswordConfirm, acceptedTerms, acknowledgedPrivacy);
+    if (pageError) {
+      setFormError(pageError);
       return;
     }
 
-    if (accountPassword.length < 8) {
-      setFormError("Use at least 8 characters for your password.");
-      return;
-    }
-
-    if (accountPassword !== accountPasswordConfirm) {
-      setFormError("The passwords do not match.");
+    if (!isLastPage) {
+      setAccountPage((page) => page + 1);
       return;
     }
 
     try {
       setSubmitting(true);
-      await onCreateAccount(normalizeProfile(profile), accountPassword);
+      await onCreateAccount(prepareProfileForRegistration(profile), accountPassword);
     } catch (error) {
       setFormError(error instanceof Error ? error.message : "Could not create the Supabase account.");
     } finally {
@@ -241,12 +183,63 @@ export default function AccountAccess({ initialProfile, onCreateAccount, onSignI
   const handleSignIn = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setFormError("");
+    setFormNotice("");
+
+    const email = normalizeEmailAddress(signInEmail);
+    if (!isValidEmailAddress(email)) {
+      setFormError("Enter a valid email address.");
+      return;
+    }
 
     try {
       setSubmitting(true);
-      await onSignIn(signInEmail, signInPassword);
+      await onSignIn(email, signInPassword);
     } catch (error) {
       setFormError(error instanceof Error ? error.message : "Could not sign in to Supabase.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleForgotPassword = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setFormError("");
+    setFormNotice("");
+
+    try {
+      setSubmitting(true);
+      await requestSupabasePasswordReset(resetEmail);
+      setFormNotice("If this email can receive reset messages, Supabase will send password reset instructions shortly.");
+    } catch (error) {
+      setFormNotice(error instanceof Error ? error.message : "If this email can receive reset messages, Supabase will send password reset instructions shortly.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleResetPassword = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setFormError("");
+    setFormNotice("");
+
+    if (resetPassword.length < 8) {
+      setFormError("Use at least 8 characters for your password.");
+      return;
+    }
+
+    if (resetPassword !== resetPasswordConfirm) {
+      setFormError("The passwords do not match.");
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      await updateSupabasePassword(resetPassword);
+      setFormNotice("Password updated. You can continue using SPLIT.");
+      onPasswordResetComplete?.();
+      setMode("signin");
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : "Could not update your password.");
     } finally {
       setSubmitting(false);
     }
@@ -270,12 +263,12 @@ export default function AccountAccess({ initialProfile, onCreateAccount, onSignI
               Your creator details, ready for every split sheet.
             </h1>
             <p className="mt-4 max-w-md text-sm leading-6 text-muted-foreground">
-              Save the legal and professional information SPLIT needs before starting new split sheets.
+              Save only what SPLIT needs to connect users, route split sheets, and protect account access.
             </p>
           </div>
 
           <div className="hidden rounded-lg border border-border bg-secondary/50 p-4 text-xs leading-5 text-muted-foreground lg:block">
-            Profile details can later connect to Supabase authentication and pre-fill writers, signatures, and split sheet metadata.
+            Passwords are handled only by Supabase Auth. SPLIT stores profile, role, consent, and split-sheet data in protected profile tables.
           </div>
         </section>
 
@@ -287,6 +280,7 @@ export default function AccountAccess({ initialProfile, onCreateAccount, onSignI
                 onClick={() => {
                   setMode("create");
                   setFormError("");
+                  setFormNotice("");
                 }}
                 className={`flex h-10 items-center justify-center gap-2 rounded-md text-sm font-semibold transition-colors ${
                   mode === "create" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
@@ -300,9 +294,10 @@ export default function AccountAccess({ initialProfile, onCreateAccount, onSignI
                 onClick={() => {
                   setMode("signin");
                   setFormError("");
+                  setFormNotice("");
                 }}
                 className={`flex h-10 items-center justify-center gap-2 rounded-md text-sm font-semibold transition-colors ${
-                  mode === "signin" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+                  mode !== "create" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
                 }`}
               >
                 <LogIn className="h-4 w-4" />
@@ -310,12 +305,12 @@ export default function AccountAccess({ initialProfile, onCreateAccount, onSignI
               </button>
             </div>
 
-            {mode === "create" ? (
+            {mode === "create" && (
               <form onSubmit={handleCreateAccount} className="rounded-lg border border-border bg-card p-4 shadow-sm md:p-6">
                 <div className="mb-6">
                   <div className="mb-2 flex items-center justify-between text-xs font-semibold text-muted-foreground">
                     <span>
-                      Step {accountStep + 1} of {accountSteps.length}
+                      Page {accountPage + 1} of {accountPages.length}
                     </span>
                     <span>{Math.round(progress)}%</span>
                   </div>
@@ -324,101 +319,90 @@ export default function AccountAccess({ initialProfile, onCreateAccount, onSignI
                   </div>
                 </div>
 
-                <div className="min-h-[260px]">
-                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">Account Creation</p>
-                  <h2 className="mt-3 text-2xl font-bold tracking-tight">{currentStep.label}</h2>
-                  <p className="mt-2 max-w-lg text-sm leading-6 text-muted-foreground">{currentStep.description}</p>
+                <div className="min-h-[420px]">
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">{currentPage.eyebrow}</p>
+                  <h2 className="mt-3 text-2xl font-bold tracking-tight">{currentPage.title}</h2>
+                  <p className="mt-2 max-w-lg text-sm leading-6 text-muted-foreground">{currentPage.description}</p>
 
                   <div className="mt-7">
-                    {renderAccountStep({
-                      step: currentStep,
-                      profile,
-                      updateProfile,
-                      proHelpSelected,
-                      setProHelpSelected,
-                    })}
+                    {accountPage === 0 && (
+                      <PersonalInformationPage
+                        profile={profile}
+                        updateProfile={updateProfile}
+                      />
+                    )}
+                    {accountPage === 1 && (
+                      <ProfessionalInformationPage
+                        profile={profile}
+                        selectedRoles={selectedRoles}
+                        updateProfile={updateProfile}
+                      />
+                    )}
+                    {accountPage === 2 && (
+                      <SecurityConsentPage
+                        password={accountPassword}
+                        confirmPassword={accountPasswordConfirm}
+                        acceptedTerms={acceptedTerms}
+                        acknowledgedPrivacy={acknowledgedPrivacy}
+                        onPasswordChange={setAccountPassword}
+                        onConfirmPasswordChange={setAccountPasswordConfirm}
+                        onTermsChange={setAcceptedTerms}
+                        onPrivacyChange={setAcknowledgedPrivacy}
+                      />
+                    )}
                   </div>
-
-                  {isLastStep && (
-                    <div className="mt-7 rounded-xl border border-border bg-secondary/40 p-4">
-                      <div className="mb-4">
-                        <h3 className="text-sm font-bold">Secure Sign In</h3>
-                        <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                          Create a password so Supabase can store this profile under your account.
-                        </p>
-                      </div>
-                      <div className="grid gap-3 md:grid-cols-2">
-                        <Field label="Password" htmlFor="accountPassword">
-                          <Input
-                            id="accountPassword"
-                            type="password"
-                            value={accountPassword}
-                            onChange={(event) => setAccountPassword(event.target.value)}
-                            placeholder="8 characters minimum"
-                            minLength={8}
-                            required
-                            className="h-12 text-base md:text-sm"
-                          />
-                        </Field>
-                        <Field label="Confirm Password" htmlFor="accountPasswordConfirm">
-                          <Input
-                            id="accountPasswordConfirm"
-                            type="password"
-                            value={accountPasswordConfirm}
-                            onChange={(event) => setAccountPasswordConfirm(event.target.value)}
-                            placeholder="Repeat password"
-                            minLength={8}
-                            required
-                            className="h-12 text-base md:text-sm"
-                          />
-                        </Field>
-                      </div>
-                    </div>
-                  )}
                 </div>
 
-                {formError && (
-                  <div className="mt-5 rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-2 text-xs leading-5 text-destructive">
-                    {formError}
-                  </div>
-                )}
+                <FeedbackMessage error={formError} notice={formNotice} />
 
                 <div className="mt-6 flex items-center justify-between gap-3">
                   <Button
                     type="button"
                     variant="outline"
                     className="h-11 px-4"
-                    disabled={accountStep === 0}
-                    onClick={() => setAccountStep((step) => Math.max(0, step - 1))}
+                    disabled={accountPage === 0}
+                    onClick={() => {
+                      setFormError("");
+                      setFormNotice("");
+                      setAccountPage((page) => Math.max(0, page - 1));
+                    }}
                   >
                     <ArrowLeft className="h-4 w-4" />
                     Back
                   </Button>
                   <Button type="submit" disabled={submitting} className="h-11 flex-1 md:flex-none md:px-8">
-                    {submitting ? "Saving…" : isLastStep ? "Create Account" : "Next"}
-                    {!isLastStep && <ArrowRight className="h-4 w-4" />}
+                    {submitting ? "Saving..." : isLastPage ? "Create Account" : "Next"}
+                    {!isLastPage && <ArrowRight className="h-4 w-4" />}
                   </Button>
                 </div>
               </form>
-            ) : (
+            )}
+
+            {mode === "signin" && (
               <form onSubmit={handleSignIn} className="rounded-lg border border-border bg-card p-4 shadow-sm md:p-6">
+                <div className="mb-5">
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">Welcome back</p>
+                  <h2 className="mt-3 text-2xl font-bold tracking-tight">Sign in to SPLIT</h2>
+                </div>
                 <div className="space-y-4">
-                  <Field label="Email Address" htmlFor="signInEmail">
+                  <Field label="Email Address" htmlFor="signInEmail" required>
                     <Input
                       id="signInEmail"
-                      type="text"
+                      type="email"
                       inputMode="email"
+                      autoComplete="email"
                       value={signInEmail}
-                      onChange={(event) => setSignInEmail(event.target.value)}
+                      onChange={(event) => setSignInEmail(normalizeEmailAddress(event.target.value))}
                       placeholder="name@example.com"
                       required
                     />
                   </Field>
 
-                  <Field label="Password" htmlFor="signInPassword">
+                  <Field label="Password" htmlFor="signInPassword" required>
                     <Input
                       id="signInPassword"
                       type="password"
+                      autoComplete="current-password"
                       value={signInPassword}
                       onChange={(event) => setSignInPassword(event.target.value)}
                       placeholder="Enter password"
@@ -427,14 +411,107 @@ export default function AccountAccess({ initialProfile, onCreateAccount, onSignI
                   </Field>
                 </div>
 
-                {formError && (
-                  <div className="mt-5 rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-2 text-xs leading-5 text-destructive">
-                    {formError}
-                  </div>
-                )}
+                <FeedbackMessage error={formError} notice={formNotice} />
 
                 <Button type="submit" disabled={submitting} className="mt-6 h-11 w-full">
-                  {submitting ? "Signing in…" : "Sign In"}
+                  {submitting ? "Signing in..." : "Sign In"}
+                </Button>
+                <button
+                  type="button"
+                  className="mt-4 w-full text-center text-xs font-semibold text-primary hover:underline"
+                  onClick={() => {
+                    setMode("forgot");
+                    setFormError("");
+                    setFormNotice("");
+                    setResetEmail(signInEmail);
+                  }}
+                >
+                  Forgot Password?
+                </button>
+              </form>
+            )}
+
+            {mode === "forgot" && (
+              <form onSubmit={handleForgotPassword} className="rounded-lg border border-border bg-card p-4 shadow-sm md:p-6">
+                <div className="mb-5">
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">Password reset</p>
+                  <h2 className="mt-3 text-2xl font-bold tracking-tight">Request reset email</h2>
+                  <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                    Enter your SPLIT account email. For privacy, we show the same message whether or not the email exists.
+                  </p>
+                </div>
+                <Field label="Email Address" htmlFor="resetEmail" required>
+                  <Input
+                    id="resetEmail"
+                    type="email"
+                    inputMode="email"
+                    autoComplete="email"
+                    value={resetEmail}
+                    onChange={(event) => setResetEmail(normalizeEmailAddress(event.target.value))}
+                    placeholder="name@example.com"
+                    required
+                  />
+                </Field>
+
+                <FeedbackMessage error={formError} notice={formNotice} />
+
+                <Button type="submit" disabled={submitting} className="mt-6 h-11 w-full">
+                  {submitting ? "Sending..." : "Send Reset Email"}
+                </Button>
+                <button
+                  type="button"
+                  className="mt-4 w-full text-center text-xs font-semibold text-primary hover:underline"
+                  onClick={() => {
+                    setMode("signin");
+                    setFormError("");
+                    setFormNotice("");
+                  }}
+                >
+                  Back to Sign In
+                </button>
+              </form>
+            )}
+
+            {mode === "reset" && (
+              <form onSubmit={handleResetPassword} className="rounded-lg border border-border bg-card p-4 shadow-sm md:p-6">
+                <div className="mb-5">
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">Recovery session</p>
+                  <h2 className="mt-3 text-2xl font-bold tracking-tight">Create a new password</h2>
+                  <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                    Use at least 8 characters. SPLIT sends the new password only to Supabase Auth.
+                  </p>
+                </div>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <Field label="New Password" htmlFor="resetPassword" required>
+                    <Input
+                      id="resetPassword"
+                      type="password"
+                      autoComplete="new-password"
+                      value={resetPassword}
+                      onChange={(event) => setResetPassword(event.target.value)}
+                      placeholder="8 characters minimum"
+                      minLength={8}
+                      required
+                    />
+                  </Field>
+                  <Field label="Confirm New Password" htmlFor="resetPasswordConfirm" required>
+                    <Input
+                      id="resetPasswordConfirm"
+                      type="password"
+                      autoComplete="new-password"
+                      value={resetPasswordConfirm}
+                      onChange={(event) => setResetPasswordConfirm(event.target.value)}
+                      placeholder="Repeat password"
+                      minLength={8}
+                      required
+                    />
+                  </Field>
+                </div>
+
+                <FeedbackMessage error={formError} notice={formNotice} />
+
+                <Button type="submit" disabled={submitting} className="mt-6 h-11 w-full">
+                  {submitting ? "Updating..." : "Update Password"}
                 </Button>
               </form>
             )}
@@ -445,112 +522,130 @@ export default function AccountAccess({ initialProfile, onCreateAccount, onSignI
   );
 }
 
-function requiresPublishingDetails(status?: string) {
-  return ["Signed to publisher", "Admin by third party", "Co-published"].includes(status ?? "");
-}
-
-function isSimplePublishingSetup(status?: string) {
-  return status === "Self-published" || status === "Unpublished";
-}
-
-function renderAccountStep({
-  step,
+function PersonalInformationPage({
   profile,
   updateProfile,
-  proHelpSelected,
-  setProHelpSelected,
 }: {
-  step: AccountStep;
   profile: UserProfile;
   updateProfile: (field: keyof UserProfile, value: string) => void;
-  proHelpSelected: boolean;
-  setProHelpSelected: (selected: boolean) => void;
 }) {
-  if (step.field === "username") {
-    const normalizedUsername = normalizeUsername(profile.username);
-    const available = normalizedUsername.length >= 3 && !["split", "admin", "support"].includes(normalizedUsername);
+  const normalizedUsername = normalizeUsername(profile.username);
+  const available = normalizedUsername.length >= 3 && !["split", "admin", "support"].includes(normalizedUsername);
+  const phoneMaxLength = getPhoneInputMaxLength(profile.phoneCountryCode);
 
-    return (
-      <div className="space-y-4">
-        <Field label={step.label} htmlFor={step.field}>
-          <div className="relative">
-            <span className="pointer-events-none absolute left-5 top-1/2 -translate-y-1/2 text-sm font-bold text-muted-foreground">@</span>
-            <Input
-              id={step.field}
-              value={profile.username ?? ""}
-              onChange={(event) => updateProfile("username", normalizeUsername(event.target.value))}
-              placeholder={step.placeholder}
-              required
-              className="h-12 rounded-full pl-9 pr-5 text-base shadow-sm shadow-foreground/5 md:text-sm"
-            />
-          </div>
-        </Field>
-        <Field label="Display Name" htmlFor="displayName">
+  return (
+    <div className="space-y-4">
+      <Field label="Username" htmlFor="username" required help="Your public SPLIT handle. Collaborators can invite or credit you with @username.">
+        <div className="relative">
+          <span className="pointer-events-none absolute left-5 top-1/2 -translate-y-1/2 text-sm font-bold text-muted-foreground">@</span>
           <Input
-            id="displayName"
-            value={profile.displayName ?? ""}
-            onChange={(event) => updateProfile("displayName", event.target.value)}
-            placeholder="Artist, producer, or public name"
+            id="username"
+            value={profile.username ?? ""}
+            onChange={(event) => updateProfile("username", normalizeUsername(event.target.value))}
+            placeholder="yourname"
+            required
+            className="h-12 rounded-full pl-9 pr-5 text-base shadow-sm shadow-foreground/5 md:text-sm"
+          />
+        </div>
+        <p className={`mt-1 text-xs leading-5 ${available ? "text-[hsl(var(--split-verified))]" : "text-muted-foreground"}`}>
+          {available ? `@${normalizedUsername} is ready for beta use.` : "Use at least 3 letters or numbers. Supabase enforces uniqueness when the account is created."}
+        </p>
+      </Field>
+
+      <Field label="Email Address" htmlFor="emailAddress" required help="This is the email used for Supabase login, password recovery, and account notifications.">
+        <Input
+          id="emailAddress"
+          type="email"
+          inputMode="email"
+          autoComplete="email"
+          value={profile.emailAddress ?? ""}
+          onChange={(event) => updateProfile("emailAddress", normalizeEmailAddress(event.target.value))}
+          placeholder="name@example.com"
+          required
+          className="h-12 rounded-full px-5 text-base shadow-sm shadow-foreground/5 md:text-sm"
+        />
+      </Field>
+
+      <Field label="Legal Name" htmlFor="legalName" required help="Use the name you would sign on a split sheet or registration document. You can find it on your legal ID or tax documents.">
+        <Input
+          id="legalName"
+          value={profile.legalName ?? ""}
+          onChange={(event) => updateProfile("legalName", event.target.value)}
+          placeholder="Full legal name"
+          required
+          className="h-12 rounded-full px-5 text-base shadow-sm shadow-foreground/5 md:text-sm"
+        />
+      </Field>
+
+      <Field label="Artist Name" htmlFor="artistName" help="Optional public artist, producer, or songwriter name. Use the name collaborators know you by.">
+        <Input
+          id="artistName"
+          value={profile.pkaNames ?? ""}
+          onChange={(event) => {
+            updateProfile("pkaNames", event.target.value);
+            if (!profile.displayName) updateProfile("displayName", event.target.value);
+          }}
+          placeholder="Artist name, producer name, alias"
+          className="h-12 rounded-full px-5 text-base shadow-sm shadow-foreground/5 md:text-sm"
+        />
+      </Field>
+
+      <Field label="Phone Number" htmlFor="phoneNumber" required help="Used for account recovery and split-sheet contact matching. Pick the country code, then enter the national number.">
+        <div className="grid gap-3 md:grid-cols-[150px_1fr]">
+          <Select
+            value={profile.phoneCountryCode}
+            onValueChange={(value) => {
+              updateProfile("phoneCountryCode", value);
+              updateProfile("phoneNumber", formatNationalPhoneNumber(profile.phoneNumber ?? "", value));
+            }}
+          >
+            <SelectTrigger className="h-12 rounded-full px-5 shadow-sm shadow-foreground/5" aria-label="Phone country code">
+              <SelectValue placeholder="🇺🇸 +1" />
+            </SelectTrigger>
+            <SelectContent>
+              {phoneCountries.map((country) => (
+                <SelectItem key={country.value} value={country.value}>
+                  {country.label} {country.country}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Input
+            id="phoneNumber"
+            type="tel"
+            inputMode="numeric"
+            autoComplete="tel-national"
+            maxLength={phoneMaxLength}
+            value={profile.phoneNumber ?? ""}
+            onChange={(event) =>
+              updateProfile("phoneNumber", formatNationalPhoneNumber(event.target.value, profile.phoneCountryCode))
+            }
+            placeholder="555-000-0000"
+            required
             className="h-12 rounded-full px-5 text-base shadow-sm shadow-foreground/5 md:text-sm"
           />
-        </Field>
-        <div className={`rounded-lg border px-3 py-2 text-xs leading-5 ${
-          available
-            ? "border-emerald-200 bg-emerald-50/70 text-emerald-900"
-            : "border-[hsl(var(--split-pending)/0.28)] bg-[hsl(var(--split-pending)/0.07)] text-muted-foreground"
-        }`}>
-          {available ? `@${normalizedUsername} looks available for this beta profile.` : "Use at least 3 letters or numbers. Full uniqueness will be enforced when backend auth is connected."}
         </div>
-      </div>
-    );
-  }
+      </Field>
+    </div>
+  );
+}
 
-  if (step.field === "legalName") {
-    return (
-      <div className="space-y-4">
-        <div className="grid gap-3">
-          <NameField label="Legal First Name" htmlFor="legalFirstName">
-            <Input
-              id="legalFirstName"
-              value={profile.legalFirstName ?? ""}
-              onChange={(event) => updateProfile("legalFirstName", event.target.value)}
-              placeholder="John"
-              required
-              className="h-12 rounded-full px-5 text-base shadow-sm shadow-foreground/5 md:text-sm"
-            />
-          </NameField>
-          <NameField label="Legal Middle Name (Optional)" htmlFor="legalMiddleName">
-            <Input
-              id="legalMiddleName"
-              value={profile.legalMiddleName ?? ""}
-              onChange={(event) => updateProfile("legalMiddleName", event.target.value)}
-              placeholder="Quincy"
-              className="h-12 rounded-full px-5 text-base shadow-sm shadow-foreground/5 md:text-sm"
-            />
-          </NameField>
-          <NameField label="Legal Last Name" htmlFor="legalLastName">
-            <Input
-              id="legalLastName"
-              value={profile.legalLastName ?? ""}
-              onChange={(event) => updateProfile("legalLastName", event.target.value)}
-              placeholder="Doe"
-              required
-              className="h-12 rounded-full px-5 text-base shadow-sm shadow-foreground/5 md:text-sm"
-            />
-          </NameField>
-        </div>
-        <p className="rounded-lg border border-border bg-secondary/60 px-3 py-2 text-xs leading-5 text-muted-foreground">
-          Stick to one legal name for your SPLIT account so contracts, royalty records, and signatures stay consistent.
-        </p>
-      </div>
-    );
-  }
+function ProfessionalInformationPage({
+  profile,
+  selectedRoles,
+  updateProfile,
+}: {
+  profile: UserProfile;
+  selectedRoles: string[];
+  updateProfile: (field: keyof UserProfile, value: string) => void;
+}) {
+  const skippedPro = profile.proAffiliation === "Skip PRO Registration";
+  const needsPublishingDetails = requiresPublishingDetails(profile.publishingStatus);
+  const simplePublishingSetup = isSimplePublishingSetup(profile.publishingStatus);
 
-  if (step.field === "roleTags") {
-    const selectedRoles = parseRoleTags(profile.roleTags);
-
-    return (
-      <Field label="Select all that apply" htmlFor="roleTags">
+  return (
+    <div className="space-y-5">
+      <Field label="Roles" htmlFor="roleTags" required help="Select the roles that describe how people should credit you on SPLIT. These show on your creator profile.">
         <div id="roleTags" className="flex flex-wrap gap-2">
           {creatorRoleOptions.map((role) => {
             const active = selectedRoles.includes(role);
@@ -576,213 +671,68 @@ function renderAccountStep({
             );
           })}
         </div>
-        <p className="mt-2 text-xs leading-5 text-muted-foreground">
-          These tags appear on your collaborator profile and can be changed later.
-        </p>
       </Field>
-    );
-  }
 
-  if (step.field === "phoneNumber") {
-    const phoneMaxLength = getPhoneInputMaxLength(profile.phoneCountryCode);
-
-    return (
-      <Field label={step.label} htmlFor={step.field}>
-        <div className="grid gap-3 md:grid-cols-[150px_1fr]">
+      <div className="grid gap-4 md:grid-cols-2">
+        <Field label="PRO Affiliation" htmlFor="proAffiliation" help="A PRO collects public performance royalties. You can find this on your ASCAP, BMI, SESAC, or society account. Choose Skip if you have not registered yet.">
           <Select
-            value={profile.phoneCountryCode}
+            value={profile.proAffiliation}
             onValueChange={(value) => {
-              updateProfile("phoneCountryCode", value);
-              updateProfile("phoneNumber", formatNationalPhoneNumber(profile.phoneNumber ?? "", value));
+              updateProfile("proAffiliation", value);
+              if (value === "Skip PRO Registration") {
+                updateProfile("ipiNumber", "");
+                updateProfile("customProName", "");
+              }
             }}
           >
-            <SelectTrigger className="h-12 rounded-full px-5 shadow-sm shadow-foreground/5">
-              <SelectValue placeholder="🇺🇸 +1" />
+            <SelectTrigger id="proAffiliation" className="h-12">
+              <SelectValue placeholder="Select PRO affiliation" />
             </SelectTrigger>
             <SelectContent>
-              {phoneCountries.map((country) => (
-                <SelectItem key={country.value} value={country.value}>
-                  {country.label} {country.country}
+              {proOptions.map((pro) => (
+                <SelectItem key={pro} value={pro}>
+                  {pro}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
-          <Input
-            id={step.field}
-            type="tel"
-            inputMode="numeric"
-            autoComplete="tel-national"
-            maxLength={phoneMaxLength}
-            value={profile.phoneNumber ?? ""}
-            onChange={(event) =>
-              updateProfile("phoneNumber", formatNationalPhoneNumber(event.target.value, profile.phoneCountryCode))
-            }
-            placeholder="555-000-0000"
-            required={step.required}
-            className="h-12 rounded-full px-5 text-base shadow-sm shadow-foreground/5 md:text-sm"
-          />
-        </div>
-      </Field>
-    );
-  }
-
-  if (step.field === "legalAddress") {
-    return (
-      <div className="space-y-4">
-        <Field label="Address" htmlFor="addressLine">
-          <AddressSearchField
-            id="addressLine"
-            value={{
-              addressLine: profile.addressLine ?? "",
-              zipCode: profile.zipCode ?? "",
-              city: profile.city ?? "",
-              state: profile.state ?? "",
-              country: profile.country ?? "",
-            }}
-            onFieldChange={updateProfile}
-            placeholder="Start typing your full legal address"
-            required
-            className="h-12 rounded-full px-5 pr-12 text-base shadow-sm shadow-foreground/5 md:text-sm"
-          />
         </Field>
 
-        <div className="grid gap-3 md:grid-cols-2">
-          <Field label="Zip Code" htmlFor="zipCode">
-            <Input
-              id="zipCode"
-              value={profile.zipCode ?? ""}
-              onChange={(event) => updateProfile("zipCode", event.target.value)}
-              placeholder="10036"
-              required
-              className="h-12 rounded-full px-5 text-base shadow-sm shadow-foreground/5 md:text-sm"
-            />
-          </Field>
-          <Field label="City" htmlFor="city">
-            <Input
-              id="city"
-              value={profile.city ?? ""}
-              onChange={(event) => updateProfile("city", event.target.value)}
-              placeholder="New York"
-              required
-              className="h-12 rounded-full px-5 text-base shadow-sm shadow-foreground/5 md:text-sm"
-            />
-          </Field>
-          <Field label="State" htmlFor="state">
-            <Input
-              id="state"
-              value={profile.state ?? ""}
-              onChange={(event) => updateProfile("state", event.target.value)}
-              placeholder="NY"
-              required
-              className="h-12 rounded-full px-5 text-base shadow-sm shadow-foreground/5 md:text-sm"
-            />
-          </Field>
-          <Field label="Country" htmlFor="country">
-            <Select value={profile.country} onValueChange={(value) => updateProfile("country", value)}>
-              <SelectTrigger id="country" className="h-12 rounded-full px-5 shadow-sm shadow-foreground/5">
-                <SelectValue placeholder="Select country" />
-              </SelectTrigger>
-              <SelectContent>
-                {countryOptions.map((country) => (
-                  <SelectItem key={country.value} value={country.value}>
-                    {country.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Field>
-        </div>
-      </div>
-    );
-  }
-
-  if (step.field === "mlcNumber") {
-    return (
-      <Field label={step.label} htmlFor={step.field}>
-        <div className="grid gap-3 md:grid-cols-[1fr_auto]">
+        <Field label="IPI / CAE Number" htmlFor="ipiNumber" help="This is your songwriter identifier inside your PRO account. Leave it blank or skip PRO registration if you do not have one yet.">
           <Input
-            id={step.field}
-            value={profile.mlcNumber ?? ""}
-            onChange={(event) => updateProfile("mlcNumber", event.target.value)}
-            placeholder="Optional"
+            id="ipiNumber"
+            value={profile.ipiNumber ?? ""}
+            onChange={(event) => updateProfile("ipiNumber", event.target.value)}
+            placeholder={skippedPro ? "Skipped for now" : "Optional"}
+            disabled={skippedPro}
             className="h-12 rounded-full px-5 text-base shadow-sm shadow-foreground/5 md:text-sm"
           />
-        </div>
-        <button
-            type="button"
-          className="mt-2 text-left text-xs font-semibold text-primary hover:underline"
-            onClick={() => updateProfile("mlcNumber", "Create MLC account later")}
-          >
-          Don&apos;t have an MLC account? Create one
-        </button>
-      </Field>
-    );
-  }
-
-  if (step.field === "proAffiliation") {
-    return (
-      <div className="space-y-4">
-        <div className="grid gap-4 md:grid-cols-2">
-          <Field label={step.label} htmlFor={step.field}>
-            <Select value={profile.proAffiliation} onValueChange={(value) => updateProfile("proAffiliation", value)}>
-              <SelectTrigger id={step.field} className="h-12">
-                <SelectValue placeholder={step.placeholder} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ASCAP">ASCAP</SelectItem>
-                <SelectItem value="BMI">BMI</SelectItem>
-                <SelectItem value="SESAC">SESAC</SelectItem>
-                <SelectItem value="Other">Other</SelectItem>
-              </SelectContent>
-            </Select>
-          </Field>
-          <Field label="IPI / CAE Number" htmlFor="ipiNumber">
-            <Input
-              id="ipiNumber"
-              value={profile.ipiNumber ?? ""}
-              onChange={(event) => updateProfile("ipiNumber", event.target.value)}
-              placeholder="Optional"
-              className="h-12 rounded-full px-5 text-base shadow-sm shadow-foreground/5 md:text-sm"
-            />
-          </Field>
-        </div>
-        <button
-          type="button"
-          className="text-left text-xs font-semibold text-primary hover:underline"
-          onClick={() => {
-            updateProfile("proAffiliation", "Other");
-            setProHelpSelected(true);
-          }}
-        >
-          Not Signed With a PRO? Click Here
-        </button>
-        {profile.proAffiliation === "Other" && (
-          <Field label="PRO Name" htmlFor="customProName">
-            <Input
-              id="customProName"
-              value={profile.customProName ?? ""}
-              onChange={(event) => updateProfile("customProName", event.target.value)}
-              placeholder="Enter PRO name"
-              className="h-12 rounded-full px-5 text-base shadow-sm shadow-foreground/5 md:text-sm"
-            />
-          </Field>
-        )}
-        {proHelpSelected && (
-          <p className="text-xs leading-5 text-muted-foreground">
-            No problem. This profile is marked as Other for now, and we can add a dedicated unsigned status later.
-          </p>
-        )}
+        </Field>
       </div>
-    );
-  }
 
-  if (step.field === "publishingStatus") {
-    return (
-      <div className="space-y-5">
-        <Field label="Publishing Status" htmlFor="publishingStatus">
+      {profile.proAffiliation === "Other" && (
+        <Field label="PRO Name" htmlFor="customProName" help="Use this if your society is not listed above. Enter the society name from your registration account.">
+          <Input
+            id="customProName"
+            value={profile.customProName ?? ""}
+            onChange={(event) => updateProfile("customProName", event.target.value)}
+            placeholder="Enter PRO or society name"
+            className="h-12 rounded-full px-5 text-base shadow-sm shadow-foreground/5 md:text-sm"
+          />
+        </Field>
+      )}
+
+      {skippedPro && (
+        <div className="rounded-lg border border-border bg-secondary/50 p-3 text-xs leading-5 text-muted-foreground">
+          SPLIT will let you create split sheets now. PRO details can be added later before registration exports.
+        </div>
+      )}
+
+      <div className="rounded-xl border border-border bg-secondary/30 p-4">
+        <Field label="Publishing Information" htmlFor="publishingStatus" help="Publishing details tell SPLIT whether you control your own publishing or work through a publisher. You can find this in your publishing/admin agreement.">
           <Select value={profile.publishingStatus ?? ""} onValueChange={(value) => updateProfile("publishingStatus", value)}>
             <SelectTrigger id="publishingStatus" className="h-12 text-base md:text-sm">
-              <SelectValue placeholder="Select your publishing setup" />
+              <SelectValue placeholder="Select publishing setup" />
             </SelectTrigger>
             <SelectContent>
               {publishingStatusOptions.map((option) => (
@@ -794,78 +744,54 @@ function renderAccountStep({
           </Select>
         </Field>
 
-        {isSimplePublishingSetup(profile.publishingStatus) && (
-          <div className="rounded-lg border border-emerald-200 bg-emerald-50/70 p-4 text-sm leading-6 text-emerald-900">
-            <span className="font-semibold">Simple setup:</span> no publisher/admin fields needed. SPLIT will use your account PRO and IPI/CAE for your controlled publishing share.
+        {simplePublishingSetup && (
+          <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50/70 p-3 text-xs leading-5 text-emerald-900">
+            Self-published accounts default to 100% of their controlled publishing share.
           </div>
         )}
 
-        {requiresPublishingDetails(profile.publishingStatus) && (
-          <>
-            <div className="grid gap-4 md:grid-cols-2">
-              <Field label="Publisher / Admin Company" htmlFor="publisherName">
-                <Input
-                  id="publisherName"
-                  value={profile.publisherName ?? ""}
-                  onChange={(event) => updateProfile("publisherName", event.target.value)}
-                  placeholder="Company name"
-                  className="h-12 text-base md:text-sm"
-                />
-              </Field>
-              <Field label="Publisher IPI" htmlFor="publisherIpi">
-                <Input
-                  id="publisherIpi"
-                  value={profile.publisherIpi ?? ""}
-                  onChange={(event) => updateProfile("publisherIpi", event.target.value)}
-                  placeholder="Publisher IPI/CAE if available"
-                  className="h-12 text-base md:text-sm"
-                />
-              </Field>
-              <Field label="Publisher PRO / Society" htmlFor="publisherPro">
-                <Input
-                  id="publisherPro"
-                  value={profile.publisherPro ?? ""}
-                  onChange={(event) => updateProfile("publisherPro", event.target.value)}
-                  placeholder="ASCAP, BMI, SESAC, PRS, SGAE..."
-                  className="h-12 text-base md:text-sm"
-                />
-              </Field>
-              <Field label="Your Publishing Share %" htmlFor="publishingShare">
-                <Input
-                  id="publishingShare"
-                  type="number"
-                  min="0"
-                  max="100"
-                  value={profile.publishingShare ?? ""}
-                  onChange={(event) => updateProfile("publishingShare", event.target.value)}
-                  placeholder="Example: 50"
-                  className="h-12 text-base md:text-sm"
-                />
-              </Field>
-              <Field label="Admin Company (Optional)" htmlFor="adminCompanyName">
-                <Input
-                  id="adminCompanyName"
-                  value={profile.adminCompanyName ?? ""}
-                  onChange={(event) => updateProfile("adminCompanyName", event.target.value)}
-                  placeholder="If separate from publisher"
-                  className="h-12 text-base md:text-sm"
-                />
-              </Field>
-              <Field label="Admin Collection Share %" htmlFor="adminCollectionShare">
-                <Input
-                  id="adminCollectionShare"
-                  type="number"
-                  min="0"
-                  max="100"
-                  value={profile.adminCollectionShare ?? ""}
-                  onChange={(event) => updateProfile("adminCollectionShare", event.target.value)}
-                  placeholder="Example: 10"
-                  className="h-12 text-base md:text-sm"
-                />
-              </Field>
-            </div>
-
-            <Field label="Publisher / Admin Contact" htmlFor="publisherContact">
+        {needsPublishingDetails && (
+          <div className="mt-4 grid gap-4 md:grid-cols-2">
+            <Field label="Publisher / Admin Company" htmlFor="publisherName" help="The company that controls or administers your publishing. Look at your publishing or admin agreement.">
+              <Input
+                id="publisherName"
+                value={profile.publisherName ?? ""}
+                onChange={(event) => updateProfile("publisherName", event.target.value)}
+                placeholder="Company name"
+                className="h-12 text-base md:text-sm"
+              />
+            </Field>
+            <Field label="Publisher IPI" htmlFor="publisherIpi" help="The publisher identifier from the publisher's PRO/society account.">
+              <Input
+                id="publisherIpi"
+                value={profile.publisherIpi ?? ""}
+                onChange={(event) => updateProfile("publisherIpi", event.target.value)}
+                placeholder="Publisher IPI/CAE"
+                className="h-12 text-base md:text-sm"
+              />
+            </Field>
+            <Field label="Publisher PRO / Society" htmlFor="publisherPro" help="The society your publisher uses, such as ASCAP, BMI, PRS, SGAE, or another PRO.">
+              <Input
+                id="publisherPro"
+                value={profile.publisherPro ?? ""}
+                onChange={(event) => updateProfile("publisherPro", event.target.value)}
+                placeholder="ASCAP, BMI, SESAC, PRS..."
+                className="h-12 text-base md:text-sm"
+              />
+            </Field>
+            <Field label="Your Publishing Share %" htmlFor="publishingShare" help="The percentage of publishing you control for your writer share. Check your publishing agreement if you have one.">
+              <Input
+                id="publishingShare"
+                type="number"
+                min="0"
+                max="100"
+                value={profile.publishingShare ?? ""}
+                onChange={(event) => updateProfile("publishingShare", event.target.value)}
+                placeholder="Example: 50"
+                className="h-12 text-base md:text-sm"
+              />
+            </Field>
+            <Field label="Publisher / Admin Contact" htmlFor="publisherContact" help="Registration email or contact for your publisher/admin team. This can usually be found in your agreement or company portal.">
               <Input
                 id="publisherContact"
                 value={profile.publisherContact ?? ""}
@@ -874,59 +800,176 @@ function renderAccountStep({
                 className="h-12 text-base md:text-sm"
               />
             </Field>
-          </>
+          </div>
         )}
       </div>
-    );
-  }
-
-  return (
-    <Field label={step.label} htmlFor={step.field}>
-      <Input
-        id={step.field}
-        type={step.field === "phoneNumber" ? "tel" : "text"}
-        inputMode={step.field === "emailAddress" ? "email" : undefined}
-        value={profile[step.field] ?? ""}
-        onChange={(event) => updateProfile(step.field, event.target.value)}
-        placeholder={step.placeholder}
-        required={step.required}
-        className="h-12 text-base md:text-sm"
-      />
-    </Field>
+    </div>
   );
 }
 
-function normalizeProfile(profile: UserProfile): UserProfile {
-  const normalized = normalizeUserProfile(profile);
-  const legalName = [profile.legalFirstName, profile.legalMiddleName, profile.legalLastName]
-    .map((part) => (part ?? "").trim())
-    .filter(Boolean)
-    .join(" ");
-  const legalAddress = [profile.addressLine, profile.city, profile.state, profile.zipCode, profile.country]
-    .map((part) => (part ?? "").trim())
-    .filter(Boolean)
-    .join(", ");
+function SecurityConsentPage({
+  password,
+  confirmPassword,
+  acceptedTerms,
+  acknowledgedPrivacy,
+  onPasswordChange,
+  onConfirmPasswordChange,
+  onTermsChange,
+  onPrivacyChange,
+}: {
+  password: string;
+  confirmPassword: string;
+  acceptedTerms: boolean;
+  acknowledgedPrivacy: boolean;
+  onPasswordChange: (value: string) => void;
+  onConfirmPasswordChange: (value: string) => void;
+  onTermsChange: (value: boolean) => void;
+  onPrivacyChange: (value: boolean) => void;
+}) {
+  return (
+    <div className="space-y-5">
+      <div className="grid gap-3 md:grid-cols-2">
+        <Field label="Create Password" htmlFor="accountPassword" required help="SPLIT sends this directly to Supabase Auth. We never store passwords in a profile table.">
+          <Input
+            id="accountPassword"
+            type="password"
+            autoComplete="new-password"
+            value={password}
+            onChange={(event) => onPasswordChange(event.target.value)}
+            placeholder="8 characters minimum"
+            minLength={8}
+            required
+            className="h-12 text-base md:text-sm"
+          />
+        </Field>
+        <Field label="Confirm Password" htmlFor="accountPasswordConfirm" required>
+          <Input
+            id="accountPasswordConfirm"
+            type="password"
+            autoComplete="new-password"
+            value={confirmPassword}
+            onChange={(event) => onConfirmPasswordChange(event.target.value)}
+            placeholder="Repeat password"
+            minLength={8}
+            required
+            className="h-12 text-base md:text-sm"
+          />
+        </Field>
+      </div>
+
+      <div className="rounded-lg border border-border bg-secondary/40 p-4 text-xs leading-5 text-muted-foreground">
+        <div className="mb-2 flex items-center gap-2 text-sm font-bold text-foreground">
+          <ShieldCheck className="h-4 w-4 text-primary" />
+          Password requirements
+        </div>
+        Use at least 8 characters. A longer password with letters, numbers, and symbols is recommended.
+      </div>
+
+      <div className="space-y-3">
+        <ConsentRow
+          checked={acceptedTerms}
+          onCheckedChange={onTermsChange}
+          id="termsAccepted"
+          label={
+            <>
+              I accept the{" "}
+              <a href={TERMS_URL} target="_blank" rel="noreferrer" className="font-semibold text-primary hover:underline">
+                Terms & Conditions
+              </a>
+              .
+            </>
+          }
+        />
+        <ConsentRow
+          checked={acknowledgedPrivacy}
+          onCheckedChange={onPrivacyChange}
+          id="privacyAcknowledged"
+          label={
+            <>
+              I acknowledge the{" "}
+              <a href={PRIVACY_URL} target="_blank" rel="noreferrer" className="font-semibold text-primary hover:underline">
+                Privacy Policy
+              </a>
+              .
+            </>
+          }
+        />
+      </div>
+    </div>
+  );
+}
+
+function requiresPublishingDetails(status?: string) {
+  return ["Signed to publisher", "Co-published"].includes(status ?? "");
+}
+
+function isSimplePublishingSetup(status?: string) {
+  return status === "Self-published";
+}
+
+function validateAccountPage(
+  page: number,
+  profile: UserProfile,
+  password: string,
+  confirmPassword: string,
+  acceptedTerms: boolean,
+  acknowledgedPrivacy: boolean,
+) {
+  if (page === 0) {
+    if (normalizeUsername(profile.username).length < 3) return "Choose a username with at least 3 letters or numbers.";
+    if (!isValidEmailAddress(profile.emailAddress)) return "Enter a valid email address.";
+    if (!profile.legalName.trim()) return "Enter your legal name.";
+    if (!profile.phoneNumber.trim()) return "Enter your phone number.";
+  }
+
+  if (page === 1) {
+    if (parseRoleTags(profile.roleTags).length === 0) return "Select at least one creator role.";
+  }
+
+  if (page === 2) {
+    if (password.length < 8) return "Use at least 8 characters for your password.";
+    if (password !== confirmPassword) return "The passwords do not match.";
+    if (!acceptedTerms) return "Accept the Terms & Conditions to create your SPLIT account.";
+    if (!acknowledgedPrivacy) return "Acknowledge the Privacy Policy to create your SPLIT account.";
+  }
+
+  return "";
+}
+
+function prepareProfileForRegistration(profile: UserProfile): UserProfile {
+  const now = new Date().toISOString();
   const publishingStatus = (profile.publishingStatus ?? "").trim();
   const needsPublishingDetails = requiresPublishingDetails(publishingStatus);
+  const skippedPro = profile.proAffiliation === "Skip PRO Registration";
 
-  return {
-    ...normalized,
-    legalName,
-    legalAddress,
-    roleTags: parseRoleTags(profile.roleTags).join(", "),
+  return normalizeUserProfile({
+    ...profile,
+    username: normalizeUsername(profile.username),
+    emailAddress: normalizeEmailAddress(profile.emailAddress),
+    displayName: (profile.displayName || profile.pkaNames || profile.username || profile.legalName).trim(),
+    legalName: profile.legalName.trim(),
+    pkaNames: (profile.pkaNames ?? "").trim(),
+    roleTags: parseRoleTags(profile.roleTags)
+      .filter((role) => !["Manager", "Publisher"].includes(role))
+      .join(", "),
     phoneNumber: formatNationalPhoneNumber(profile.phoneNumber ?? "", profile.phoneCountryCode),
-    ipiNumber: (profile.ipiNumber ?? "").trim(),
-    customProName: profile.proAffiliation === "Other" ? (profile.customProName ?? "").trim() : "",
+    proAffiliation: skippedPro ? "Skip PRO Registration" : (profile.proAffiliation ?? "").trim(),
+    ipiNumber: skippedPro ? "" : (profile.ipiNumber ?? "").trim(),
+    customProName: !skippedPro && profile.proAffiliation === "Other" ? (profile.customProName ?? "").trim() : "",
     publishingStatus,
     publisherName: needsPublishingDetails ? (profile.publisherName ?? "").trim() : "",
     publisherIpi: needsPublishingDetails ? (profile.publisherIpi ?? "").trim() : "",
     publisherPro: needsPublishingDetails ? (profile.publisherPro ?? "").trim() : "",
     publishingShare: isSimplePublishingSetup(publishingStatus) ? "100" : (profile.publishingShare ?? "").trim(),
-    adminCompanyName: needsPublishingDetails ? (profile.adminCompanyName ?? "").trim() : "",
-    adminIpi: needsPublishingDetails ? (profile.adminIpi ?? "").trim() : "",
-    adminCollectionShare: needsPublishingDetails ? (profile.adminCollectionShare ?? "").trim() : "",
+    adminCompanyName: "",
+    adminIpi: "",
+    adminCollectionShare: "",
     publisherContact: needsPublishingDetails ? (profile.publisherContact ?? "").trim() : "",
-  };
+    termsAcceptedAt: now,
+    termsVersion: TERMS_VERSION,
+    privacyAcknowledgedAt: now,
+    privacyPolicyVersion: PRIVACY_VERSION,
+  });
 }
 
 function parseRoleTags(value: string) {
@@ -936,24 +979,93 @@ function parseRoleTags(value: string) {
     .filter(Boolean);
 }
 
-function Field({ label, htmlFor, children }: { label: string; htmlFor: string; children: ReactNode }) {
+function FeedbackMessage({ error, notice }: { error: string; notice: string }) {
+  if (!error && !notice) return null;
+
   return (
-    <div className="space-y-2">
-      <Label htmlFor={htmlFor} className="text-xs font-semibold text-foreground">
+    <div className={`mt-5 rounded-lg border px-3 py-2 text-xs leading-5 ${
+      error
+        ? "border-destructive/20 bg-destructive/5 text-destructive"
+        : "border-primary/20 bg-primary/5 text-primary"
+    }`}>
+      {error || notice}
+    </div>
+  );
+}
+
+function ConsentRow({
+  id,
+  checked,
+  onCheckedChange,
+  label,
+}: {
+  id: string;
+  checked: boolean;
+  onCheckedChange: (value: boolean) => void;
+  label: ReactNode;
+}) {
+  return (
+    <div className="flex gap-3 rounded-lg border border-border bg-background p-3">
+      <Checkbox
+        id={id}
+        checked={checked}
+        onCheckedChange={(value) => onCheckedChange(Boolean(value))}
+        className="mt-0.5"
+      />
+      <Label htmlFor={id} className="cursor-pointer text-sm leading-6 text-muted-foreground">
         {label}
       </Label>
+    </div>
+  );
+}
+
+function Field({
+  label,
+  htmlFor,
+  children,
+  required,
+  help,
+}: {
+  label: string;
+  htmlFor: string;
+  children: ReactNode;
+  required?: boolean;
+  help?: string;
+}) {
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-1.5">
+        <Label htmlFor={htmlFor} className="text-xs font-semibold text-foreground">
+          {label}
+          {required ? <span className="text-primary"> *</span> : null}
+        </Label>
+        {help && <HelpTip content={help} />}
+      </div>
       {children}
     </div>
   );
 }
 
-function NameField({ label, htmlFor, children }: { label: string; htmlFor: string; children: ReactNode }) {
+function HelpTip({ content }: { content: string }) {
   return (
-    <div className="space-y-2">
-      <Label htmlFor={htmlFor} className="flex min-h-8 items-end text-xs font-semibold leading-4 text-foreground">
-        {label}
-      </Label>
-      {children}
-    </div>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          aria-label="Help"
+          className="inline-flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <HelpCircle className="h-3.5 w-3.5" />
+        </button>
+      </TooltipTrigger>
+      <TooltipContent className="max-w-xs text-xs leading-5">
+        {content}
+      </TooltipContent>
+    </Tooltip>
   );
+}
+
+function hasRecoveryUrl() {
+  if (typeof window === "undefined") return false;
+  return window.location.hash.includes("type=recovery") || window.location.search.includes("type=recovery");
 }

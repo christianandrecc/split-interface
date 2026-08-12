@@ -39,6 +39,10 @@ export type UserProfile = {
   adminIpi: string;
   adminCollectionShare: string;
   publisherContact: string;
+  termsAcceptedAt: string;
+  termsVersion: string;
+  privacyAcknowledgedAt: string;
+  privacyPolicyVersion: string;
 };
 
 export function createSplitId() {
@@ -94,7 +98,15 @@ export function createEmptyProfile(): UserProfile {
     adminIpi: "",
     adminCollectionShare: "",
     publisherContact: "",
+    termsAcceptedAt: "",
+    termsVersion: "",
+    privacyAcknowledgedAt: "",
+    privacyPolicyVersion: "",
   };
+}
+
+function text(value?: string | null) {
+  return (value ?? "").trim();
 }
 
 export function normalizeUserProfile(profile: Partial<UserProfile>): UserProfile {
@@ -102,21 +114,52 @@ export function normalizeUserProfile(profile: Partial<UserProfile>): UserProfile
   const normalized = {
     ...base,
     ...profile,
-    splitId: profile.splitId || base.splitId,
   };
+  const phoneCountryCode = text(normalized.phoneCountryCode) || "+1";
 
   return {
     ...normalized,
+    splitId: text(normalized.splitId) || base.splitId,
     username: normalizeUsername(normalized.username),
-    displayName: (normalized.displayName ?? "").trim(),
-    profileImageUrl: (normalized.profileImageUrl ?? "").trim(),
-    roleTags: (normalized.roleTags ?? "").trim(),
-    socialInstagram: (normalized.socialInstagram ?? "").trim(),
-    socialTikTok: (normalized.socialTikTok ?? "").trim(),
-    socialX: (normalized.socialX ?? "").trim(),
-    socialWebsite: (normalized.socialWebsite ?? "").trim(),
-    profileLocation: (normalized.profileLocation ?? "").trim(),
-    profileVisibility: normalized.profileVisibility || "Collaborators only",
-    phoneNumber: formatNationalPhoneNumber(normalized.phoneNumber ?? "", normalized.phoneCountryCode),
+    displayName: text(normalized.displayName),
+    profileImageUrl: text(normalized.profileImageUrl),
+    roleTags: text(normalized.roleTags),
+    socialInstagram: text(normalized.socialInstagram),
+    socialTikTok: text(normalized.socialTikTok),
+    socialX: text(normalized.socialX),
+    socialWebsite: text(normalized.socialWebsite),
+    profileLocation: text(normalized.profileLocation),
+    profileVisibility: text(normalized.profileVisibility) || "Collaborators only",
+    legalName: text(normalized.legalName),
+    legalFirstName: text(normalized.legalFirstName),
+    legalMiddleName: text(normalized.legalMiddleName),
+    legalLastName: text(normalized.legalLastName),
+    pkaNames: text(normalized.pkaNames),
+    phoneCountryCode,
+    phoneNumber: formatNationalPhoneNumber(text(normalized.phoneNumber), phoneCountryCode),
+    emailAddress: text(normalized.emailAddress),
+    legalAddress: text(normalized.legalAddress),
+    addressLine: text(normalized.addressLine),
+    zipCode: text(normalized.zipCode),
+    city: text(normalized.city),
+    state: text(normalized.state),
+    country: text(normalized.country) || "United States",
+    mlcNumber: text(normalized.mlcNumber),
+    proAffiliation: text(normalized.proAffiliation),
+    ipiNumber: text(normalized.ipiNumber),
+    customProName: text(normalized.customProName),
+    publishingStatus: text(normalized.publishingStatus),
+    publisherName: text(normalized.publisherName),
+    publisherIpi: text(normalized.publisherIpi),
+    publisherPro: text(normalized.publisherPro),
+    publishingShare: text(normalized.publishingShare),
+    adminCompanyName: text(normalized.adminCompanyName),
+    adminIpi: text(normalized.adminIpi),
+    adminCollectionShare: text(normalized.adminCollectionShare),
+    publisherContact: text(normalized.publisherContact),
+    termsAcceptedAt: text(normalized.termsAcceptedAt),
+    termsVersion: text(normalized.termsVersion),
+    privacyAcknowledgedAt: text(normalized.privacyAcknowledgedAt),
+    privacyPolicyVersion: text(normalized.privacyPolicyVersion),
   };
 }

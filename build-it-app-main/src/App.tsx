@@ -11,6 +11,7 @@ import { normalizeUserProfile, type UserProfile } from "@/lib/userProfile";
 import {
   createSupabaseAccountProfile,
   loadProfileForActiveSession,
+  normalizeEmailAddress,
   saveSupabaseProfile,
   signInAndLoadSupabaseProfile,
 } from "@/lib/profileStorage";
@@ -19,10 +20,16 @@ import { toast } from "sonner";
 const queryClient = new QueryClient();
 const PROFILE_STORAGE_KEY = "split.userProfile.v6";
 
+function hasPasswordRecoveryUrl() {
+  if (typeof window === "undefined") return false;
+  return window.location.hash.includes("type=recovery") || window.location.search.includes("type=recovery");
+}
+
 const App = () => {
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [showAccountCreation, setShowAccountCreation] = useState(false);
   const [loadingProfile, setLoadingProfile] = useState(true);
+  const [passwordRecoveryActive, setPasswordRecoveryActive] = useState(() => hasPasswordRecoveryUrl());
 
   useEffect(() => {
     let active = true;
@@ -69,7 +76,8 @@ const App = () => {
     const result = await createSupabaseAccountProfile(normalizedProfile, password);
 
     if (result.needsEmailConfirmation) {
-      throw new Error("Supabase created the auth user, but email confirmation is required. Confirm the email, then use Sign In to finish saving the profile.");
+      persistProfile(result.profile);
+      throw new Error("Supabase created the account, but email confirmation is required. Confirm the email, then sign in here so SPLIT can finish saving the protected profile details.");
     }
 
     persistProfile(result.profile);
@@ -95,13 +103,33 @@ const App = () => {
   };
 
   const handleSignIn = async (emailAddress: string, password: string) => {
+    const pendingProfile =
+      userProfile && normalizeEmailAddress(userProfile.emailAddress) === normalizeEmailAddress(emailAddress)
+        ? userProfile
+        : null;
     const result = await signInAndLoadSupabaseProfile(emailAddress, password);
+    const profile =
+      pendingProfile && (pendingProfile.phoneNumber || pendingProfile.legalName || pendingProfile.roleTags)
+        ? await saveSupabaseProfile({
+            ...result.profile,
+            ...pendingProfile,
+            splitId: result.profile.splitId || pendingProfile.splitId,
+            username: pendingProfile.username || result.profile.username,
+            emailAddress: result.profile.emailAddress || pendingProfile.emailAddress,
+          })
+        : result.profile;
 
-    persistProfile(result.profile);
+    persistProfile(profile);
     setShowAccountCreation(false);
+    setPasswordRecoveryActive(false);
     toast.success("Signed in to SPLIT", {
-      description: result.profile.username ? `@${result.profile.username}` : result.profile.emailAddress,
+      description: profile.username ? `@${profile.username}` : profile.emailAddress,
     });
+  };
+
+  const handlePasswordResetComplete = () => {
+    setPasswordRecoveryActive(false);
+    window.history.replaceState(null, "", window.location.pathname);
   };
 
   if (loadingProfile) {
@@ -123,7 +151,7 @@ const App = () => {
       <TooltipProvider>
         <Toaster />
         <Sonner />
-        {userProfile && !showAccountCreation ? (
+        {userProfile && !showAccountCreation && !passwordRecoveryActive ? (
           <BrowserRouter>
             <Routes>
               <Route
@@ -143,8 +171,10 @@ const App = () => {
         ) : (
           <AccountAccess
             initialProfile={userProfile}
+            forcePasswordReset={passwordRecoveryActive}
             onCreateAccount={handleCreateAccount}
             onSignIn={handleSignIn}
+            onPasswordResetComplete={handlePasswordResetComplete}
           />
         )}
       </TooltipProvider>
