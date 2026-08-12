@@ -3,6 +3,8 @@ import { Agreement, StatusBadge, AgreementIcon } from "@/components/Dashboard";
 import { SplitSheetDocumentPage } from "@/components/contract-builder/SplitSheetDocumentPreview";
 import { addDocumentAuditTrail, type StoredSplitSheetDocument } from "@/components/contract-builder/document";
 import { getSplitWorkflowLabel, VERIFIED_SPLIT_STATUSES } from "@/lib/splitWorkflow";
+import { documentBelongsToProfile, findInviteForProfile, type SplitSheetUpdateContext } from "@/lib/splitSheetStorage";
+import type { UserProfile } from "@/lib/userProfile";
 import {
   Shield,
   GitBranch,
@@ -55,10 +57,12 @@ function buildSignatureRecords(document: StoredSplitSheetDocument, proposalId: s
 
 export default function AgreementDetail({
   agreement,
+  viewerProfile,
   onUpdateDocument,
 }: {
   agreement: Agreement;
-  onUpdateDocument?: (document: StoredSplitSheetDocument) => void;
+  viewerProfile: UserProfile;
+  onUpdateDocument?: (document: StoredSplitSheetDocument, context?: SplitSheetUpdateContext) => void | Promise<void>;
 }) {
   const [showHistory, setShowHistory] = useState(false);
   const [showAudit, setShowAudit] = useState(false);
@@ -70,7 +74,10 @@ export default function AgreementDetail({
   const totalPercent = agreement.splits.reduce((s, p) => s + p.percent, 0);
   const isFinalRecord = FINAL_STATUSES.includes(agreement.status);
   const invites = agreement.document?.collaboratorInvites ?? [];
-  const canUpdateInvites = Boolean(agreement.document && onUpdateDocument && !isFinalRecord);
+  const isCreator = Boolean(agreement.document && documentBelongsToProfile(agreement.document, viewerProfile));
+  const viewerInvite = agreement.document ? findInviteForProfile(agreement.document, viewerProfile) : undefined;
+  const viewerParticipantId = isCreator ? "creator" : viewerInvite?.id;
+  const canUpdateInvites = Boolean(agreement.document && onUpdateDocument && !isFinalRecord && !isCreator && viewerInvite);
   const currentProposal = agreement.document?.splitProposalVersions.find((proposal) => proposal.id === agreement.document?.currentProposalId) ?? agreement.document?.splitProposalVersions.at(-1);
   const currentApprovals = agreement.document?.splitApprovals.filter((approval) => approval.proposalVersionId === currentProposal?.id) ?? [];
   const currentSignatures = agreement.document?.splitSignatures.filter((signature) => signature.proposalVersionId === currentProposal?.id) ?? [];
@@ -81,7 +88,9 @@ export default function AgreementDetail({
       : [];
   const proposalTotal = Object.values(proposalPercents).reduce((sum, value) => sum + (Number(value) || 0), 0);
   const canNegotiate = Boolean(agreement.document && onUpdateDocument && !isFinalRecord && agreement.status !== "Draft" && agreement.status !== "Pending Collaborator Acceptance");
-  const canSign = Boolean(agreement.document && onUpdateDocument && ["Ready to Sign", "Pending Signatures"].includes(agreement.status));
+  const canReviseProposal = canNegotiate && (isCreator || viewerInvite?.status === "Accepted");
+  const signableSignature = visibleSignatures.find((signature) => signature.status === "Pending" && signature.collaboratorId === viewerParticipantId);
+  const canSign = Boolean(agreement.document && onUpdateDocument && signableSignature && ["Ready to Sign", "Pending Signatures"].includes(agreement.status));
   const versionItems = agreement.document?.splitProposalVersions.map((proposal) => ({
     version: proposal.versionNumber,
     date: new Date(proposal.createdAt).toLocaleDateString(),
@@ -97,7 +106,7 @@ export default function AgreementDetail({
     .reverse() ?? [];
 
   const updateInviteStatus = (inviteId: string, status: "Accepted" | "Declined") => {
-    if (!agreement.document || !onUpdateDocument || isFinalRecord) return;
+    if (!agreement.document || !onUpdateDocument || isFinalRecord || inviteId !== viewerInvite?.id) return;
 
     const now = new Date().toISOString();
     const collaboratorInvites = invites.map((invite) =>
@@ -141,14 +150,23 @@ export default function AgreementDetail({
       `${actor} ${status.toLowerCase()} the collaboration invite`,
     );
 
-    onUpdateDocument(updatedDocument);
+    onUpdateDocument(updatedDocument, {
+      action: status === "Accepted" ? "invite_accept" : "invite_decline",
+      responseType: status === "Accepted" ? "invite_accept" : "invite_reject",
+    });
   };
 
   const updateApprovalStatus = (approvalId: string, status: "Approved" | "Rejected") => {
-    if (!agreement.document || !onUpdateDocument || !currentProposal || isFinalRecord) return;
+    const approval = currentApprovals.find((item) => item.id === approvalId);
+    if (
+      !agreement.document ||
+      !onUpdateDocument ||
+      !currentProposal ||
+      isFinalRecord ||
+      approval?.collaboratorId !== viewerParticipantId
+    ) return;
 
     const now = new Date().toISOString();
-    const approval = currentApprovals.find((item) => item.id === approvalId);
     const splitApprovals = agreement.document.splitApprovals.map((item) =>
       item.id === approvalId
         ? {
@@ -163,7 +181,7 @@ export default function AgreementDetail({
     const allApproved = nextCurrentApprovals.length > 0 && nextCurrentApprovals.every((item) => item.status === "Approved");
     const baseDocument = {
       ...agreement.document,
-      status: status === "Rejected" ? "Revision Requested" as const : allApproved ? "Ready to Sign" as const : agreement.document.status,
+      status: status === "Rejected" ? "Disputed" as const : allApproved ? "Ready to Sign" as const : agreement.document.status,
       splitApprovals,
     };
     const documentWithSignatures = status !== "Rejected" && allApproved
@@ -172,10 +190,14 @@ export default function AgreementDetail({
     const updatedDocument = addDocumentAuditTrail(
       documentWithSignatures,
       approval?.collaboratorName || "Collaborator",
-      status === "Rejected" ? "Requested a split revision" : "Approved the current split proposal",
+      status === "Rejected" ? "Disputed the current split proposal" : "Approved the current split proposal",
     );
 
-    onUpdateDocument(updatedDocument);
+    onUpdateDocument(updatedDocument, {
+      action: status === "Approved" ? "split_accept" : "split_reject",
+      responseType: status === "Approved" ? "split_accept" : "split_reject",
+      notes: status === "Rejected" ? proposalNote.trim() : undefined,
+    });
     setProposalNote("");
   };
 
@@ -185,6 +207,7 @@ export default function AgreementDetail({
     const now = new Date().toISOString();
     const preparedSignatures = buildSignatureRecords(agreement.document, currentProposal.id);
     const signature = preparedSignatures.find((item) => item.id === signatureId);
+    if (signature?.collaboratorId !== viewerParticipantId) return;
     const splitSignatures = preparedSignatures.map((item) =>
       item.id === signatureId
         ? {
@@ -209,11 +232,14 @@ export default function AgreementDetail({
       allSigned ? "Signed and verified the split sheet" : "Signed the split sheet",
     );
 
-    onUpdateDocument(updatedDocument);
+    onUpdateDocument(updatedDocument, {
+      action: "sign",
+      responseType: "signature",
+    });
   };
 
   const createRevisionProposal = () => {
-    if (!agreement.document || !onUpdateDocument || !canNegotiate) return;
+    if (!agreement.document || !onUpdateDocument || !canReviseProposal) return;
 
     const nextTotal = Math.round(proposalTotal * 100) / 100;
     if (Math.abs(nextTotal - 100) > 0.01) return;
@@ -228,16 +254,18 @@ export default function AgreementDetail({
       percentage: Number(proposalPercents[party.id]) || 0,
       notes: party.contributionDescription,
     }));
-    const acceptedApprovals = agreement.document.collaboratorInvites
+    const viewerName = viewerProfile.displayName || viewerProfile.pkaNames || viewerProfile.legalName || viewerProfile.emailAddress || "SPLIT user";
+    const creatorName = agreement.document.creatorProfile.displayName || agreement.document.creatorProfile.legalName || agreement.document.creatorProfile.emailAddress || "SPLIT user";
+    const approvalRecords = agreement.document.collaboratorInvites
       .filter((invite) => invite.status === "Accepted")
       .map((invite) => ({
         id: `${proposalId}-${invite.id}`,
         proposalVersionId: proposalId,
         collaboratorId: invite.id,
         collaboratorName: invite.name,
-        status: "Pending" as const,
+        status: !isCreator && invite.id === viewerInvite?.id ? "Approved" as const : "Pending" as const,
+        respondedAt: !isCreator && invite.id === viewerInvite?.id ? now : undefined,
       }));
-    const creatorName = agreement.document.creatorProfile.displayName || agreement.document.creatorProfile.legalName || agreement.document.creatorProfile.emailAddress || "SPLIT user";
     const updatedParties = agreement.document.data.parties.map((party) => ({
       ...party,
       percent: Number(proposalPercents[party.id]) || 0,
@@ -257,7 +285,7 @@ export default function AgreementDetail({
           {
             id: proposalId,
             versionNumber,
-            proposedBy: creatorName,
+            proposedBy: isCreator ? creatorName : viewerName,
             notes: proposalNote.trim() || "Updated split proposal",
             createdAt: now,
             allocations,
@@ -270,17 +298,21 @@ export default function AgreementDetail({
             proposalVersionId: proposalId,
             collaboratorId: "creator",
             collaboratorName: creatorName,
-            status: "Approved" as const,
-            respondedAt: now,
+            status: isCreator ? "Approved" as const : "Pending" as const,
+            respondedAt: isCreator ? now : undefined,
           },
-          ...acceptedApprovals,
+          ...approvalRecords,
         ],
       },
-      creatorName,
+      isCreator ? creatorName : viewerName,
       `Created split proposal v${versionNumber}`,
     );
 
-    onUpdateDocument(updatedDocument);
+    onUpdateDocument(updatedDocument, {
+      action: isCreator ? "creator_update" : "counter_offer",
+      responseType: isCreator ? undefined : "split_reject",
+      notes: proposalNote.trim() || "Updated split proposal",
+    });
     setProposalNote("");
   };
 
@@ -318,6 +350,7 @@ export default function AgreementDetail({
             <button
               type="button"
               disabled={!canSign}
+              onClick={() => signableSignature && signSplitSheet(signableSignature.id)}
               className="flex items-center gap-1.5 bg-primary text-primary-foreground rounded-lg px-3 py-2 text-xs font-semibold hover:bg-primary/90 transition-colors disabled:cursor-default disabled:opacity-40"
             >
               <PenLine className="h-3.5 w-3.5" />
@@ -371,7 +404,7 @@ export default function AgreementDetail({
                   <div className="flex gap-2">
                     <button
                       type="button"
-                      disabled={!canUpdateInvites || invite.status === "Accepted"}
+                      disabled={!canUpdateInvites || invite.id !== viewerInvite?.id || invite.status === "Accepted"}
                       onClick={() => updateInviteStatus(invite.id, "Accepted")}
                       className="rounded-lg border border-[hsl(var(--split-verified)/0.25)] bg-[hsl(var(--split-verified)/0.08)] px-3 py-2 text-xs font-semibold text-[hsl(var(--split-verified))] disabled:cursor-default disabled:opacity-50"
                     >
@@ -379,7 +412,7 @@ export default function AgreementDetail({
                     </button>
                     <button
                       type="button"
-                      disabled={!canUpdateInvites || invite.status === "Declined"}
+                      disabled={!canUpdateInvites || invite.id !== viewerInvite?.id || invite.status === "Declined"}
                       onClick={() => updateInviteStatus(invite.id, "Declined")}
                       className="rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-2 text-xs font-semibold text-destructive disabled:cursor-default disabled:opacity-50"
                     >
@@ -443,7 +476,7 @@ export default function AgreementDetail({
                       <div className="flex gap-2">
                         <button
                           type="button"
-                          disabled={!canNegotiate}
+                          disabled={!canNegotiate || approval.collaboratorId !== viewerParticipantId}
                           onClick={() => updateApprovalStatus(approval.id, "Approved")}
                           className="rounded-lg border border-[hsl(var(--split-verified)/0.25)] bg-[hsl(var(--split-verified)/0.08)] px-3 py-2 text-xs font-semibold text-[hsl(var(--split-verified))] disabled:cursor-default disabled:opacity-50"
                         >
@@ -451,11 +484,11 @@ export default function AgreementDetail({
                         </button>
                         <button
                           type="button"
-                          disabled={!canNegotiate}
+                          disabled={!canNegotiate || approval.collaboratorId !== viewerParticipantId}
                           onClick={() => updateApprovalStatus(approval.id, "Rejected")}
                           className="rounded-lg border border-[hsl(var(--split-amended)/0.25)] bg-[hsl(var(--split-amended)/0.08)] px-3 py-2 text-xs font-semibold text-[hsl(var(--split-amended))] disabled:cursor-default disabled:opacity-50"
                         >
-                          Request revision
+                          Dispute
                         </button>
                       </div>
                     )}
@@ -465,7 +498,9 @@ export default function AgreementDetail({
 
               {!isFinalRecord ? (
                 <div className="rounded-lg border border-border bg-background p-3">
-                  <div className="mb-3 text-xs font-bold uppercase tracking-wider text-muted-foreground">Create a revised proposal</div>
+                  <div className="mb-3 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                    {isCreator ? "Create a revised proposal" : "Counter offer"}
+                  </div>
                   <div className="grid gap-3 md:grid-cols-2">
                     {agreement.document.data.parties.map((party) => (
                       <label key={party.id} className="text-xs font-semibold text-muted-foreground">
@@ -496,11 +531,11 @@ export default function AgreementDetail({
                     </span>
                     <button
                       type="button"
-                      disabled={!canNegotiate || Math.abs(proposalTotal - 100) > 0.01}
+                      disabled={!canReviseProposal || Math.abs(proposalTotal - 100) > 0.01}
                       onClick={createRevisionProposal}
                       className="rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-40"
                     >
-                      Propose updated split
+                      {isCreator ? "Propose updated split" : "Send counter offer"}
                     </button>
                   </div>
                 </div>
@@ -545,7 +580,7 @@ export default function AgreementDetail({
                     </div>
                     <button
                       type="button"
-                      disabled={!canSign || signature.status === "Signed"}
+                      disabled={!canSign || signature.status === "Signed" || signature.collaboratorId !== viewerParticipantId}
                       onClick={() => signSplitSheet(signature.id)}
                       className="rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground hover:bg-primary/90 disabled:cursor-default disabled:opacity-40"
                     >

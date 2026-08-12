@@ -237,7 +237,7 @@ export function getTodayDateInputValue(date = new Date()) {
 }
 
 export function uid() {
-  return crypto.randomUUID?.() ?? `${Date.now()}_${Math.random().toString(16).slice(2)}`;
+  return globalThis.crypto?.randomUUID?.() ?? `${Date.now()}_${Math.random().toString(16).slice(2)}`;
 }
 
 export function sumPercents(parties: Party[]) {

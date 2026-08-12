@@ -170,12 +170,313 @@ export type Database = {
         }
         Relationships: []
       }
+      split_sheet_audit_records: {
+        Row: {
+          action: string
+          actor_label: string
+          actor_user_id: string | null
+          created_at: string
+          id: string
+          metadata: Json
+          split_sheet_id: string
+        }
+        Insert: {
+          action: string
+          actor_label: string
+          actor_user_id?: string | null
+          created_at?: string
+          id?: string
+          metadata?: Json
+          split_sheet_id: string
+        }
+        Update: {
+          action?: string
+          actor_label?: string
+          actor_user_id?: string | null
+          created_at?: string
+          id?: string
+          metadata?: Json
+          split_sheet_id?: string
+        }
+        Relationships: []
+      }
+      split_sheet_collaborators: {
+        Row: {
+          approval_status: string
+          collaborator_user_id: string | null
+          contribution_categories: Json
+          contribution_notes: string | null
+          created_at: string
+          display_name: string | null
+          id: string
+          invite_email: string | null
+          invite_method: string
+          invite_phone: string | null
+          invite_status: string
+          invite_value: string | null
+          legal_name: string | null
+          party_id: string
+          percentage: number
+          profile_snapshot: Json
+          responded_at: string | null
+          role: string
+          signature_status: string
+          signed_at: string | null
+          signing_order: number
+          split_sheet_id: string
+          updated_at: string
+          username: string | null
+        }
+        Insert: {
+          approval_status?: string
+          collaborator_user_id?: string | null
+          contribution_categories?: Json
+          contribution_notes?: string | null
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          invite_email?: string | null
+          invite_method?: string
+          invite_phone?: string | null
+          invite_status?: string
+          invite_value?: string | null
+          legal_name?: string | null
+          party_id: string
+          percentage?: number
+          profile_snapshot?: Json
+          responded_at?: string | null
+          role?: string
+          signature_status?: string
+          signed_at?: string | null
+          signing_order?: number
+          split_sheet_id: string
+          updated_at?: string
+          username?: string | null
+        }
+        Update: {
+          approval_status?: string
+          collaborator_user_id?: string | null
+          contribution_categories?: Json
+          contribution_notes?: string | null
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          invite_email?: string | null
+          invite_method?: string
+          invite_phone?: string | null
+          invite_status?: string
+          invite_value?: string | null
+          legal_name?: string | null
+          party_id?: string
+          percentage?: number
+          profile_snapshot?: Json
+          responded_at?: string | null
+          role?: string
+          signature_status?: string
+          signed_at?: string | null
+          signing_order?: number
+          split_sheet_id?: string
+          updated_at?: string
+          username?: string | null
+        }
+        Relationships: []
+      }
+      split_sheet_contract_deliveries: {
+        Row: {
+          created_at: string
+          delivery_status: string
+          error_message: string | null
+          id: string
+          payload: Json
+          provider: string
+          requested_by_label: string
+          requested_by_user_id: string | null
+          split_sheet_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          delivery_status?: string
+          error_message?: string | null
+          id?: string
+          payload?: Json
+          provider?: string
+          requested_by_label: string
+          requested_by_user_id?: string | null
+          split_sheet_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          delivery_status?: string
+          error_message?: string | null
+          id?: string
+          payload?: Json
+          provider?: string
+          requested_by_label?: string
+          requested_by_user_id?: string | null
+          split_sheet_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      split_sheet_proposal_versions: {
+        Row: {
+          allocations: Json
+          created_at: string
+          id: string
+          notes: string | null
+          proposed_by_label: string
+          proposed_by_user_id: string | null
+          split_sheet_id: string
+          total_percentage: number
+          version_number: number
+        }
+        Insert: {
+          allocations?: Json
+          created_at?: string
+          id?: string
+          notes?: string | null
+          proposed_by_label: string
+          proposed_by_user_id?: string | null
+          split_sheet_id: string
+          total_percentage?: number
+          version_number: number
+        }
+        Update: {
+          allocations?: Json
+          created_at?: string
+          id?: string
+          notes?: string | null
+          proposed_by_label?: string
+          proposed_by_user_id?: string | null
+          split_sheet_id?: string
+          total_percentage?: number
+          version_number?: number
+        }
+        Relationships: []
+      }
+      split_sheet_responses: {
+        Row: {
+          collaborator_id: string | null
+          created_at: string
+          id: string
+          notes: string | null
+          proposal_version_id: string | null
+          responder_user_id: string | null
+          response_type: string
+          split_sheet_id: string
+        }
+        Insert: {
+          collaborator_id?: string | null
+          created_at?: string
+          id?: string
+          notes?: string | null
+          proposal_version_id?: string | null
+          responder_user_id?: string | null
+          response_type: string
+          split_sheet_id: string
+        }
+        Update: {
+          collaborator_id?: string | null
+          created_at?: string
+          id?: string
+          notes?: string | null
+          proposal_version_id?: string | null
+          responder_user_id?: string | null
+          response_type?: string
+          split_sheet_id?: string
+        }
+        Relationships: []
+      }
+      split_sheets: {
+        Row: {
+          artist_project_name: string | null
+          contract_delivery_error: string | null
+          contract_delivery_requested_at: string | null
+          contract_delivery_status: string
+          created_at: string
+          creator_user_id: string
+          current_proposal_id: string | null
+          document_number: string
+          document_payload: Json
+          id: string
+          sent_at: string | null
+          split_total: number
+          status: string
+          stored_at: string | null
+          title: string
+          updated_at: string
+          verified_at: string | null
+          version: number
+          work_title: string
+        }
+        Insert: {
+          artist_project_name?: string | null
+          contract_delivery_error?: string | null
+          contract_delivery_requested_at?: string | null
+          contract_delivery_status?: string
+          created_at?: string
+          creator_user_id: string
+          current_proposal_id?: string | null
+          document_number: string
+          document_payload?: Json
+          id?: string
+          sent_at?: string | null
+          split_total?: number
+          status?: string
+          stored_at?: string | null
+          title: string
+          updated_at?: string
+          verified_at?: string | null
+          version?: number
+          work_title: string
+        }
+        Update: {
+          artist_project_name?: string | null
+          contract_delivery_error?: string | null
+          contract_delivery_requested_at?: string | null
+          contract_delivery_status?: string
+          created_at?: string
+          creator_user_id?: string
+          current_proposal_id?: string | null
+          document_number?: string
+          document_payload?: Json
+          id?: string
+          sent_at?: string | null
+          split_total?: number
+          status?: string
+          stored_at?: string | null
+          title?: string
+          updated_at?: string
+          verified_at?: string | null
+          version?: number
+          work_title?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      apply_split_sheet_participant_update: {
+        Args: {
+          p_action: string
+          p_actor_label?: string | null
+          p_document_payload: Json
+          p_notes?: string | null
+          p_response_type?: string | null
+          p_split_sheet_id: string
+        }
+        Returns: Json
+      }
+      resolve_split_sheet_collaborators: {
+        Args: {
+          p_split_sheet_id: string
+        }
+        Returns: number
+      }
     }
     Enums: {
       [_ in never]: never

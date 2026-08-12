@@ -87,6 +87,18 @@ export type StoredSplitSheetDocument = {
   }[];
 };
 
+export function isStoredSplitSheetDocument(value: unknown): value is StoredSplitSheetDocument {
+  if (!value || typeof value !== "object") return false;
+
+  const candidate = value as StoredSplitSheetDocument;
+  return Boolean(
+    candidate.id &&
+      candidate.data &&
+      Array.isArray(candidate.data.parties) &&
+      Array.isArray(candidate.auditTrail),
+  );
+}
+
 function makeId() {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
     return crypto.randomUUID();

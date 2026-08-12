@@ -9,6 +9,7 @@ import StepReview from "./StepReview";
 import SplitSheetDocumentPreview from "./SplitSheetDocumentPreview";
 import { createSplitSheetDocument, addDocumentAuditTrail, type StoredSplitSheetDocument } from "./document";
 import type { UserProfile } from "@/lib/userProfile";
+import { queueContractDelivery } from "@/lib/splitSheetWorkflow";
 import {
   STEPS,
   type StepId,
@@ -30,14 +31,15 @@ export default function ContractBuilder({
 }: {
   userProfile: UserProfile;
   onBack: () => void;
-  onStoreDocument: (document: StoredSplitSheetDocument) => void;
-  onSendDocument: (document: StoredSplitSheetDocument) => void;
+  onStoreDocument: (document: StoredSplitSheetDocument) => Promise<boolean>;
+  onSendDocument: (document: StoredSplitSheetDocument) => Promise<boolean>;
 }) {
   const [step, setStep] = useState<StepId>("metadata");
   const [data, setData] = useState<ContractData>(() => createInitialContract(userProfile));
   const [generatedDocument, setGeneratedDocument] = useState<StoredSplitSheetDocument | null>(null);
   const [documentStored, setDocumentStored] = useState(false);
   const [documentSent, setDocumentSent] = useState(false);
+  const [savingDocument, setSavingDocument] = useState(false);
 
   const stepIdx = STEPS.findIndex((s) => s.id === step);
   const isSongStep = step === "metadata";
@@ -72,8 +74,8 @@ export default function ContractBuilder({
     toast.success("SPLIT Sheet draft created", { description: signedInArtistData.songTitle || "Untitled Work" });
   };
 
-  const handleStoreGeneratedDocument = () => {
-    if (!generatedDocument) return;
+  const handleStoreGeneratedDocument = async () => {
+    if (!generatedDocument || savingDocument) return;
 
     const storedDocument = addDocumentAuditTrail(
       {
@@ -85,31 +87,61 @@ export default function ContractBuilder({
       "Stored in account",
     );
 
-    setGeneratedDocument(storedDocument);
-    setDocumentStored(true);
-    onStoreDocument(storedDocument);
-    toast.success("SPLIT Sheet stored in your account");
+    setSavingDocument(true);
+    try {
+      const persisted = await onStoreDocument(storedDocument);
+      setGeneratedDocument(storedDocument);
+      setDocumentStored(true);
+      toast.success(persisted ? "SPLIT Sheet stored in Supabase" : "SPLIT Sheet stored locally", {
+        description: persisted ? "The backend record is ready." : "Supabase was unavailable, so this preview used local storage.",
+      });
+    } catch (error) {
+      toast.error("Could not store this SPLIT Sheet", {
+        description: error instanceof Error ? error.message : "Check the split percentages and try again.",
+      });
+    } finally {
+      setSavingDocument(false);
+    }
   };
 
-  const handleSendGeneratedDocument = () => {
-    if (!generatedDocument) return;
+  const handleSendGeneratedDocument = async () => {
+    if (!generatedDocument || savingDocument) return;
 
-    const sentDocument = addDocumentAuditTrail(
+    const actor = userProfile.emailAddress || userProfile.legalName || "SPLIT user";
+    const sentDocument = queueContractDelivery(addDocumentAuditTrail(
       {
         ...generatedDocument,
         status: generatedDocument.collaborators.length ? "Pending Collaborator Acceptance" : "Verified and Stored",
         storedAt: generatedDocument.storedAt || new Date().toISOString(),
         sentAt: new Date().toISOString(),
       },
-      userProfile.emailAddress || userProfile.legalName || "SPLIT user",
+      actor,
       generatedDocument.collaborators.length ? "Sent invitations to collaborators" : "Stored solo writer split",
-    );
+    ), actor);
 
-    setGeneratedDocument(sentDocument);
-    setDocumentStored(true);
-    setDocumentSent(true);
-    onSendDocument(sentDocument);
-    toast.success(generatedDocument.collaborators.length ? "Invites sent to collaborators" : "Solo SPLIT Sheet stored");
+    setSavingDocument(true);
+    try {
+      const persisted = await onSendDocument(sentDocument);
+      setGeneratedDocument(sentDocument);
+      setDocumentStored(true);
+      setDocumentSent(true);
+      toast.success(
+        generatedDocument.collaborators.length
+          ? "Contract delivery queued"
+          : "Solo SPLIT Sheet stored",
+        {
+          description: persisted
+            ? "Supabase has the split sheet and delivery request."
+            : "Saved locally with a server-side delivery placeholder.",
+        },
+      );
+    } catch (error) {
+      toast.error("Could not send this SPLIT Sheet", {
+        description: error instanceof Error ? error.message : "Check the split percentages and try again.",
+      });
+    } finally {
+      setSavingDocument(false);
+    }
   };
 
   if (generatedDocument) {
@@ -205,12 +237,22 @@ function createInitialContract(userProfile: UserProfile): ContractData {
 }
 
 function getSignedInArtistName(userProfile: UserProfile) {
+  const legalName = safeText(userProfile.legalName);
+  const pkaName = firstPkaName(userProfile);
+  const displayName = safeText(userProfile.displayName);
+  const emailAddress = safeText(userProfile.emailAddress);
+  const fullLegalName = [
+    userProfile.legalFirstName,
+    userProfile.legalMiddleName,
+    userProfile.legalLastName,
+  ].map(safeText).filter(Boolean).join(" ");
+
   return (
-    userProfile.displayName ||
-    userProfile.pkaNames.split(",")[0]?.trim() ||
-    userProfile.legalName ||
-    [userProfile.legalFirstName, userProfile.legalMiddleName, userProfile.legalLastName].filter(Boolean).join(" ") ||
-    userProfile.emailAddress ||
+    displayName ||
+    pkaName ||
+    legalName ||
+    fullLegalName ||
+    emailAddress ||
     "Signed-in SPLIT profile"
   );
 }
@@ -230,31 +272,46 @@ function requiresPublishingDetails(status?: string) {
 }
 
 function profileToParty(userProfile: UserProfile): Party {
-  const phoneNumber = [userProfile.phoneCountryCode, userProfile.phoneNumber].filter(Boolean).join(" ").trim();
+  const phoneNumber = [userProfile.phoneCountryCode, userProfile.phoneNumber].map(safeText).filter(Boolean).join(" ").trim();
   const publishingStatus = userProfile.publishingStatus || "Unknown";
   const needsPublishingDetails = requiresPublishingDetails(publishingStatus);
+  const username = safeText(userProfile.username);
+  const emailAddress = safeText(userProfile.emailAddress);
+  const legalName = safeText(userProfile.legalName) || [
+    userProfile.legalFirstName,
+    userProfile.legalMiddleName,
+    userProfile.legalLastName,
+  ].map(safeText).filter(Boolean).join(" ");
 
   return makeParty({
-    splitId: userProfile.splitId,
+    splitId: safeText(userProfile.splitId),
     phoneNumber,
-    inviteMethod: userProfile.username ? "username" : userProfile.emailAddress ? "email" : "phone",
-    inviteValue: userProfile.username ? `@${userProfile.username}` : userProfile.emailAddress || phoneNumber,
+    inviteMethod: username ? "username" : emailAddress ? "email" : "phone",
+    inviteValue: username ? `@${username}` : emailAddress || phoneNumber,
     accountLinked: true,
     isCurrentUser: true,
-    legalName: userProfile.legalName || [userProfile.legalFirstName, userProfile.legalMiddleName, userProfile.legalLastName].filter(Boolean).join(" "),
-    professionalName: userProfile.pkaNames.split(",")[0]?.trim() || "",
-    email: userProfile.emailAddress,
-    country: userProfile.country || "United States",
-    proAffiliation: userProfile.proAffiliation || "Unknown",
-    customProName: userProfile.customProName || "",
-    ipiNumber: userProfile.ipiNumber || "",
+    legalName,
+    professionalName: firstPkaName(userProfile),
+    email: emailAddress,
+    country: safeText(userProfile.country) || "United States",
+    proAffiliation: safeText(userProfile.proAffiliation) || "Unknown",
+    customProName: safeText(userProfile.customProName),
+    ipiNumber: safeText(userProfile.ipiNumber),
     publishingStatus,
-    publisherName: needsPublishingDetails ? userProfile.publisherName || userProfile.adminCompanyName || "" : "",
-    publisherIpi: needsPublishingDetails ? userProfile.publisherIpi || userProfile.adminIpi || "" : "",
-    publisherPro: needsPublishingDetails ? userProfile.publisherPro || userProfile.proAffiliation || "" : "",
-    publisherContact: needsPublishingDetails ? userProfile.publisherContact || "" : "",
+    publisherName: needsPublishingDetails ? safeText(userProfile.publisherName) || safeText(userProfile.adminCompanyName) : "",
+    publisherIpi: needsPublishingDetails ? safeText(userProfile.publisherIpi) || safeText(userProfile.adminIpi) : "",
+    publisherPro: needsPublishingDetails ? safeText(userProfile.publisherPro) || safeText(userProfile.proAffiliation) : "",
+    publisherContact: needsPublishingDetails ? safeText(userProfile.publisherContact) : "",
     percent: 100,
     role: "Songwriter",
     signingOrder: 1,
   });
+}
+
+function safeText(value: unknown) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function firstPkaName(userProfile: UserProfile) {
+  return safeText(userProfile.pkaNames).split(",")[0]?.trim() || "";
 }

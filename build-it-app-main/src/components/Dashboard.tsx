@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import splitLogo from "@/assets/split-logo.png";
 import UserProfileSheet from "@/components/UserProfileSheet";
 import ProfilePage from "@/components/ProfilePage";
@@ -20,6 +20,16 @@ import {
   VERIFIED_SPLIT_STATUSES,
   type SplitWorkflowStageId,
 } from "@/lib/splitWorkflow";
+import {
+  loadLocalSplitSheetDocuments,
+  loadSplitSheetDocuments,
+  saveLocalSplitSheetDocuments,
+  saveSplitSheetDocument,
+  saveSplitSheetParticipantAction,
+  type SplitSheetSaveMode,
+  type SplitSheetUpdateContext,
+} from "@/lib/splitSheetStorage";
+import { toast } from "sonner";
 import {
   FileText,
   LayoutDashboard,
@@ -59,27 +69,6 @@ export type Agreement = {
   splits: { name: string; role: string; percent: number }[];
   document?: StoredSplitSheetDocument;
 };
-
-const GENERATED_DOCUMENTS_KEY = "split.generatedDocuments.v2";
-
-function isStoredSplitSheetDocument(value: unknown): value is StoredSplitSheetDocument {
-  if (!value || typeof value !== "object") return false;
-  const candidate = value as StoredSplitSheetDocument;
-  return Boolean(candidate.id && candidate.data && Array.isArray(candidate.data.parties));
-}
-
-function loadGeneratedDocuments(): StoredSplitSheetDocument[] {
-  if (typeof window === "undefined") return [];
-
-  try {
-    const stored = window.localStorage.getItem(GENERATED_DOCUMENTS_KEY);
-    if (!stored) return [];
-    const parsed = JSON.parse(stored);
-    return Array.isArray(parsed) ? parsed.filter(isStoredSplitSheetDocument) : [];
-  } catch {
-    return [];
-  }
-}
 
 function documentPartyName(party: StoredSplitSheetDocument["data"]["parties"][number]) {
   return party.professionalName || party.legalName || party.email || party.phoneNumber || party.splitId || "Invited writer";
@@ -277,26 +266,69 @@ export default function Dashboard({
   const [agreementFilter, setAgreementFilter] = useState<FilterStatus>("All");
   const [isNewAgreement, setIsNewAgreement] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [generatedDocuments, setGeneratedDocuments] = useState<StoredSplitSheetDocument[]>(loadGeneratedDocuments);
+  const [generatedDocuments, setGeneratedDocuments] = useState<StoredSplitSheetDocument[]>(() => loadLocalSplitSheetDocuments(userProfile));
+  const [loadingSplitSheets, setLoadingSplitSheets] = useState(true);
+  const [splitSheetsPersisted, setSplitSheetsPersisted] = useState(false);
   const isMobile = useIsMobile();
 
   const agreements = useMemo(() => generatedDocuments.map(documentToAgreement), [generatedDocuments]);
 
-  const saveGeneratedDocument = (document: StoredSplitSheetDocument) => {
+  useEffect(() => {
+    let active = true;
+
+    async function loadDocuments() {
+      setLoadingSplitSheets(true);
+      const results = await loadSplitSheetDocuments(userProfile);
+      if (!active) return;
+
+      const documents = results.map((result) => result.document);
+      setGeneratedDocuments(documents);
+      saveLocalSplitSheetDocuments(documents);
+      setSplitSheetsPersisted(results.length > 0 && results.every((result) => result.persisted));
+      setLoadingSplitSheets(false);
+    }
+
+    loadDocuments();
+
+    return () => {
+      active = false;
+    };
+  }, [userProfile]);
+
+  const applyGeneratedDocument = (document: StoredSplitSheetDocument) => {
     setGeneratedDocuments((current) => {
       const exists = current.some((item) => item.id === document.id);
       const next = exists
         ? current.map((item) => (item.id === document.id ? document : item))
         : [document, ...current];
 
-      window.localStorage.setItem(GENERATED_DOCUMENTS_KEY, JSON.stringify(next));
+      saveLocalSplitSheetDocuments(next);
       return next;
     });
   };
 
-  const updateGeneratedDocument = (document: StoredSplitSheetDocument) => {
-    saveGeneratedDocument(document);
+  const persistGeneratedDocument = async (document: StoredSplitSheetDocument, mode: SplitSheetSaveMode) => {
+    applyGeneratedDocument(document);
+    const result = await saveSplitSheetDocument(document, mode, userProfile);
+    applyGeneratedDocument(result.document);
+    setSplitSheetsPersisted(result.persisted);
+    return result.persisted;
+  };
+
+  const updateGeneratedDocument = async (document: StoredSplitSheetDocument, context: SplitSheetUpdateContext = {}) => {
+    applyGeneratedDocument(document);
     setSelectedAgreement(documentToAgreement(document));
+    const persisted = context.action && context.action !== "creator_update"
+      ? await saveSplitSheetParticipantAction(document, context, userProfile)
+      : await saveSplitSheetDocument(document, "update", userProfile);
+
+    applyGeneratedDocument(persisted.document);
+    setSelectedAgreement(documentToAgreement(persisted.document));
+    if (!persisted.persisted) {
+      toast.warning("Saved locally", {
+        description: "Supabase did not confirm this split-sheet update yet.",
+      });
+    }
   };
 
   const executed = agreements.filter((a) => VERIFIED_SPLIT_STATUSES.includes(a.status)).length;
@@ -317,8 +349,8 @@ export default function Dashboard({
       <ContractBuilder
         userProfile={userProfile}
         onBack={() => setIsNewAgreement(false)}
-        onStoreDocument={saveGeneratedDocument}
-        onSendDocument={saveGeneratedDocument}
+        onStoreDocument={(document) => persistGeneratedDocument(document, "draft")}
+        onSendDocument={(document) => persistGeneratedDocument(document, "send")}
       />
     );
   }
@@ -334,7 +366,7 @@ export default function Dashboard({
           <span className="text-sm font-semibold truncate flex-1">{selectedAgreement.title}</span>
         </header>
         <main className="flex-1 overflow-y-auto">
-          <AgreementDetail agreement={selectedAgreement} onUpdateDocument={updateGeneratedDocument} />
+          <AgreementDetail agreement={selectedAgreement} viewerProfile={userProfile} onUpdateDocument={updateGeneratedDocument} />
         </main>
       </div>
     );
@@ -447,6 +479,8 @@ export default function Dashboard({
               executed={executed}
               pending={pending}
               drafts={drafts}
+              loading={loadingSplitSheets}
+              persisted={splitSheetsPersisted}
               onOpenBucket={(filter) => {
                 setAgreementFilter(filter);
                 setSelectedAgreement(null);
@@ -478,7 +512,7 @@ export default function Dashboard({
                 />
                 <div className="flex-1 min-w-0 overflow-y-auto bg-background">
                   {selectedAgreement ? (
-                    <AgreementDetail agreement={selectedAgreement} onUpdateDocument={updateGeneratedDocument} />
+                    <AgreementDetail agreement={selectedAgreement} viewerProfile={userProfile} onUpdateDocument={updateGeneratedDocument} />
                   ) : (
                     <EmptyDetail onNew={() => setIsNewAgreement(true)} />
                   )}
@@ -526,6 +560,8 @@ function DashboardHome({
   executed,
   pending,
   drafts,
+  loading,
+  persisted,
   onOpenBucket,
   onNew,
   isMobile,
@@ -534,6 +570,8 @@ function DashboardHome({
   executed: number;
   pending: number;
   drafts: number;
+  loading: boolean;
+  persisted: boolean;
   onOpenBucket: (filter: FilterStatus) => void;
   onNew: () => void;
   isMobile: boolean;
@@ -547,6 +585,18 @@ function DashboardHome({
             <p className="mt-0.5 max-w-2xl text-xs leading-5 text-muted-foreground md:text-sm">
               See the split sheets that need attention, then finish drafts, approvals, signatures, and verified records.
             </p>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold ${
+                persisted
+                  ? "border-[hsl(var(--split-verified)/0.25)] bg-[hsl(var(--split-verified)/0.08)] text-[hsl(var(--split-verified))]"
+                  : "border-border bg-secondary/50 text-muted-foreground"
+              }`}>
+                {loading ? "Loading split sheets..." : persisted ? "Supabase synced" : "Local preview fallback"}
+              </span>
+              <span className="text-[11px] font-medium text-muted-foreground">
+                Contracts are queued for server-side delivery, never sent from the browser.
+              </span>
+            </div>
           </div>
           <button
             onClick={onNew}
