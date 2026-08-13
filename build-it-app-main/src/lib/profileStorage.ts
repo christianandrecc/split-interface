@@ -16,6 +16,9 @@ export type PasswordResetResult = {
   sent: boolean;
 };
 
+const DEFAULT_AUTH_REDIRECT_URL = "https://split-interface.vercel.app/";
+const LOCAL_AUTH_HOSTS = new Set(["localhost", "127.0.0.1", "0.0.0.0"]);
+
 function requireSupabaseConfig() {
   if (!isSupabaseConfigured) {
     throw new Error("Supabase is not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY to .env.local.");
@@ -34,6 +37,51 @@ export function normalizeEmailAddress(value?: string | null) {
 export function isValidEmailAddress(value?: string | null) {
   const email = normalizeEmailAddress(value);
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+function normalizeHttpRedirectUrl(value?: string | null) {
+  const rawValue = clean(value);
+  if (!rawValue) return null;
+
+  try {
+    const url = new URL(rawValue);
+    if (!["http:", "https:"].includes(url.protocol)) return null;
+    url.hash = "";
+    url.search = "";
+    if (!url.pathname.endsWith("/")) url.pathname = `${url.pathname}/`;
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
+export function resolveSupabaseAuthRedirectUrl(currentOrigin?: string | null, configuredUrl?: string | null) {
+  const configuredRedirect = normalizeHttpRedirectUrl(configuredUrl);
+  if (configuredRedirect) return configuredRedirect;
+
+  const currentRedirect = normalizeHttpRedirectUrl(currentOrigin);
+  if (!currentRedirect) return DEFAULT_AUTH_REDIRECT_URL;
+
+  try {
+    const url = new URL(currentRedirect);
+    if (url.protocol === "http:" && LOCAL_AUTH_HOSTS.has(url.hostname)) {
+      return DEFAULT_AUTH_REDIRECT_URL;
+    }
+  } catch {
+    return DEFAULT_AUTH_REDIRECT_URL;
+  }
+
+  return currentRedirect;
+}
+
+export function getSupabaseAuthRedirectUrl() {
+  const configuredUrl =
+    import.meta.env.VITE_SUPABASE_AUTH_REDIRECT_URL ||
+    import.meta.env.VITE_PUBLIC_APP_URL ||
+    import.meta.env.VITE_APP_URL;
+  const currentOrigin = typeof window === "undefined" ? null : window.location.origin;
+
+  return resolveSupabaseAuthRedirectUrl(currentOrigin, configuredUrl);
 }
 
 function buildLegalName(profile: UserProfile) {
@@ -246,11 +294,73 @@ async function loadProfileForUser(userId: string) {
 
 export async function loadProfileForActiveSession() {
   requireSupabaseConfig();
+  await consumeSupabaseAuthCallbackFromUrl();
 
   const { data, error } = await supabase.auth.getUser();
   if (error || !data.user) return null;
 
   return loadProfileForUser(data.user.id);
+}
+
+function authHashParams() {
+  if (typeof window === "undefined" || !window.location.hash) return new URLSearchParams();
+  return new URLSearchParams(window.location.hash.replace(/^#/, ""));
+}
+
+function hasAuthCallbackUrl() {
+  if (typeof window === "undefined") return false;
+
+  const url = new URL(window.location.href);
+  const hashParams = authHashParams();
+
+  return Boolean(
+    url.searchParams.get("code") ||
+      url.searchParams.get("error") ||
+      url.searchParams.get("error_description") ||
+      hashParams.get("access_token") ||
+      hashParams.get("refresh_token") ||
+      hashParams.get("error") ||
+      hashParams.get("error_description"),
+  );
+}
+
+function clearSupabaseAuthUrl() {
+  if (typeof window === "undefined" || !hasAuthCallbackUrl()) return;
+  window.history.replaceState(null, "", window.location.pathname || "/");
+}
+
+export async function consumeSupabaseAuthCallbackFromUrl() {
+  if (typeof window === "undefined" || !hasAuthCallbackUrl()) return false;
+
+  const url = new URL(window.location.href);
+  const hashParams = authHashParams();
+  const callbackError = url.searchParams.get("error_description") || hashParams.get("error_description");
+  if (callbackError) {
+    clearSupabaseAuthUrl();
+    throw new Error(callbackError);
+  }
+
+  const authCode = url.searchParams.get("code");
+  if (authCode) {
+    const { error } = await supabase.auth.exchangeCodeForSession(authCode);
+    clearSupabaseAuthUrl();
+    if (error) throw new Error(error.message);
+    return true;
+  }
+
+  const accessToken = hashParams.get("access_token");
+  const refreshToken = hashParams.get("refresh_token");
+  if (accessToken && refreshToken) {
+    const { error } = await supabase.auth.setSession({
+      access_token: accessToken,
+      refresh_token: refreshToken,
+    });
+    clearSupabaseAuthUrl();
+    if (error) throw new Error(error.message);
+    return true;
+  }
+
+  return false;
 }
 
 export async function createSupabaseAccountProfile(profile: UserProfile, password: string): Promise<ProfileStorageResult> {
@@ -266,6 +376,7 @@ export async function createSupabaseAccountProfile(profile: UserProfile, passwor
     email,
     password,
     options: {
+      emailRedirectTo: getSupabaseAuthRedirectUrl(),
       data: profileSignupMetadata(normalized),
     },
   });
@@ -338,7 +449,7 @@ export async function requestSupabasePasswordReset(emailAddress: string): Promis
   }
 
   const { error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: `${window.location.origin}/`,
+    redirectTo: getSupabaseAuthRedirectUrl(),
   });
 
   if (error) throw new Error("If this account can receive reset emails, Supabase will send one shortly.");

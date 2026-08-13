@@ -8,6 +8,7 @@ import {
   phoneNumberFromRow,
   profileSignupMetadata,
   profileFromStoredRowForTest,
+  resolveSupabaseAuthRedirectUrl,
   stripStoredCountryCode,
 } from "@/lib/profileStorage";
 import { createEmptyProfile } from "@/lib/userProfile";
@@ -26,6 +27,16 @@ const fullProfileSignupMigrationSql = readFileSync(
 );
 
 describe("profile phone storage", () => {
+  it("keeps Supabase email confirmation links off local hosts by default", () => {
+    expect(resolveSupabaseAuthRedirectUrl("http://127.0.0.1:8080")).toBe("https://split-interface.vercel.app/");
+    expect(resolveSupabaseAuthRedirectUrl("http://localhost:5173")).toBe("https://split-interface.vercel.app/");
+  });
+
+  it("uses the deployed origin or explicit env redirect for Supabase auth links", () => {
+    expect(resolveSupabaseAuthRedirectUrl("https://split-interface.vercel.app")).toBe("https://split-interface.vercel.app/");
+    expect(resolveSupabaseAuthRedirectUrl("https://preview-split.vercel.app", "https://split-interface.vercel.app")).toBe("https://split-interface.vercel.app/");
+  });
+
   it("normalizes and validates account emails before Supabase Auth calls", () => {
     expect(normalizeEmailAddress(" CHORI@Example.COM ")).toBe("chori@example.com");
     expect(isValidEmailAddress("chori@example.com")).toBe(true);

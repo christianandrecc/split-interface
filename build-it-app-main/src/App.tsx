@@ -56,9 +56,13 @@ const App = () => {
       const savedProfile = window.localStorage.getItem(PROFILE_STORAGE_KEY);
 
       if (savedProfile) {
-        const normalizedProfile = normalizeUserProfile(JSON.parse(savedProfile));
-        window.localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(normalizedProfile));
-        if (active) setUserProfile(normalizedProfile);
+        try {
+          const normalizedProfile = normalizeUserProfile(JSON.parse(savedProfile));
+          window.localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(normalizedProfile));
+          if (active) setUserProfile(normalizedProfile);
+        } catch {
+          window.localStorage.removeItem(PROFILE_STORAGE_KEY);
+        }
       }
 
       try {
