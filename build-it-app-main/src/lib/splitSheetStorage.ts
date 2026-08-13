@@ -4,6 +4,11 @@ import {
 } from "@/components/contract-builder/document";
 import { isSupabaseConfigured, supabase } from "@/integrations/supabase/client";
 import type { Json, Tables, TablesInsert } from "@/integrations/supabase/types";
+import {
+  isInternalSplitSheetAuditAction,
+  splitSheetAllocationDisplayName,
+  splitSheetPartyDisplayName,
+} from "@/lib/splitSheetDisplay";
 import { validateDocumentSplit } from "@/lib/splitSheetWorkflow";
 import type { UserProfile } from "@/lib/userProfile";
 
@@ -14,6 +19,11 @@ type SplitSheetInsert = TablesInsert<"split_sheets">;
 type SplitCollaboratorInsert = TablesInsert<"split_sheet_collaborators">;
 type SplitProposalInsert = TablesInsert<"split_sheet_proposal_versions">;
 type SplitAuditInsert = TablesInsert<"split_sheet_audit_records">;
+type SplitSheetRpcRow = {
+  id: string;
+  updated_at: string | null;
+  document_payload: Json;
+};
 
 export type SplitSheetSaveMode = "draft" | "send" | "update" | "contract_delivery";
 export type SplitSheetParticipantAction =
@@ -22,10 +32,11 @@ export type SplitSheetParticipantAction =
   | "split_accept"
   | "split_reject"
   | "counter_offer"
-  | "sign";
+  | "sign"
+  | "local_chat";
 
 export type SplitSheetUpdateContext = {
-  action?: SplitSheetParticipantAction | "creator_update";
+  action?: SplitSheetParticipantAction | "creator_update" | "local_chat";
   responseType?: "invite_accept" | "invite_reject" | "split_accept" | "split_reject" | "signature";
   notes?: string;
 };
@@ -42,7 +53,9 @@ function ensureBrowserStorage() {
 
 function documentVisibleToProfile(document: StoredSplitSheetDocument, profile?: UserProfile) {
   if (!profile) return true;
-  return documentBelongsToProfile(document, profile) || Boolean(findInviteForProfile(document, profile));
+  if (documentBelongsToProfile(document, profile)) return true;
+  if (document.status === "Draft" || !document.sentAt) return false;
+  return Boolean(findInviteForProfile(document, profile));
 }
 
 export function loadLocalSplitSheetDocuments(profile?: UserProfile): StoredSplitSheetDocument[] {
@@ -80,6 +93,21 @@ function upsertLocalDocument(document: StoredSplitSheetDocument) {
   saveLocalSplitSheetDocuments(next);
 }
 
+function dedupeDocuments(documents: StoredSplitSheetDocument[]) {
+  const byId = new Map<string, StoredSplitSheetDocument>();
+
+  for (const document of documents) {
+    const current = byId.get(document.id);
+    if (!current || new Date(document.updatedAt).getTime() >= new Date(current.updatedAt).getTime()) {
+      byId.set(document.id, document);
+    }
+  }
+
+  return [...byId.values()].sort(
+    (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+  );
+}
+
 function requireSupabaseConfig() {
   if (!isSupabaseConfigured) {
     throw new Error("Supabase is not configured for split-sheet storage.");
@@ -111,6 +139,34 @@ function phoneDigits(value?: string | null) {
   return (value ?? "").replace(/\D/g, "");
 }
 
+function partyMatchesProfile(
+  party: StoredSplitSheetDocument["data"]["parties"][number] | undefined,
+  profile: UserProfile,
+) {
+  if (!party) return false;
+
+  const profileUsername = normalizeIdentifier(profile.username);
+  const profileEmail = normalizeIdentifier(profile.emailAddress);
+  const profilePhone = phoneDigits(`${profile.phoneCountryCode ?? ""} ${profile.phoneNumber ?? ""}`);
+  const partyUsernameValues = [party.inviteValue, party.splitId]
+    .map(normalizeIdentifier)
+    .filter(Boolean);
+  const partyEmailValues = [party.email, party.inviteMethod === "email" ? party.inviteValue : ""]
+    .map(normalizeIdentifier)
+    .filter(Boolean);
+  const partyPhoneValues = [party.phoneNumber, party.inviteMethod === "phone" ? party.inviteValue : ""]
+    .map(phoneDigits)
+    .filter(Boolean);
+
+  if (profileUsername && partyUsernameValues.includes(profileUsername)) return true;
+  if (profileEmail && partyEmailValues.includes(profileEmail)) return true;
+
+  return Boolean(
+    profilePhone &&
+      partyPhoneValues.some((value) => value && profilePhone.endsWith(value.slice(-10))),
+  );
+}
+
 export function documentBelongsToProfile(document: StoredSplitSheetDocument, profile: UserProfile) {
   const creator = document.creatorProfile;
 
@@ -129,6 +185,7 @@ export function findInviteForProfile(document: StoredSplitSheetDocument, profile
   return document.collaboratorInvites.find((invite) => {
     const inviteValue = normalizeIdentifier(invite.inviteValue);
     const snapshot = invite.profileSnapshot;
+    const party = document.data.parties.find((item) => item.id === invite.partyId);
 
     if (profileUsername && (
       inviteValue === profileUsername ||
@@ -145,8 +202,45 @@ export function findInviteForProfile(document: StoredSplitSheetDocument, profile
     }
 
     const invitePhone = phoneDigits(invite.inviteValue || snapshot?.phoneNumber);
-    return Boolean(profilePhone && invitePhone && profilePhone.endsWith(invitePhone.slice(-10)));
+    return Boolean(
+      (profilePhone && invitePhone && profilePhone.endsWith(invitePhone.slice(-10))) ||
+        partyMatchesProfile(party, profile)
+    );
   });
+}
+
+export function documentParticipantIdsForProfile(document: StoredSplitSheetDocument, profile: UserProfile) {
+  const ids = new Set<string>();
+  const viewerInvite = findInviteForProfile(document, profile);
+  const viewerInviteParty = viewerInvite
+    ? document.data.parties.find((party) => party.id === viewerInvite.partyId)
+    : undefined;
+  const hasCollaboratorIdentity = Boolean(viewerInvite && !viewerInviteParty?.isCurrentUser);
+
+  if (documentBelongsToProfile(document, profile) && !hasCollaboratorIdentity) {
+    ids.add("creator");
+    const creatorParty = document.data.parties.find((party) => party.isCurrentUser);
+    if (creatorParty?.id) ids.add(creatorParty.id);
+  }
+
+  if (viewerInvite) {
+    ids.add(viewerInvite.id);
+    ids.add(viewerInvite.partyId);
+  }
+
+  document.data.parties.forEach((party) => {
+    if (hasCollaboratorIdentity && party.isCurrentUser) return;
+    if (!partyMatchesProfile(party, profile)) return;
+
+    ids.add(party.id);
+    const invite = document.collaboratorInvites.find((item) => item.partyId === party.id);
+    if (invite) {
+      ids.add(invite.id);
+      ids.add(invite.partyId);
+    }
+  });
+
+  return ids;
 }
 
 function documentToSplitSheetRow(document: StoredSplitSheetDocument, creatorUserId: string): SplitSheetInsert {
@@ -181,7 +275,7 @@ function documentToSplitSheetRow(document: StoredSplitSheetDocument, creatorUser
   };
 }
 
-function documentToCollaboratorRows(document: StoredSplitSheetDocument): SplitCollaboratorInsert[] {
+function documentToCollaboratorRows(document: StoredSplitSheetDocument, actorUserId: string): SplitCollaboratorInsert[] {
   const currentProposalId = document.currentProposalId || document.splitProposalVersions.at(-1)?.id || null;
 
   return document.data.parties.map((party, index) => {
@@ -202,13 +296,13 @@ function documentToCollaboratorRows(document: StoredSplitSheetDocument): SplitCo
     return {
       split_sheet_id: document.id,
       party_id: party.id,
-      collaborator_user_id: null,
+      collaborator_user_id: party.isCurrentUser ? actorUserId : null,
       username: clean(username),
       invite_email: party.inviteMethod === "email" ? clean(inviteValue) : clean(party.email),
       invite_phone: party.inviteMethod === "phone" ? clean(inviteValue) : clean(party.phoneNumber),
       invite_value: clean(inviteValue),
       invite_method: party.isCurrentUser ? "creator" : party.inviteMethod || "username",
-      display_name: clean(party.professionalName || party.legalName || invite?.name || inviteValue),
+      display_name: clean(splitSheetPartyDisplayName(document, party, party.professionalName || party.legalName || invite?.name || inviteValue)),
       legal_name: clean(party.legalName),
       role: clean(party.role) ?? "Collaborator",
       percentage: Number(party.percent) || 0,
@@ -233,31 +327,42 @@ function documentToProposalRows(document: StoredSplitSheetDocument, actorUserId:
     proposed_by_user_id: actorUserId,
     proposed_by_label: proposal.proposedBy,
     notes: clean(proposal.notes),
-    allocations: proposal.allocations as unknown as Json,
+    allocations: proposal.allocations.map((allocation) => ({
+      ...allocation,
+      name: splitSheetAllocationDisplayName(document, allocation),
+    })) as unknown as Json,
     total_percentage: proposal.allocations.reduce((sum, allocation) => sum + (Number(allocation.percentage) || 0), 0),
     created_at: proposal.createdAt,
   }));
 }
 
 function documentToAuditRows(document: StoredSplitSheetDocument): SplitAuditInsert[] {
-  return document.auditTrail.map((entry, index) => ({
-    split_sheet_id: document.id,
-    actor_user_id: null,
-    actor_label: entry.actor,
-    action: entry.action,
-    metadata: {
-      documentVersion: document.version,
-      order: index + 1,
-    },
-    created_at: entry.timestamp,
-  }));
+  return document.auditTrail.flatMap((entry, index) => {
+    if (isInternalSplitSheetAuditAction(entry.action)) return [];
+
+    return [{
+      split_sheet_id: document.id,
+      actor_user_id: null,
+      actor_label: entry.actor,
+      action: entry.action === "Sent a negotiation message" ? "Sent a message in Messages" : entry.action,
+      metadata: {
+        documentVersion: document.version,
+        order: index + 1,
+      },
+      created_at: entry.timestamp,
+    }];
+  });
 }
 
 function rowToDocument(row: SplitSheetRow): StoredSplitSheetDocument | null {
   return isStoredSplitSheetDocument(row.document_payload) ? row.document_payload : null;
 }
 
-async function replaceCollaborators(document: StoredSplitSheetDocument) {
+function rpcRowToDocument(row: SplitSheetRpcRow): StoredSplitSheetDocument | null {
+  return isStoredSplitSheetDocument(row.document_payload) ? row.document_payload : null;
+}
+
+async function replaceCollaborators(document: StoredSplitSheetDocument, actorUserId: string) {
   const { error: deleteError } = await supabase
     .from("split_sheet_collaborators")
     .delete()
@@ -265,7 +370,7 @@ async function replaceCollaborators(document: StoredSplitSheetDocument) {
 
   if (deleteError) throw new Error(deleteError.message);
 
-  const collaborators = documentToCollaboratorRows(document);
+  const collaborators = documentToCollaboratorRows(document, actorUserId);
   if (collaborators.length === 0) return;
 
   const { error } = await supabase
@@ -318,19 +423,24 @@ export async function loadSplitSheetDocuments(profile?: UserProfile): Promise<Sp
 
   try {
     await getActiveUserId();
-    const { data, error } = await supabase
-      .from("split_sheets")
-      .select("*")
-      .order("updated_at", { ascending: false });
-
+    const { data, error } = await supabase.rpc("load_my_split_sheets");
     if (error) throw new Error(error.message);
 
-    const documents = (data ?? [])
-      .map(rowToDocument)
+    const remoteDocuments = ((data ?? []) as SplitSheetRpcRow[])
+      .map(rpcRowToDocument)
       .filter((document): document is StoredSplitSheetDocument => Boolean(document));
+    const mergedDocuments = dedupeDocuments([
+      ...remoteDocuments,
+      ...localDocuments.map((result) => result.document),
+    ]);
+    const remoteIds = new Set(remoteDocuments.map((document) => document.id));
 
-    return documents.map((document) => ({ document, persisted: true }));
-  } catch {
+    return mergedDocuments.map((document) => ({
+      document,
+      persisted: remoteIds.has(document.id),
+    }));
+  } catch (error) {
+    console.warn("SPLIT could not load split sheets from Supabase.", error);
     return localDocuments;
   }
 }
@@ -364,7 +474,7 @@ export async function saveSplitSheetDocument(
 
     if (error) throw new Error(error.message);
 
-    await replaceCollaborators(document);
+    await replaceCollaborators(document, userId);
     await replaceProposalVersions(document, userId);
     await replaceAuditRecords(document);
 
@@ -378,6 +488,7 @@ export async function saveSplitSheetDocument(
       persisted: true,
     };
   } catch (error) {
+    console.warn("SPLIT could not save this split sheet to Supabase.", error);
     return {
       document,
       persisted: false,
@@ -421,7 +532,8 @@ export async function saveSplitSheetParticipantAction(
       document: persistedDocument,
       persisted: true,
     };
-  } catch {
+  } catch (error) {
+    console.warn("SPLIT could not save this participant action to Supabase.", error);
     return {
       document,
       persisted: false,

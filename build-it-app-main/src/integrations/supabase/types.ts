@@ -483,11 +483,37 @@ export type Database = {
         }
         Returns: Json
       }
+      load_my_split_sheets: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          document_payload: Json
+          id: string
+          updated_at: string | null
+        }[]
+      }
+      resolve_all_pending_split_sheet_collaborators: {
+        Args: Record<PropertyKey, never>
+        Returns: number
+      }
       resolve_split_sheet_collaborators: {
         Args: {
           p_split_sheet_id: string
         }
         Returns: number
+      }
+      search_split_profiles: {
+        Args: {
+          result_limit?: number
+          search_query: string
+        }
+        Returns: {
+          display_name: string | null
+          profile_image_url: string | null
+          profile_location: string | null
+          role_tags: string | null
+          user_id: string | null
+          username: string | null
+        }[]
       }
     }
     Enums: {

@@ -109,6 +109,24 @@ function text(value?: string | null) {
   return (value ?? "").trim();
 }
 
+function splitLegalName(value?: string | null) {
+  const parts = text(value).split(/\s+/).filter(Boolean);
+
+  if (parts.length === 0) {
+    return { firstName: "", middleName: "", lastName: "" };
+  }
+
+  if (parts.length === 1) {
+    return { firstName: parts[0], middleName: "", lastName: "" };
+  }
+
+  return {
+    firstName: parts[0],
+    middleName: parts.slice(1, -1).join(" "),
+    lastName: parts.at(-1) ?? "",
+  };
+}
+
 export function normalizeUserProfile(profile: Partial<UserProfile>): UserProfile {
   const base = createEmptyProfile();
   const normalized = {
@@ -116,6 +134,8 @@ export function normalizeUserProfile(profile: Partial<UserProfile>): UserProfile
     ...profile,
   };
   const phoneCountryCode = text(normalized.phoneCountryCode) || "+1";
+  const legalName = text(normalized.legalName);
+  const legalNameParts = splitLegalName(legalName);
 
   return {
     ...normalized,
@@ -130,10 +150,10 @@ export function normalizeUserProfile(profile: Partial<UserProfile>): UserProfile
     socialWebsite: text(normalized.socialWebsite),
     profileLocation: text(normalized.profileLocation),
     profileVisibility: text(normalized.profileVisibility) || "Collaborators only",
-    legalName: text(normalized.legalName),
-    legalFirstName: text(normalized.legalFirstName),
-    legalMiddleName: text(normalized.legalMiddleName),
-    legalLastName: text(normalized.legalLastName),
+    legalName,
+    legalFirstName: text(normalized.legalFirstName) || legalNameParts.firstName,
+    legalMiddleName: text(normalized.legalMiddleName) || legalNameParts.middleName,
+    legalLastName: text(normalized.legalLastName) || legalNameParts.lastName,
     pkaNames: text(normalized.pkaNames),
     phoneCountryCode,
     phoneNumber: formatNationalPhoneNumber(text(normalized.phoneNumber), phoneCountryCode),

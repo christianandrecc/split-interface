@@ -1,6 +1,6 @@
-import { type ReactNode, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 import AddressSearchField from "@/components/AddressSearchField";
-import { normalizeUsername, type UserProfile } from "@/lib/userProfile";
+import { normalizeUserProfile, normalizeUsername, type UserProfile } from "@/lib/userProfile";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -120,10 +120,15 @@ function isSimplePublishingSetup(status?: string) {
 }
 
 export default function ProfilePage({ userProfile, onUpdateProfile, onBackToPublicProfile }: ProfilePageProps) {
-  const [draft, setDraft] = useState<UserProfile>(userProfile);
+  const [draft, setDraft] = useState<UserProfile>(() => hydrateProfileForEditing(userProfile));
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
+
+  useEffect(() => {
+    setDraft(hydrateProfileForEditing(userProfile));
+    setSaveError("");
+  }, [userProfile]);
 
   const displayName = useMemo(() => draft.displayName || buildLegalName(draft) || draft.emailAddress || "Your Profile", [draft]);
   const needsPublishingDetails = requiresPublishingDetails(draft.publishingStatus);
@@ -585,7 +590,7 @@ export default function ProfilePage({ userProfile, onUpdateProfile, onBackToPubl
 }
 
 function normalizeProfile(profile: UserProfile): UserProfile {
-  return {
+  return normalizeUserProfile({
     ...profile,
     username: normalizeUsername(profile.username),
     displayName: (profile.displayName ?? "").trim(),
@@ -614,7 +619,28 @@ function normalizeProfile(profile: UserProfile): UserProfile {
     adminIpi: requiresPublishingDetails(profile.publishingStatus) ? (profile.adminIpi ?? "").trim() : "",
     adminCollectionShare: requiresPublishingDetails(profile.publishingStatus) ? (profile.adminCollectionShare ?? "").trim() : "",
     publisherContact: requiresPublishingDetails(profile.publishingStatus) ? (profile.publisherContact ?? "").trim() : "",
-  };
+  });
+}
+
+function hydrateProfileForEditing(profile: UserProfile): UserProfile {
+  const normalized = normalizeUserProfile(profile);
+  const legalAddressParts = normalized.legalAddress
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  if (legalAddressParts.length < 2 || normalized.addressLine || normalized.city || normalized.state) {
+    return normalized;
+  }
+
+  return normalizeUserProfile({
+    ...normalized,
+    addressLine: legalAddressParts[0] ?? normalized.addressLine,
+    city: legalAddressParts[1] ?? normalized.city,
+    state: legalAddressParts[2] ?? normalized.state,
+    zipCode: legalAddressParts[3] ?? normalized.zipCode,
+    country: legalAddressParts[4] ?? normalized.country,
+  });
 }
 
 function parseRoleTags(value: string) {

@@ -22,6 +22,7 @@ import {
   isWriterReady,
 } from "./types";
 import { toast } from "sonner";
+import type { SplitSheetSaveResult } from "@/lib/splitSheetStorage";
 
 export default function ContractBuilder({
   userProfile,
@@ -31,8 +32,8 @@ export default function ContractBuilder({
 }: {
   userProfile: UserProfile;
   onBack: () => void;
-  onStoreDocument: (document: StoredSplitSheetDocument) => Promise<boolean>;
-  onSendDocument: (document: StoredSplitSheetDocument) => Promise<boolean>;
+  onStoreDocument: (document: StoredSplitSheetDocument) => Promise<SplitSheetSaveResult>;
+  onSendDocument: (document: StoredSplitSheetDocument) => Promise<SplitSheetSaveResult>;
 }) {
   const [step, setStep] = useState<StepId>("metadata");
   const [data, setData] = useState<ContractData>(() => createInitialContract(userProfile));
@@ -64,14 +65,44 @@ export default function ContractBuilder({
   const next = () => { if (stepIdx < STEPS.length - 1) setStep(STEPS[stepIdx + 1].id); };
   const prev = () => { if (stepIdx > 0) setStep(STEPS[stepIdx - 1].id); };
 
-  const handlePropose = () => {
+  const handlePropose = async () => {
+    if (savingDocument) return;
+
     const signedInArtistData = bindContractToSignedInArtist(data, userProfile);
     const document = createSplitSheetDocument(signedInArtistData, userProfile);
+    const actor = userProfile.emailAddress || userProfile.legalName || "SPLIT user";
+    const storedDocument = addDocumentAuditTrail(
+      {
+        ...document,
+        status: "Draft",
+        storedAt: document.storedAt || new Date().toISOString(),
+      },
+      actor,
+      "Stored draft in account",
+    );
+
     setData(signedInArtistData);
-    setGeneratedDocument(document);
+    setGeneratedDocument(storedDocument);
     setDocumentStored(false);
     setDocumentSent(false);
-    toast.success("SPLIT Sheet draft created", { description: signedInArtistData.songTitle || "Untitled Work" });
+    setSavingDocument(true);
+
+    try {
+      const result = await onStoreDocument(storedDocument);
+      setGeneratedDocument(result.document);
+      setDocumentStored(true);
+      toast.success(result.persisted ? "SPLIT Sheet draft saved" : "SPLIT Sheet draft saved locally", {
+        description: result.persisted
+          ? "The draft is now visible in your account."
+          : "Supabase was unavailable, so this preview used local storage.",
+      });
+    } catch (error) {
+      toast.error("Could not save this SPLIT Sheet draft", {
+        description: error instanceof Error ? error.message : "Check the split percentages and try again.",
+      });
+    } finally {
+      setSavingDocument(false);
+    }
   };
 
   const handleStoreGeneratedDocument = async () => {
@@ -89,11 +120,11 @@ export default function ContractBuilder({
 
     setSavingDocument(true);
     try {
-      const persisted = await onStoreDocument(storedDocument);
-      setGeneratedDocument(storedDocument);
+      const result = await onStoreDocument(storedDocument);
+      setGeneratedDocument(result.document);
       setDocumentStored(true);
-      toast.success(persisted ? "SPLIT Sheet stored in Supabase" : "SPLIT Sheet stored locally", {
-        description: persisted ? "The backend record is ready." : "Supabase was unavailable, so this preview used local storage.",
+      toast.success(result.persisted ? "SPLIT Sheet stored in Supabase" : "SPLIT Sheet stored locally", {
+        description: result.persisted ? "The backend record is ready." : "Supabase was unavailable, so this preview used local storage.",
       });
     } catch (error) {
       toast.error("Could not store this SPLIT Sheet", {
@@ -121,8 +152,8 @@ export default function ContractBuilder({
 
     setSavingDocument(true);
     try {
-      const persisted = await onSendDocument(sentDocument);
-      setGeneratedDocument(sentDocument);
+      const result = await onSendDocument(sentDocument);
+      setGeneratedDocument(result.document);
       setDocumentStored(true);
       setDocumentSent(true);
       toast.success(
@@ -130,7 +161,7 @@ export default function ContractBuilder({
           ? "Contract delivery queued"
           : "Solo SPLIT Sheet stored",
         {
-          description: persisted
+          description: result.persisted
             ? "Supabase has the split sheet and delivery request."
             : "Saved locally with a server-side delivery placeholder.",
         },
@@ -204,9 +235,10 @@ export default function ContractBuilder({
             {step === "review" ? (
               <button
                 onClick={handlePropose}
-                className="bg-primary text-primary-foreground rounded-lg px-5 md:px-6 py-2.5 text-sm font-semibold hover:bg-primary/90 transition-colors shadow-sm"
+                disabled={savingDocument}
+                className="bg-primary text-primary-foreground rounded-lg px-5 md:px-6 py-2.5 text-sm font-semibold hover:bg-primary/90 transition-colors disabled:cursor-not-allowed disabled:opacity-40 shadow-sm"
               >
-                Create SPLIT Sheet
+                {savingDocument ? "Saving draft..." : "Create SPLIT Sheet"}
               </button>
             ) : (
               <button

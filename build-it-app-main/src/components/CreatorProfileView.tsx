@@ -110,7 +110,7 @@ export default function CreatorProfileView({
   return (
     <div className="h-full overflow-y-auto bg-background">
       <div className="mx-auto w-full max-w-[1180px] px-4 py-5 md:px-8 md:py-8">
-        <section className="relative border-b border-border pb-0">
+        <section className="relative border-b border-border pb-6 md:pb-7">
           {mode === "own" && (
             <div className="absolute right-0 top-0 z-10 flex items-center gap-2">
               <button
@@ -133,26 +133,26 @@ export default function CreatorProfileView({
               </button>
             </div>
           )}
-          <div className="flex flex-col gap-6 lg:grid lg:grid-cols-[240px_minmax(0,1fr)] lg:items-center xl:grid-cols-[248px_minmax(0,1fr)]">
-            <div className="w-full max-w-[240px] overflow-hidden rounded-xl border border-border bg-card shadow-sm xl:max-w-[248px]">
+          <div className="flex flex-col gap-5 md:flex-row md:items-center md:pr-20 lg:gap-7">
+            <div className="w-full max-w-[168px] flex-shrink-0 overflow-hidden rounded-xl border border-border bg-card shadow-sm md:max-w-[176px]">
               {profile.profileImage ? (
                 <img
                   src={profile.profileImage}
                   alt={`${profile.displayName} profile portrait`}
-                  className="aspect-square h-full w-full object-cover"
+                  className="aspect-square w-full object-cover"
                 />
               ) : (
-                <div className="flex aspect-square h-full w-full items-center justify-center bg-primary/10 text-primary">
+                <div className="flex aspect-square w-full items-center justify-center bg-gradient-to-br from-primary/12 via-primary/7 to-secondary text-primary">
                   {profile.displayName || profile.username ? (
-                    <span className="text-4xl font-bold tracking-tight">{getInitials(profile.displayName || profile.username)}</span>
+                    <span className="text-3xl font-bold tracking-tight">{getInitials(profile.displayName || profile.username)}</span>
                   ) : (
-                    <UserRound className="h-12 w-12" />
+                    <UserRound className="h-10 w-10" />
                   )}
                 </div>
               )}
             </div>
 
-            <div className="min-w-0 lg:pt-1">
+            <div className="min-w-0 flex-1">
               <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
@@ -795,16 +795,34 @@ function parseRoleTags(value?: string) {
     .filter(Boolean);
 }
 
-function buildPublicName(profile: UserProfile) {
+function firstText(...values: Array<string | undefined | null>) {
+  return values.map((value) => value?.trim()).find(Boolean) ?? "";
+}
+
+function firstPkaName(profile: UserProfile) {
+  return firstText((profile.pkaNames ?? "").split(",")[0], profile.displayName);
+}
+
+function buildLegalParts(profile: UserProfile) {
   return [profile.legalFirstName, profile.legalMiddleName, profile.legalLastName]
-    .map((part) => part.trim())
+    .map((part) => (part ?? "").trim())
     .filter(Boolean)
     .join(" ");
 }
 
+function buildPublicName(profile: UserProfile) {
+  return firstText(
+    firstPkaName(profile),
+    profile.legalName,
+    buildLegalParts(profile),
+    profile.username,
+    (profile.emailAddress ?? "").split("@")[0],
+  );
+}
+
 function buildLocationLabel(profile: UserProfile) {
   return [profile.city, profile.state]
-    .map((part) => part.trim())
+    .map((part) => (part ?? "").trim())
     .filter(Boolean)
     .join(", ");
 }

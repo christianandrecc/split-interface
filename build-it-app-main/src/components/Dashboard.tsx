@@ -3,7 +3,7 @@ import splitLogo from "@/assets/split-logo.png";
 import UserProfileSheet from "@/components/UserProfileSheet";
 import ProfilePage from "@/components/ProfilePage";
 import CreatorProfileView from "@/components/CreatorProfileView";
-import type { UserProfile } from "@/lib/userProfile";
+import { createEmptyProfile, type UserProfile } from "@/lib/userProfile";
 import type { StoredSplitSheetDocument } from "@/components/contract-builder/document";
 import AgreementsList, { type FilterStatus } from "@/components/AgreementsList";
 import AgreementDetail from "@/components/AgreementDetail";
@@ -12,6 +12,12 @@ import CollaborationView from "@/components/CollaborationView";
 import SettingsPage from "@/components/SettingsPage";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useIsMobile } from "@/hooks/use-mobile";
+import {
+  searchPublicProfiles,
+  searchSplitSheets,
+  type PublicProfileSearchResult,
+  type SplitSheetSearchResult,
+} from "@/lib/globalSearch";
 import {
   getSplitWorkflowLabel,
   getSplitWorkflowStageById,
@@ -29,6 +35,11 @@ import {
   type SplitSheetSaveMode,
   type SplitSheetUpdateContext,
 } from "@/lib/splitSheetStorage";
+import {
+  splitSheetAllocationDisplayName,
+  splitSheetParticipantDisplayName,
+  splitSheetPartyDisplayName,
+} from "@/lib/splitSheetDisplay";
 import { toast } from "sonner";
 import {
   FileText,
@@ -43,6 +54,8 @@ import {
   X,
   ArrowLeft,
   FilePenLine,
+  Loader2,
+  UserRound,
 } from "lucide-react";
 
 export type Agreement = {
@@ -70,13 +83,30 @@ export type Agreement = {
   document?: StoredSplitSheetDocument;
 };
 
-function documentPartyName(party: StoredSplitSheetDocument["data"]["parties"][number]) {
-  return party.professionalName || party.legalName || party.email || party.phoneNumber || party.splitId || "Invited writer";
+function documentPartyName(document: StoredSplitSheetDocument, party: StoredSplitSheetDocument["data"]["parties"][number]) {
+  return splitSheetPartyDisplayName(document, party);
+}
+
+function isPlaceholderName(value?: string) {
+  return /^(invited writer|invited collaborator|collaborator|contributor|pending)$/i.test((value ?? "").trim());
 }
 
 function documentCollaboratorInvites(document: StoredSplitSheetDocument) {
   if (Array.isArray(document.collaboratorInvites) && document.collaboratorInvites.length > 0) {
-    return document.collaboratorInvites;
+    return document.collaboratorInvites.map((invite) => {
+      const party = document.data.parties.find((item) => item.id === invite.partyId);
+      const name = splitSheetPartyDisplayName(document, party, invite.name || "Invited writer");
+      const snapshotDisplayName = invite.profileSnapshot?.displayName;
+
+      return {
+        ...invite,
+        name,
+        profileSnapshot: {
+          ...invite.profileSnapshot,
+          displayName: snapshotDisplayName && !isPlaceholderName(snapshotDisplayName) ? snapshotDisplayName : name,
+        },
+      };
+    });
   }
 
   return document.data.parties
@@ -84,12 +114,12 @@ function documentCollaboratorInvites(document: StoredSplitSheetDocument) {
     .map((party) => ({
       id: party.id,
       partyId: party.id,
-      name: documentPartyName(party),
+      name: documentPartyName(document, party),
       inviteMethod: party.inviteMethod,
       inviteValue: party.inviteValue || party.email || party.phoneNumber || party.splitId,
       status: "Pending" as const,
       profileSnapshot: {
-        displayName: party.professionalName || party.legalName || party.inviteValue,
+        displayName: documentPartyName(document, party),
         role: party.role,
         email: party.email,
         phoneNumber: party.phoneNumber,
@@ -100,7 +130,13 @@ function documentCollaboratorInvites(document: StoredSplitSheetDocument) {
 
 function documentSplitProposals(document: StoredSplitSheetDocument) {
   if (Array.isArray(document.splitProposalVersions) && document.splitProposalVersions.length > 0) {
-    return document.splitProposalVersions;
+    return document.splitProposalVersions.map((proposal) => ({
+      ...proposal,
+      allocations: proposal.allocations.map((allocation) => ({
+        ...allocation,
+        name: splitSheetAllocationDisplayName(document, allocation),
+      })),
+    }));
   }
 
   const proposalId = document.currentProposalId || `${document.id}-proposal-1`;
@@ -113,7 +149,7 @@ function documentSplitProposals(document: StoredSplitSheetDocument) {
       createdAt: document.createdAt || new Date().toISOString(),
       allocations: document.data.parties.map((party) => ({
         partyId: party.id,
-        name: documentPartyName(party),
+        name: documentPartyName(document, party),
         role: party.role || "Collaborator",
         percentage: Number(party.percent) || 0,
         notes: party.contributionDescription,
@@ -124,7 +160,10 @@ function documentSplitProposals(document: StoredSplitSheetDocument) {
 
 function documentSplitApprovals(document: StoredSplitSheetDocument, proposalId: string, invites: ReturnType<typeof documentCollaboratorInvites>) {
   if (Array.isArray(document.splitApprovals) && document.splitApprovals.length > 0) {
-    return document.splitApprovals;
+    return document.splitApprovals.map((approval) => ({
+      ...approval,
+      collaboratorName: splitSheetParticipantDisplayName(document, approval.collaboratorId, approval.collaboratorName),
+    }));
   }
 
   const creatorName = document.creatorProfile.displayName || document.creatorProfile.legalName || document.creatorProfile.emailAddress || "SPLIT user";
@@ -143,7 +182,7 @@ function documentSplitApprovals(document: StoredSplitSheetDocument, proposalId: 
         id: `${document.id}-${invite.id}-approval`,
         proposalVersionId: proposalId,
         collaboratorId: invite.id,
-        collaboratorName: invite.name,
+        collaboratorName: splitSheetParticipantDisplayName(document, invite.id, invite.name),
         status: "Pending" as const,
       })),
   ];
@@ -151,7 +190,10 @@ function documentSplitApprovals(document: StoredSplitSheetDocument, proposalId: 
 
 function documentSplitSignatures(document: StoredSplitSheetDocument, proposalId: string, invites: ReturnType<typeof documentCollaboratorInvites>) {
   if (Array.isArray(document.splitSignatures) && document.splitSignatures.length > 0) {
-    return document.splitSignatures;
+    return document.splitSignatures.map((signature) => ({
+      ...signature,
+      collaboratorName: splitSheetParticipantDisplayName(document, signature.collaboratorId, signature.collaboratorName),
+    }));
   }
 
   const creatorName = document.creatorProfile.displayName || document.creatorProfile.legalName || document.creatorProfile.emailAddress || "SPLIT user";
@@ -179,7 +221,7 @@ function documentSplitSignatures(document: StoredSplitSheetDocument, proposalId:
         id: `${document.id}-${invite.id}-signature`,
         proposalVersionId: proposalId,
         collaboratorId: invite.id,
-        collaboratorName: invite.name,
+        collaboratorName: splitSheetParticipantDisplayName(document, invite.id, invite.name),
         status: isSignedRecord ? "Signed" as const : "Pending" as const,
         signedAt,
         signatureMethod: isSignedRecord ? "SPLIT beta acknowledgement" : undefined,
@@ -208,12 +250,12 @@ function documentToAgreement(document: StoredSplitSheetDocument): Agreement {
     title: document.data.songTitle || document.title || "Untitled SPLIT Sheet",
     type: "Split Sheet",
     status: document.status || "Draft",
-    parties: parties.map(documentPartyName),
+    parties: parties.map((party) => documentPartyName(document, party)),
     version: document.version || 1,
     created: created.slice(0, 10),
     updated: updated.slice(0, 10),
     splits: parties.map((party) => ({
-      name: documentPartyName(party),
+      name: documentPartyName(document, party),
       role: party.role || "Songwriter",
       percent: Number(party.percent) || 0,
     })),
@@ -228,6 +270,7 @@ type View =
   | "settings"
   | "collaboration"
   | "profile"
+  | "public-profile"
   | "profile-edit"
   | "activity";
 
@@ -263,21 +306,32 @@ export default function Dashboard({
 }) {
   const [activeView, setActiveView] = useState<View>("dashboard");
   const [selectedAgreement, setSelectedAgreement] = useState<Agreement | null>(null);
+  const [selectedMessageDealId, setSelectedMessageDealId] = useState<string | undefined>();
   const [agreementFilter, setAgreementFilter] = useState<FilterStatus>("All");
   const [isNewAgreement, setIsNewAgreement] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [generatedDocuments, setGeneratedDocuments] = useState<StoredSplitSheetDocument[]>(() => loadLocalSplitSheetDocuments(userProfile));
   const [loadingSplitSheets, setLoadingSplitSheets] = useState(true);
   const [splitSheetsPersisted, setSplitSheetsPersisted] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchFocused, setSearchFocused] = useState(false);
+  const [profileSearchResults, setProfileSearchResults] = useState<PublicProfileSearchResult[]>([]);
+  const [searchingProfiles, setSearchingProfiles] = useState(false);
+  const [selectedPublicProfile, setSelectedPublicProfile] = useState<UserProfile | null>(null);
   const isMobile = useIsMobile();
 
   const agreements = useMemo(() => generatedDocuments.map(documentToAgreement), [generatedDocuments]);
+  const splitSheetSearchResults = useMemo(
+    () => searchSplitSheets(agreements, searchQuery, 5),
+    [agreements, searchQuery],
+  );
+  const searchResultsOpen = searchFocused && searchQuery.trim().length >= 2;
 
   useEffect(() => {
     let active = true;
 
-    async function loadDocuments() {
-      setLoadingSplitSheets(true);
+    async function loadDocuments(showLoading = true) {
+      if (showLoading) setLoadingSplitSheets(true);
       const results = await loadSplitSheetDocuments(userProfile);
       if (!active) return;
 
@@ -289,11 +343,53 @@ export default function Dashboard({
     }
 
     loadDocuments();
+    const refreshTimer = window.setInterval(() => {
+      void loadDocuments(false);
+    }, 30000);
+    const refreshOnFocus = () => {
+      void loadDocuments(false);
+    };
+    const refreshOnVisible = () => {
+      if (document.visibilityState === "visible") void loadDocuments(false);
+    };
+
+    window.addEventListener("focus", refreshOnFocus);
+    document.addEventListener("visibilitychange", refreshOnVisible);
 
     return () => {
       active = false;
+      window.clearInterval(refreshTimer);
+      window.removeEventListener("focus", refreshOnFocus);
+      document.removeEventListener("visibilitychange", refreshOnVisible);
     };
   }, [userProfile]);
+
+  useEffect(() => {
+    const query = searchQuery.trim();
+    let active = true;
+
+    if (query.length < 2) {
+      setProfileSearchResults([]);
+      setSearchingProfiles(false);
+      return () => {
+        active = false;
+      };
+    }
+
+    setSearchingProfiles(true);
+    const searchTimer = window.setTimeout(() => {
+      void searchPublicProfiles(query, 6).then((results) => {
+        if (!active) return;
+        setProfileSearchResults(results);
+        setSearchingProfiles(false);
+      });
+    }, 220);
+
+    return () => {
+      active = false;
+      window.clearTimeout(searchTimer);
+    };
+  }, [searchQuery]);
 
   const applyGeneratedDocument = (document: StoredSplitSheetDocument) => {
     setGeneratedDocuments((current) => {
@@ -312,12 +408,13 @@ export default function Dashboard({
     const result = await saveSplitSheetDocument(document, mode, userProfile);
     applyGeneratedDocument(result.document);
     setSplitSheetsPersisted(result.persisted);
-    return result.persisted;
+    return result;
   };
 
   const updateGeneratedDocument = async (document: StoredSplitSheetDocument, context: SplitSheetUpdateContext = {}) => {
     applyGeneratedDocument(document);
     setSelectedAgreement(documentToAgreement(document));
+
     const persisted = context.action && context.action !== "creator_update"
       ? await saveSplitSheetParticipantAction(document, context, userProfile)
       : await saveSplitSheetDocument(document, "update", userProfile);
@@ -344,6 +441,42 @@ export default function Dashboard({
     }
   };
 
+  const openDealMessages = (agreementId: string) => {
+    setSelectedMessageDealId(agreementId);
+    setActiveView("collaboration");
+    if (isMobile) setSidebarOpen(false);
+  };
+
+  const clearSearch = () => {
+    setSearchQuery("");
+    setSearchFocused(false);
+  };
+
+  const openAgreementFromSearch = (agreementId: string) => {
+    openAgreement(agreementId);
+    clearSearch();
+  };
+
+  const openProfileFromSearch = (result: PublicProfileSearchResult) => {
+    const profile = createEmptyProfile();
+    const roleTags = result.roleTags || "Creator";
+    setSelectedPublicProfile({
+      ...profile,
+      splitId: "",
+      username: result.username,
+      displayName: result.displayName,
+      pkaNames: result.displayName,
+      roleTags,
+      profileImageUrl: result.profileImageUrl,
+      profileLocation: result.profileLocation,
+      profileVisibility: "Public",
+    });
+    setSelectedAgreement(null);
+    setActiveView("public-profile");
+    if (isMobile) setSidebarOpen(false);
+    clearSearch();
+  };
+
   if (isNewAgreement) {
     return (
       <ContractBuilder
@@ -366,7 +499,7 @@ export default function Dashboard({
           <span className="text-sm font-semibold truncate flex-1">{selectedAgreement.title}</span>
         </header>
         <main className="flex-1 overflow-y-auto">
-          <AgreementDetail agreement={selectedAgreement} viewerProfile={userProfile} onUpdateDocument={updateGeneratedDocument} />
+          <AgreementDetail agreement={selectedAgreement} viewerProfile={userProfile} onOpenMessages={openDealMessages} />
         </main>
       </div>
     );
@@ -454,8 +587,20 @@ export default function Dashboard({
             <div className={`relative ${isMobile ? "w-full" : "max-w-sm w-full"}`}>
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
               <input
-                placeholder="Search…"
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                onFocus={() => setSearchFocused(true)}
+                onBlur={() => window.setTimeout(() => setSearchFocused(false), 120)}
+                placeholder="Search split sheets or users..."
                 className="w-full rounded-lg border border-border bg-secondary/60 pl-9 pr-3 py-2 text-sm placeholder:text-muted-foreground/70 focus:outline-none focus:ring-2 focus:ring-ring/30"
+              />
+              <GlobalSearchResults
+                open={searchResultsOpen}
+                splitSheets={splitSheetSearchResults}
+                profiles={profileSearchResults}
+                searchingProfiles={searchingProfiles}
+                onOpenAgreement={openAgreementFromSearch}
+                onOpenProfile={openProfileFromSearch}
               />
             </div>
           </div>
@@ -512,7 +657,7 @@ export default function Dashboard({
                 />
                 <div className="flex-1 min-w-0 overflow-y-auto bg-background">
                   {selectedAgreement ? (
-                    <AgreementDetail agreement={selectedAgreement} viewerProfile={userProfile} onUpdateDocument={updateGeneratedDocument} />
+                    <AgreementDetail agreement={selectedAgreement} viewerProfile={userProfile} onOpenMessages={openDealMessages} />
                   ) : (
                     <EmptyDetail onNew={() => setIsNewAgreement(true)} />
                   )}
@@ -520,13 +665,27 @@ export default function Dashboard({
               </div>
             )
           )}
-          {activeView === "collaboration" && <CollaborationView />}
+          {activeView === "collaboration" && (
+            <CollaborationView
+              documents={generatedDocuments}
+              userProfile={userProfile}
+              initialDealId={selectedMessageDealId}
+              onUpdateDocument={updateGeneratedDocument}
+            />
+          )}
           {activeView === "settings" && <SettingsPage />}
           {activeView === "profile" && (
             <CreatorProfileView
               userProfile={userProfile}
               mode="own"
               onEditProfile={() => setActiveView("profile-edit")}
+              onMessage={() => setActiveView("collaboration")}
+            />
+          )}
+          {activeView === "public-profile" && selectedPublicProfile && (
+            <CreatorProfileView
+              userProfile={selectedPublicProfile}
+              mode="collaborator"
               onMessage={() => setActiveView("collaboration")}
             />
           )}
@@ -552,6 +711,115 @@ export default function Dashboard({
         )}
       </div>
     </div>
+  );
+}
+
+function GlobalSearchResults({
+  open,
+  splitSheets,
+  profiles,
+  searchingProfiles,
+  onOpenAgreement,
+  onOpenProfile,
+}: {
+  open: boolean;
+  splitSheets: SplitSheetSearchResult[];
+  profiles: PublicProfileSearchResult[];
+  searchingProfiles: boolean;
+  onOpenAgreement: (agreementId: string) => void;
+  onOpenProfile: (profile: PublicProfileSearchResult) => void;
+}) {
+  if (!open) return null;
+
+  const hasResults = splitSheets.length > 0 || profiles.length > 0;
+
+  return (
+    <div
+      className="absolute left-0 right-0 top-[calc(100%+0.5rem)] z-50 max-h-[70vh] overflow-y-auto rounded-xl border border-border bg-card/95 p-2 shadow-xl backdrop-blur-xl"
+      role="listbox"
+      aria-label="Search results"
+      onMouseDown={(event) => event.preventDefault()}
+    >
+      {splitSheets.length > 0 && (
+        <SearchSection title="Split sheets">
+          {splitSheets.map((result) => (
+            <button
+              key={result.id}
+              type="button"
+              onMouseDown={() => onOpenAgreement(result.id)}
+              className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-accent focus:outline-none focus:ring-2 focus:ring-ring/30"
+            >
+              <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                <FileText className="h-4 w-4" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-semibold text-foreground">{result.title}</span>
+                <span className="block truncate text-xs text-muted-foreground">
+                  {result.status} · {result.description}
+                </span>
+              </span>
+              <ChevronRight className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
+            </button>
+          ))}
+        </SearchSection>
+      )}
+
+      {(profiles.length > 0 || searchingProfiles) && (
+        <SearchSection title="People">
+          {profiles.map((profile) => (
+            <button
+              key={profile.userId || profile.username}
+              type="button"
+              onMouseDown={() => onOpenProfile(profile)}
+              className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-accent focus:outline-none focus:ring-2 focus:ring-ring/30"
+            >
+              {profile.profileImageUrl ? (
+                <img
+                  src={profile.profileImageUrl}
+                  alt=""
+                  className="h-9 w-9 flex-shrink-0 rounded-lg object-cover"
+                />
+              ) : (
+                <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-secondary text-primary">
+                  <UserRound className="h-4 w-4" />
+                </span>
+              )}
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-semibold text-foreground">{profile.displayName}</span>
+                <span className="block truncate text-xs text-muted-foreground">
+                  {profile.username ? `@${profile.username}` : "SPLIT profile"}
+                  {profile.roleTags ? ` · ${profile.roleTags}` : ""}
+                </span>
+              </span>
+              <ChevronRight className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
+            </button>
+          ))}
+          {searchingProfiles && (
+            <div className="flex items-center gap-2 px-3 py-2 text-xs font-medium text-muted-foreground">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              Searching SPLIT users
+            </div>
+          )}
+        </SearchSection>
+      )}
+
+      {!hasResults && !searchingProfiles && (
+        <div className="px-3 py-6 text-center text-sm text-muted-foreground">
+          No split sheets or users found.
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SearchSection({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section className="py-1">
+      <p className="px-3 pb-1.5 pt-1 text-[0.65rem] font-bold uppercase tracking-[0.18em] text-muted-foreground">
+        {title}
+      </p>
+      <div className="space-y-1">{children}</div>
+    </section>
   );
 }
 

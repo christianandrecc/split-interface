@@ -6,7 +6,9 @@ import {
   normalizeEmailAddress,
   phoneNumberForStorage,
   phoneNumberFromRow,
+  mergeProfileWithFallbackForTest,
   profileSignupMetadata,
+  profileFromAuthUserMetadataForTest,
   profileFromStoredRowForTest,
   resolveSupabaseAuthRedirectUrl,
   stripStoredCountryCode,
@@ -77,6 +79,64 @@ describe("profile phone storage", () => {
     expect(profile.legalFirstName).toBe("");
     expect(profile.phoneCountryCode).toBe("+1");
     expect(profile.country).toBe("United States");
+  });
+
+  it("hydrates profile edit fields from auth metadata when a stored row is sparse", () => {
+    const storedProfile = profileFromStoredRowForTest({
+      user_id: "00000000-0000-0000-0000-000000000000",
+      email: "chori@example.com",
+      username: "chori",
+      display_name: "Chori",
+      phone_country_code: null,
+      phone_number: null,
+      legal_name: null,
+      legal_first_name: null,
+      legal_middle_name: null,
+      legal_last_name: null,
+      address_line: null,
+      address_street: null,
+      address_city: null,
+      address_state: null,
+      address_zip: null,
+      address_country: null,
+      city: null,
+      state: null,
+      country: null,
+      pro_affiliation: null,
+      ipi_number: null,
+      profile_data: {},
+    } as Parameters<typeof profileFromStoredRowForTest>[0]);
+    const metadataProfile = profileFromAuthUserMetadataForTest({
+      id: "00000000-0000-0000-0000-000000000000",
+      email: "chori@example.com",
+      user_metadata: {
+        profile_data: {
+          legalName: "Christian Carrera",
+          addressLine: "123 Music Row",
+          city: "New York",
+          state: "NY",
+          zipCode: "10001",
+          country: "United States",
+          proAffiliation: "ASCAP",
+          ipiNumber: "123456789",
+          phoneCountryCode: "+1",
+          phoneNumber: "2168578164",
+        },
+      },
+    });
+
+    expect(metadataProfile).not.toBeNull();
+    const mergedProfile = mergeProfileWithFallbackForTest(storedProfile, metadataProfile!);
+
+    expect(mergedProfile.legalName).toBe("Christian Carrera");
+    expect(mergedProfile.legalFirstName).toBe("Christian");
+    expect(mergedProfile.legalLastName).toBe("Carrera");
+    expect(mergedProfile.addressLine).toBe("123 Music Row");
+    expect(mergedProfile.city).toBe("New York");
+    expect(mergedProfile.state).toBe("NY");
+    expect(mergedProfile.proAffiliation).toBe("ASCAP");
+    expect(mergedProfile.ipiNumber).toBe("123456789");
+    expect(mergedProfile.phoneNumber).toBe("216-857-8164");
   });
 
   it("updates the auth signup trigger to save phone metadata into profiles", () => {

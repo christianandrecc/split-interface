@@ -10,15 +10,51 @@ import AccountAccess from "@/components/AccountAccess";
 import { normalizeUserProfile, type UserProfile } from "@/lib/userProfile";
 import {
   createSupabaseAccountProfile,
-  loadProfileForActiveSession,
+  loadProfileSessionForActiveSession,
   normalizeEmailAddress,
   saveSupabaseProfile,
   signInAndLoadSupabaseProfile,
 } from "@/lib/profileStorage";
+import { isSupabaseConfigured } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
 const queryClient = new QueryClient();
 const PROFILE_STORAGE_KEY = "split.userProfile.v6";
+const PROFILE_SESSION_STORAGE_KEY = "split.userProfileSession.v1";
+
+type CachedProfileSession = {
+  userId: string;
+  profile: UserProfile;
+};
+
+function readLocalProfile() {
+  const savedProfile = window.localStorage.getItem(PROFILE_STORAGE_KEY);
+  if (!savedProfile) return null;
+
+  try {
+    const normalizedProfile = normalizeUserProfile(JSON.parse(savedProfile));
+    window.localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(normalizedProfile));
+    return normalizedProfile;
+  } catch {
+    window.localStorage.removeItem(PROFILE_STORAGE_KEY);
+    return null;
+  }
+}
+
+function writeLocalProfile(profile: UserProfile) {
+  window.localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(profile));
+}
+
+function writeProfileSession(userId: string, profile: UserProfile) {
+  const cachedSession: CachedProfileSession = { userId, profile };
+  window.localStorage.setItem(PROFILE_SESSION_STORAGE_KEY, JSON.stringify(cachedSession));
+  writeLocalProfile(profile);
+}
+
+function clearProfileCache() {
+  window.localStorage.removeItem(PROFILE_STORAGE_KEY);
+  window.localStorage.removeItem(PROFILE_SESSION_STORAGE_KEY);
+}
 
 function hasRicherProfileData(profile: UserProfile | null) {
   if (!profile) return false;
@@ -45,6 +81,7 @@ function hasPasswordRecoveryUrl() {
 
 const App = () => {
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [activeAuthUserId, setActiveAuthUserId] = useState<string | null>(null);
   const [showAccountCreation, setShowAccountCreation] = useState(false);
   const [loadingProfile, setLoadingProfile] = useState(true);
   const [passwordRecoveryActive, setPasswordRecoveryActive] = useState(() => hasPasswordRecoveryUrl());
@@ -53,29 +90,43 @@ const App = () => {
     let active = true;
 
     async function loadProfile() {
-      const savedProfile = window.localStorage.getItem(PROFILE_STORAGE_KEY);
-
-      if (savedProfile) {
+      if (isSupabaseConfigured) {
         try {
-          const normalizedProfile = normalizeUserProfile(JSON.parse(savedProfile));
-          window.localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(normalizedProfile));
-          if (active) setUserProfile(normalizedProfile);
+          const session = await loadProfileSessionForActiveSession();
+
+          if (!active) return;
+
+          if (session) {
+            const normalizedProfile = normalizeUserProfile(session.profile);
+            setActiveAuthUserId(session.userId);
+            writeProfileSession(session.userId, normalizedProfile);
+            setUserProfile(normalizedProfile);
+          } else {
+            setActiveAuthUserId(null);
+            clearProfileCache();
+            setUserProfile(null);
+          }
         } catch {
-          window.localStorage.removeItem(PROFILE_STORAGE_KEY);
+          if (active) {
+            setActiveAuthUserId(null);
+            clearProfileCache();
+            setUserProfile(null);
+          }
+        } finally {
+          if (active) setLoadingProfile(false);
         }
+
+        return;
       }
 
-      try {
-        const supabaseProfile = await loadProfileForActiveSession();
+      const savedProfile = readLocalProfile();
+      if (savedProfile && active) {
+        setUserProfile(savedProfile);
+      }
 
-        if (supabaseProfile && active) {
-          window.localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(supabaseProfile));
-          setUserProfile(supabaseProfile);
-        }
-      } catch {
-        // Keep local beta state available if Supabase is not ready yet.
-      } finally {
-        if (active) setLoadingProfile(false);
+      if (active) {
+        setActiveAuthUserId(null);
+        setLoadingProfile(false);
       }
     }
 
@@ -86,9 +137,13 @@ const App = () => {
     };
   }, []);
 
-  const persistProfile = (profile: UserProfile) => {
+  const persistProfile = (profile: UserProfile, authUserId = activeAuthUserId) => {
     const normalizedProfile = normalizeUserProfile(profile);
-    window.localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(normalizedProfile));
+    if (authUserId) {
+      writeProfileSession(authUserId, normalizedProfile);
+    } else {
+      writeLocalProfile(normalizedProfile);
+    }
     setUserProfile(normalizedProfile);
     return normalizedProfile;
   };
@@ -98,11 +153,14 @@ const App = () => {
     const result = await createSupabaseAccountProfile(normalizedProfile, password);
 
     if (result.needsEmailConfirmation) {
-      persistProfile(result.profile);
+      setActiveAuthUserId(null);
+      clearProfileCache();
+      setUserProfile(null);
       throw new Error("Supabase created the account, but email confirmation is required. Confirm the email, then sign in here so SPLIT can finish saving the protected profile details.");
     }
 
-    persistProfile(result.profile);
+    setActiveAuthUserId(result.userId ?? null);
+    persistProfile(result.profile, result.userId ?? null);
     setShowAccountCreation(false);
     toast.success("Account stored in Supabase", {
       description: result.profile.username ? `@${result.profile.username}` : result.profile.emailAddress,
@@ -114,7 +172,7 @@ const App = () => {
 
     try {
       const savedProfile = await saveSupabaseProfile(normalizedProfile);
-      persistProfile(savedProfile);
+      persistProfile(savedProfile, activeAuthUserId);
       toast.success("Profile saved to Supabase");
     } catch (error) {
       toast.error("Saved locally, but Supabase did not update", {
@@ -141,7 +199,8 @@ const App = () => {
           })
         : result.profile;
 
-    persistProfile(profile);
+    setActiveAuthUserId(result.userId ?? null);
+    persistProfile(profile, result.userId ?? null);
     setShowAccountCreation(false);
     setPasswordRecoveryActive(false);
     toast.success("Signed in to SPLIT", {

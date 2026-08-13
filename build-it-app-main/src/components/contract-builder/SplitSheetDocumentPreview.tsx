@@ -1,7 +1,13 @@
 import { ArrowLeft, CheckCircle2, Download, FileText, Save, Send, Users } from "lucide-react";
 import type { UserProfile } from "@/lib/userProfile";
 import type { StoredSplitSheetDocument } from "./document";
-import { partyDisplayName, sumPercents } from "./types";
+import { sumPercents } from "./types";
+import {
+  formatSplitSheetAuditTrail,
+  splitSheetParticipantDisplayName,
+  splitSheetPartyDisplayName,
+} from "@/lib/splitSheetDisplay";
+import { downloadSplitSheetRecord } from "@/lib/splitSheetDownload";
 import { getSplitWorkflowLabel, PENDING_SPLIT_STATUSES, VERIFIED_SPLIT_STATUSES } from "@/lib/splitWorkflow";
 
 type SplitSheetDocumentPreviewProps = {
@@ -68,6 +74,7 @@ export function SplitSheetDocumentPage({ document: splitDocument, viewerProfile,
   const hasSampleFlag = data.sampleStatus !== "No sample or interpolation";
   const hasStructuredSample = data.sampleStatus === "Sample";
   const isVerifiedRecord = VERIFIED_SPLIT_STATUSES.includes(splitDocument.status) || splitDocument.status === "Archived";
+  const auditItems = formatSplitSheetAuditTrail(splitDocument);
 
   return (
     <article
@@ -168,7 +175,7 @@ export function SplitSheetDocumentPage({ document: splitDocument, viewerProfile,
                 key={party.id}
                 className={["bg-[#31598f]", "bg-[#e0a63a]", "bg-[#2f8f7b]", "bg-[#8a5fbf]", "bg-[#cc6f4d]"][index % 5]}
                 style={{ width: party.percent + "%" }}
-                title={partyDisplayName(party) + " - " + party.percent + "%"}
+                title={splitSheetPartyDisplayName(splitDocument, party) + " - " + party.percent + "%"}
               />
             ))}
           </div>
@@ -188,7 +195,7 @@ export function SplitSheetDocumentPage({ document: splitDocument, viewerProfile,
               {writers.map((party) => (
                 <tr key={party.id}>
                   <td className="px-4 py-4">
-                    <div className="font-semibold text-slate-950">{partyDisplayName(party)}</div>
+                    <div className="font-semibold text-slate-950">{splitSheetPartyDisplayName(splitDocument, party)}</div>
                     <div className="text-xs text-slate-500">{party.role || "Songwriter"}</div>
                   </td>
                   <td className="px-4 py-4 text-slate-600">{party.contributionCategories.length ? party.contributionCategories.join(", ") : "Pending"}</td>
@@ -208,7 +215,7 @@ export function SplitSheetDocumentPage({ document: splitDocument, viewerProfile,
             {splitDocument.splitSignatures.map((signature) => (
               <div key={signature.id} className="rounded-xl border border-slate-200 px-4 py-3 text-sm">
                 <div className="flex items-center justify-between gap-3">
-                  <span className="font-semibold text-slate-950">{signature.collaboratorName}</span>
+                  <span className="font-semibold text-slate-950">{splitSheetParticipantDisplayName(splitDocument, signature.collaboratorId, signature.collaboratorName)}</span>
                   <span className={signature.status === "Signed" ? "rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700" : "rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700"}>
                     {signature.status}
                   </span>
@@ -224,11 +231,11 @@ export function SplitSheetDocumentPage({ document: splitDocument, viewerProfile,
       <section className="rounded-2xl border border-slate-200 p-5">
         <h2 className="mb-4 text-sm font-semibold uppercase tracking-[0.14em] text-slate-500">Audit trail</h2>
         <div className="space-y-3">
-          {splitDocument.auditTrail.map((item, index) => (
+          {auditItems.map((item, index) => (
             <div key={index} className="grid gap-2 rounded-xl border border-slate-200 px-4 py-3 text-sm md:grid-cols-[180px_1fr_1fr]">
-              <span className="text-slate-500">{formatDateTime(item.timestamp)}</span>
+              <span className="text-slate-500">{item.date}</span>
               <span className="font-semibold text-slate-900">{item.actor}</span>
-              <span className="text-slate-600">{item.action}</span>
+              <span className="text-slate-600">{item.event}</span>
             </div>
           ))}
         </div>
@@ -271,7 +278,7 @@ export default function SplitSheetDocumentPreview({
           </h1>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
             {isVerifiedRecord
-              ? "Review or print the final signed split record stored in your archive."
+              ? "Review or download the final signed split record stored in your archive."
               : "Save this draft or send invitations so collaborators can confirm they were part of the work."}
           </p>
         </div>
@@ -297,11 +304,11 @@ export default function SplitSheetDocumentPreview({
           </button>
           <button
             type="button"
-            onClick={() => window.print()}
+            onClick={() => downloadSplitSheetRecord(splitDocument, viewerProfile)}
             className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-[#31598f] hover:text-[#31598f]"
           >
             <Download className="h-4 w-4" />
-            {isVerifiedRecord ? "Print / Save Record" : "Print / Save PDF"}
+            {isVerifiedRecord ? "Download split sheet" : "Download draft"}
           </button>
           <button
             type="button"

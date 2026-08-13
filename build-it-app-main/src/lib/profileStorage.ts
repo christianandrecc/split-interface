@@ -5,11 +5,22 @@ import { normalizeUserProfile, type UserProfile } from "@/lib/userProfile";
 
 type ProfileRow = Tables<"profiles">;
 type ProfileInsert = TablesInsert<"profiles">;
+type AuthUserLike = {
+  id: string;
+  email?: string | null;
+  user_metadata?: Record<string, unknown> | null;
+};
 
 export type ProfileStorageResult = {
   profile: UserProfile;
   saved: boolean;
+  userId?: string;
   needsEmailConfirmation?: boolean;
+};
+
+export type ActiveProfileSession = {
+  userId: string;
+  profile: UserProfile;
 };
 
 export type PasswordResetResult = {
@@ -28,6 +39,27 @@ function requireSupabaseConfig() {
 function clean(value?: string | null) {
   const next = (value ?? "").trim();
   return next || null;
+}
+
+function cleanUnknown(value: unknown) {
+  if (typeof value === "string") return clean(value);
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  return null;
+}
+
+function recordFromUnknown(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+}
+
+function firstMetaText(metadata: Record<string, unknown>, ...keys: string[]) {
+  for (const key of keys) {
+    const value = cleanUnknown(metadata[key]);
+    if (value) return value;
+  }
+
+  return undefined;
 }
 
 export function normalizeEmailAddress(value?: string | null) {
@@ -252,6 +284,175 @@ export function profileSignupMetadata(profile: UserProfile) {
   };
 }
 
+const PROFILE_BACKFILL_KEYS: Array<keyof UserProfile> = [
+  "username",
+  "displayName",
+  "profileImageUrl",
+  "roleTags",
+  "socialInstagram",
+  "socialTikTok",
+  "socialX",
+  "socialWebsite",
+  "profileLocation",
+  "profileVisibility",
+  "legalName",
+  "legalFirstName",
+  "legalMiddleName",
+  "legalLastName",
+  "pkaNames",
+  "phoneCountryCode",
+  "phoneNumber",
+  "emailAddress",
+  "legalAddress",
+  "addressLine",
+  "zipCode",
+  "city",
+  "state",
+  "country",
+  "mlcNumber",
+  "proAffiliation",
+  "ipiNumber",
+  "customProName",
+  "publishingStatus",
+  "publisherName",
+  "publisherIpi",
+  "publisherPro",
+  "publishingShare",
+  "adminCompanyName",
+  "adminIpi",
+  "adminCollectionShare",
+  "publisherContact",
+  "termsAcceptedAt",
+  "termsVersion",
+  "privacyAcknowledgedAt",
+  "privacyPolicyVersion",
+];
+
+function profileValue(profile: UserProfile, key: keyof UserProfile) {
+  return clean(profile[key]);
+}
+
+function profileHasMeaningfulMetadata(profile: UserProfile) {
+  return Boolean(
+    profile.username ||
+      profile.displayName ||
+      profile.legalName ||
+      profile.legalFirstName ||
+      profile.legalLastName ||
+      profile.roleTags ||
+      profile.phoneNumber ||
+      profile.addressLine ||
+      profile.city ||
+      profile.state ||
+      profile.proAffiliation ||
+      profile.ipiNumber,
+  );
+}
+
+function mergeProfileWithFallback(primary: UserProfile, fallback: UserProfile) {
+  const merged: UserProfile = { ...fallback, ...primary };
+
+  for (const key of PROFILE_BACKFILL_KEYS) {
+    if (!profileValue(primary, key) && profileValue(fallback, key)) {
+      merged[key] = fallback[key];
+    }
+  }
+
+  if (
+    primary.country === "United States" &&
+    fallback.country &&
+    fallback.country !== "United States" &&
+    !primary.addressLine &&
+    !primary.city &&
+    !primary.state
+  ) {
+    merged.country = fallback.country;
+  }
+
+  return normalizeUserProfile(merged);
+}
+
+function profileGainedBackfillData(before: UserProfile, after: UserProfile) {
+  return PROFILE_BACKFILL_KEYS.some((key) => !profileValue(before, key) && Boolean(profileValue(after, key)));
+}
+
+function profileFromAuthUserMetadata(user: AuthUserLike) {
+  const metadata = recordFromUnknown(user.user_metadata);
+  const payload = recordFromUnknown(metadata.profile_data) as Partial<UserProfile>;
+  const profile = normalizeUserProfile({
+    ...payload,
+    username: firstMetaText(metadata, "username") ?? payload.username,
+    displayName: firstMetaText(metadata, "display_name", "displayName", "name", "full_name") ?? payload.displayName,
+    profileImageUrl: firstMetaText(metadata, "profile_image_url", "profileImageUrl", "avatar_url") ?? payload.profileImageUrl,
+    roleTags: firstMetaText(metadata, "role_tags", "roleTags") ?? payload.roleTags,
+    socialInstagram: firstMetaText(metadata, "social_instagram", "socialInstagram") ?? payload.socialInstagram,
+    socialTikTok: firstMetaText(metadata, "social_tiktok", "socialTikTok") ?? payload.socialTikTok,
+    socialX: firstMetaText(metadata, "social_x", "socialX") ?? payload.socialX,
+    socialWebsite: firstMetaText(metadata, "social_website", "socialWebsite") ?? payload.socialWebsite,
+    profileLocation: firstMetaText(metadata, "profile_location", "profileLocation") ?? payload.profileLocation,
+    profileVisibility: firstMetaText(metadata, "profile_visibility", "profileVisibility") ?? payload.profileVisibility,
+    legalName: firstMetaText(metadata, "legal_name", "legalName") ?? payload.legalName,
+    legalFirstName: firstMetaText(metadata, "legal_first_name", "legalFirstName") ?? payload.legalFirstName,
+    legalMiddleName: firstMetaText(metadata, "legal_middle_name", "legalMiddleName") ?? payload.legalMiddleName,
+    legalLastName: firstMetaText(metadata, "legal_last_name", "legalLastName") ?? payload.legalLastName,
+    pkaNames: firstMetaText(metadata, "pka_names", "stage_name", "pkaNames") ?? payload.pkaNames,
+    phoneCountryCode: firstMetaText(metadata, "phone_country_code", "phoneCountryCode") ?? payload.phoneCountryCode,
+    phoneNumber: firstMetaText(metadata, "phone_number", "phoneNumber", "full_phone_number") ?? payload.phoneNumber,
+    emailAddress: firstMetaText(metadata, "email", "emailAddress") ?? user.email ?? payload.emailAddress,
+    legalAddress: firstMetaText(metadata, "legal_address", "legalAddress") ?? payload.legalAddress,
+    addressLine: firstMetaText(metadata, "address_line", "address_street", "addressLine") ?? payload.addressLine,
+    zipCode: firstMetaText(metadata, "zip_code", "address_zip", "zipCode") ?? payload.zipCode,
+    city: firstMetaText(metadata, "city", "address_city") ?? payload.city,
+    state: firstMetaText(metadata, "state", "address_state") ?? payload.state,
+    country: firstMetaText(metadata, "country", "address_country") ?? payload.country,
+    mlcNumber: firstMetaText(metadata, "mlc_number", "mlcNumber") ?? payload.mlcNumber,
+    proAffiliation: firstMetaText(metadata, "pro_affiliation", "proAffiliation") ?? payload.proAffiliation,
+    ipiNumber: firstMetaText(metadata, "ipi_number", "ipiNumber") ?? payload.ipiNumber,
+    customProName: firstMetaText(metadata, "custom_pro_name", "customProName") ?? payload.customProName,
+    publishingStatus: firstMetaText(metadata, "publishing_status", "publishingStatus") ?? payload.publishingStatus,
+    publisherName: firstMetaText(metadata, "publisher_name", "publisherName") ?? payload.publisherName,
+    publisherIpi: firstMetaText(metadata, "publisher_ipi", "publisherIpi") ?? payload.publisherIpi,
+    publisherPro: firstMetaText(metadata, "publisher_pro", "publisherPro") ?? payload.publisherPro,
+    publishingShare: firstMetaText(metadata, "publishing_share", "publishingShare") ?? payload.publishingShare,
+    adminCompanyName: firstMetaText(metadata, "admin_company_name", "adminCompanyName") ?? payload.adminCompanyName,
+    adminIpi: firstMetaText(metadata, "admin_ipi", "adminIpi") ?? payload.adminIpi,
+    adminCollectionShare: firstMetaText(metadata, "admin_collection_share", "adminCollectionShare") ?? payload.adminCollectionShare,
+    publisherContact: firstMetaText(metadata, "publisher_contact", "publisherContact") ?? payload.publisherContact,
+    termsAcceptedAt: firstMetaText(metadata, "terms_accepted_at", "termsAcceptedAt") ?? payload.termsAcceptedAt,
+    termsVersion: firstMetaText(metadata, "terms_version", "termsVersion") ?? payload.termsVersion,
+    privacyAcknowledgedAt: firstMetaText(metadata, "privacy_acknowledged_at", "privacyAcknowledgedAt") ?? payload.privacyAcknowledgedAt,
+    privacyPolicyVersion: firstMetaText(metadata, "privacy_policy_version", "privacyPolicyVersion") ?? payload.privacyPolicyVersion,
+  });
+
+  return profileHasMeaningfulMetadata(profile) ? profile : null;
+}
+
+export function profileFromAuthUserMetadataForTest(user: AuthUserLike) {
+  return profileFromAuthUserMetadata(user);
+}
+
+export function mergeProfileWithFallbackForTest(primary: UserProfile, fallback: UserProfile) {
+  return mergeProfileWithFallback(primary, fallback);
+}
+
+async function loadProfileForAuthUser(user: AuthUserLike) {
+  const storedProfile = await loadProfileForUser(user.id);
+  const metadataProfile = profileFromAuthUserMetadata(user);
+
+  if (!metadataProfile) return storedProfile;
+
+  if (!storedProfile) {
+    return upsertProfileForUser(user.id, metadataProfile);
+  }
+
+  const mergedProfile = mergeProfileWithFallback(storedProfile, metadataProfile);
+  if (profileGainedBackfillData(storedProfile, mergedProfile)) {
+    return upsertProfileForUser(user.id, mergedProfile);
+  }
+
+  return mergedProfile;
+}
+
 function explainStorageError(error: { message?: string }) {
   const message = error.message ?? "Supabase profile storage failed.";
 
@@ -292,14 +493,20 @@ async function loadProfileForUser(userId: string) {
   return data ? rowToProfile(data) : null;
 }
 
-export async function loadProfileForActiveSession() {
+export async function loadProfileSessionForActiveSession(): Promise<ActiveProfileSession | null> {
   requireSupabaseConfig();
   await consumeSupabaseAuthCallbackFromUrl();
 
   const { data, error } = await supabase.auth.getUser();
   if (error || !data.user) return null;
 
-  return loadProfileForUser(data.user.id);
+  const profile = await loadProfileForAuthUser(data.user);
+  return profile ? { userId: data.user.id, profile } : null;
+}
+
+export async function loadProfileForActiveSession() {
+  const session = await loadProfileSessionForActiveSession();
+  return session?.profile ?? null;
 }
 
 function authHashParams() {
@@ -387,6 +594,7 @@ export async function createSupabaseAccountProfile(profile: UserProfile, passwor
     return {
       profile: normalized,
       saved: false,
+      userId: data.user?.id,
       needsEmailConfirmation: true,
     };
   }
@@ -394,6 +602,7 @@ export async function createSupabaseAccountProfile(profile: UserProfile, passwor
   return {
     profile: await upsertProfileForUser(data.user.id, normalized),
     saved: true,
+    userId: data.user.id,
   };
 }
 
@@ -412,9 +621,9 @@ export async function signInAndLoadSupabaseProfile(emailAddress: string, passwor
   if (error) throw new Error(error.message);
   if (!data.user) throw new Error("Supabase did not return a signed-in user.");
 
-  const storedProfile = await loadProfileForUser(data.user.id);
+  const storedProfile = await loadProfileForAuthUser(data.user);
   if (storedProfile) {
-    return { profile: storedProfile, saved: true };
+    return { profile: storedProfile, saved: true, userId: data.user.id };
   }
 
   const fallbackProfile = normalizeUserProfile({
@@ -428,6 +637,7 @@ export async function signInAndLoadSupabaseProfile(emailAddress: string, passwor
   return {
     profile: await upsertProfileForUser(data.user.id, fallbackProfile),
     saved: true,
+    userId: data.user.id,
   };
 }
 

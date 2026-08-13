@@ -129,6 +129,7 @@ export function createSplitSheetDocument(data: ContractData, creatorProfile: Use
       inviteValue: party.inviteValue || party.email || party.phoneNumber || party.splitId,
       status: "Pending" as const,
       profileSnapshot: {
+        username: party.inviteMethod === "username" ? party.inviteValue.replace(/^@+/, "") : undefined,
         displayName: party.professionalName || party.legalName || party.inviteValue,
         role: party.role,
         email: party.email,
