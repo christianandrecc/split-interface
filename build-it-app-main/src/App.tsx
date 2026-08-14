@@ -156,7 +156,10 @@ const App = () => {
       setActiveAuthUserId(null);
       clearProfileCache();
       setUserProfile(null);
-      throw new Error("Supabase created the account, but email confirmation is required. Confirm the email, then sign in here so SPLIT can finish saving the protected profile details.");
+      return {
+        needsEmailConfirmation: true,
+        emailAddress: result.profile.emailAddress || normalizedProfile.emailAddress,
+      };
     }
 
     setActiveAuthUserId(result.userId ?? null);
@@ -165,6 +168,7 @@ const App = () => {
     toast.success("Account stored in Supabase", {
       description: result.profile.username ? `@${result.profile.username}` : result.profile.emailAddress,
     });
+    return { needsEmailConfirmation: false };
   };
 
   const handleUpdateProfile = async (profile: UserProfile) => {
@@ -240,6 +244,7 @@ const App = () => {
                 element={
                   <Index
                     userProfile={userProfile}
+                    activeAuthUserId={activeAuthUserId}
                     onUpdateProfile={handleUpdateProfile}
                     onOpenAccountCreation={() => setShowAccountCreation(true)}
                   />

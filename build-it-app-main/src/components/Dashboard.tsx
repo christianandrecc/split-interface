@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import splitLogo from "@/assets/split-logo.png";
 import UserProfileSheet from "@/components/UserProfileSheet";
 import ProfilePage from "@/components/ProfilePage";
@@ -20,21 +20,24 @@ import {
 } from "@/lib/globalSearch";
 import {
   getSplitWorkflowLabel,
-  getSplitWorkflowStageById,
   PENDING_SPLIT_STATUSES,
-  SPLIT_WORKFLOW_STAGES,
   VERIFIED_SPLIT_STATUSES,
-  type SplitWorkflowStageId,
 } from "@/lib/splitWorkflow";
 import {
-  loadLocalSplitSheetDocuments,
   loadSplitSheetDocuments,
   saveLocalSplitSheetDocuments,
   saveSplitSheetDocument,
   saveSplitSheetParticipantAction,
+  splitSheetLocalStorageOwnerForAuthUser,
   type SplitSheetSaveMode,
   type SplitSheetUpdateContext,
 } from "@/lib/splitSheetStorage";
+import {
+  loadSplitNotifications,
+  markSplitNotificationsRead,
+  subscribeToSplitNotifications,
+  type SplitNotification,
+} from "@/lib/notificationStorage";
 import {
   splitSheetAllocationDisplayName,
   splitSheetParticipantDisplayName,
@@ -53,9 +56,15 @@ import {
   Menu,
   X,
   ArrowLeft,
+  AlertTriangle,
+  CheckCircle2,
   FilePenLine,
+  MessageCircle,
   Loader2,
+  PenLine,
   UserRound,
+  GitBranch,
+  type LucideIcon,
 } from "lucide-react";
 
 export type Agreement = {
@@ -281,26 +290,14 @@ const NAV_ITEMS = [
   { id: "settings", label: "Settings", icon: Settings },
 ] as const;
 
-type AgreementNotification = {
-  id: string;
-  type: "executed" | "needs_action";
-  title: string;
-  detail: string;
-  time: string;
-  agreementId: string;
-  actionLabel: string;
-  icon: typeof FileText;
-  tone: string;
-};
-
-const AGREEMENT_NOTIFICATIONS: AgreementNotification[] = [];
-
 export default function Dashboard({
   userProfile,
+  activeAuthUserId,
   onUpdateProfile,
   onOpenAccountCreation,
 }: {
   userProfile: UserProfile;
+  activeAuthUserId?: string | null;
   onUpdateProfile: (profile: UserProfile) => Promise<void>;
   onOpenAccountCreation: () => void;
 }) {
@@ -310,7 +307,7 @@ export default function Dashboard({
   const [agreementFilter, setAgreementFilter] = useState<FilterStatus>("All");
   const [isNewAgreement, setIsNewAgreement] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [generatedDocuments, setGeneratedDocuments] = useState<StoredSplitSheetDocument[]>(() => loadLocalSplitSheetDocuments(userProfile));
+  const [generatedDocuments, setGeneratedDocuments] = useState<StoredSplitSheetDocument[]>([]);
   const [loadingSplitSheets, setLoadingSplitSheets] = useState(true);
   const [splitSheetsPersisted, setSplitSheetsPersisted] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -318,7 +315,10 @@ export default function Dashboard({
   const [profileSearchResults, setProfileSearchResults] = useState<PublicProfileSearchResult[]>([]);
   const [searchingProfiles, setSearchingProfiles] = useState(false);
   const [selectedPublicProfile, setSelectedPublicProfile] = useState<UserProfile | null>(null);
+  const [notifications, setNotifications] = useState<SplitNotification[]>([]);
+  const [loadingNotifications, setLoadingNotifications] = useState(true);
   const isMobile = useIsMobile();
+  const localStorageOwner = splitSheetLocalStorageOwnerForAuthUser(activeAuthUserId);
 
   const agreements = useMemo(() => generatedDocuments.map(documentToAgreement), [generatedDocuments]);
   const splitSheetSearchResults = useMemo(
@@ -326,6 +326,26 @@ export default function Dashboard({
     [agreements, searchQuery],
   );
   const searchResultsOpen = searchFocused && searchQuery.trim().length >= 2;
+
+  const upsertNotification = useCallback((notification: SplitNotification) => {
+    setNotifications((current) => {
+      const next = current.some((item) => item.id === notification.id)
+        ? current.map((item) => (item.id === notification.id ? notification : item))
+        : [notification, ...current];
+
+      return next
+        .slice()
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+        .slice(0, 50);
+    });
+  }, []);
+
+  const refreshNotifications = useCallback(async (showLoading = false) => {
+    if (showLoading) setLoadingNotifications(true);
+    const nextNotifications = await loadSplitNotifications(50);
+    setNotifications(nextNotifications);
+    setLoadingNotifications(false);
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -337,7 +357,7 @@ export default function Dashboard({
 
       const documents = results.map((result) => result.document);
       setGeneratedDocuments(documents);
-      saveLocalSplitSheetDocuments(documents);
+      saveLocalSplitSheetDocuments(documents, localStorageOwner);
       setSplitSheetsPersisted(results.length > 0 && results.every((result) => result.persisted));
       setLoadingSplitSheets(false);
     }
@@ -362,7 +382,51 @@ export default function Dashboard({
       window.removeEventListener("focus", refreshOnFocus);
       document.removeEventListener("visibilitychange", refreshOnVisible);
     };
-  }, [userProfile]);
+  }, [userProfile, localStorageOwner]);
+
+  useEffect(() => {
+    let active = true;
+    let unsubscribe = () => undefined;
+
+    setLoadingNotifications(true);
+    void loadSplitNotifications(50).then((nextNotifications) => {
+      if (!active) return;
+      setNotifications(nextNotifications);
+      setLoadingNotifications(false);
+    });
+
+    void subscribeToSplitNotifications((notification) => {
+      if (!active) return;
+      upsertNotification(notification);
+    }).then((cleanup) => {
+      if (active) {
+        unsubscribe = cleanup;
+      } else {
+        cleanup();
+      }
+    });
+
+    const refreshTimer = window.setInterval(() => {
+      void refreshNotifications(false);
+    }, 30000);
+    const refreshOnFocus = () => {
+      void refreshNotifications(false);
+    };
+    const refreshOnVisible = () => {
+      if (document.visibilityState === "visible") void refreshNotifications(false);
+    };
+
+    window.addEventListener("focus", refreshOnFocus);
+    document.addEventListener("visibilitychange", refreshOnVisible);
+
+    return () => {
+      active = false;
+      unsubscribe();
+      window.clearInterval(refreshTimer);
+      window.removeEventListener("focus", refreshOnFocus);
+      document.removeEventListener("visibilitychange", refreshOnVisible);
+    };
+  }, [activeAuthUserId, refreshNotifications, upsertNotification]);
 
   useEffect(() => {
     const query = searchQuery.trim();
@@ -398,7 +462,7 @@ export default function Dashboard({
         ? current.map((item) => (item.id === document.id ? document : item))
         : [document, ...current];
 
-      saveLocalSplitSheetDocuments(next);
+      saveLocalSplitSheetDocuments(next, localStorageOwner);
       return next;
     });
   };
@@ -408,6 +472,7 @@ export default function Dashboard({
     const result = await saveSplitSheetDocument(document, mode, userProfile);
     applyGeneratedDocument(result.document);
     setSplitSheetsPersisted(result.persisted);
+    void refreshNotifications(false);
     return result;
   };
 
@@ -421,6 +486,7 @@ export default function Dashboard({
 
     applyGeneratedDocument(persisted.document);
     setSelectedAgreement(documentToAgreement(persisted.document));
+    void refreshNotifications(false);
     if (!persisted.persisted) {
       toast.warning("Saved locally", {
         description: "Supabase did not confirm this split-sheet update yet.",
@@ -445,6 +511,39 @@ export default function Dashboard({
     setSelectedMessageDealId(agreementId);
     setActiveView("collaboration");
     if (isMobile) setSidebarOpen(false);
+  };
+
+  const markNotificationLocallyRead = (notificationIds?: string[] | null, splitSheetId?: string | null) => {
+    const readAt = new Date().toISOString();
+    setNotifications((current) =>
+      current.map((notification) => {
+        const idMatches = !notificationIds || notificationIds.includes(notification.id);
+        const splitMatches = !splitSheetId || notification.splitSheetId === splitSheetId;
+        return idMatches && splitMatches ? { ...notification, readAt: notification.readAt || readAt } : notification;
+      }),
+    );
+  };
+
+  const openNotification = async (notification: SplitNotification) => {
+    markNotificationLocallyRead([notification.id]);
+    void markSplitNotificationsRead({ notificationIds: [notification.id] });
+
+    if (!notification.splitSheetId) {
+      setActiveView("activity");
+      return;
+    }
+
+    if (notification.actionTarget === "agreement") {
+      openAgreement(notification.splitSheetId);
+      return;
+    }
+
+    openDealMessages(notification.splitSheetId);
+  };
+
+  const markAllNotificationsRead = async () => {
+    markNotificationLocallyRead(null);
+    await markSplitNotificationsRead();
   };
 
   const clearSearch = () => {
@@ -604,7 +703,13 @@ export default function Dashboard({
               />
             </div>
           </div>
-          <NotificationsPopover onViewAll={() => setActiveView("activity")} onOpenAgreement={openAgreement} />
+          <NotificationsPopover
+            notifications={notifications}
+            loading={loadingNotifications}
+            onViewAll={() => setActiveView("activity")}
+            onOpenNotification={openNotification}
+            onMarkAllRead={markAllNotificationsRead}
+          />
           {!isMobile && (
             <button
               onClick={() => setIsNewAgreement(true)}
@@ -632,6 +737,8 @@ export default function Dashboard({
                 setActiveView("agreements");
               }}
               onNew={() => setIsNewAgreement(true)}
+              onOpenAgreement={openAgreement}
+              onOpenMessages={openDealMessages}
               isMobile={isMobile}
             />
           )}
@@ -673,7 +780,7 @@ export default function Dashboard({
               onUpdateDocument={updateGeneratedDocument}
             />
           )}
-          {activeView === "settings" && <SettingsPage />}
+          {activeView === "settings" && <SettingsPage userProfile={userProfile} />}
           {activeView === "profile" && (
             <CreatorProfileView
               userProfile={userProfile}
@@ -696,7 +803,13 @@ export default function Dashboard({
               onBackToPublicProfile={() => setActiveView("profile")}
             />
           )}
-          {activeView === "activity" && <AgreementActivityPage agreements={agreements} onOpenAgreement={openAgreement} />}
+          {activeView === "activity" && (
+            <AgreementActivityPage
+              agreements={agreements}
+              notifications={notifications}
+              onOpenNotification={openNotification}
+            />
+          )}
         </main>
 
         {/* Mobile FAB */}
@@ -832,6 +945,8 @@ function DashboardHome({
   persisted,
   onOpenBucket,
   onNew,
+  onOpenAgreement,
+  onOpenMessages,
   isMobile,
 }: {
   agreements: Agreement[];
@@ -842,8 +957,12 @@ function DashboardHome({
   persisted: boolean;
   onOpenBucket: (filter: FilterStatus) => void;
   onNew: () => void;
+  onOpenAgreement: (agreementId: string) => void;
+  onOpenMessages: (agreementId: string) => void;
   isMobile: boolean;
 }) {
+  const quickAccess = useMemo(() => buildQuickAccessMoments(agreements), [agreements]);
+
   return (
     <div className="h-full overflow-y-auto">
       <div className={`max-w-5xl mx-auto ${isMobile ? "px-4 py-5" : "px-8 py-8"}`}>
@@ -899,78 +1018,384 @@ function DashboardHome({
           />
         </div>
 
-        <WorkflowStrip agreements={agreements} onOpenStage={(stageId) => onOpenBucket(workflowStageToFilter(stageId))} />
+        <QuickAccessSection
+          moments={quickAccess}
+          onNew={onNew}
+          onOpenAgreement={onOpenAgreement}
+          onOpenMessages={onOpenMessages}
+        />
       </div>
     </div>
   );
 }
 
-function workflowStageToFilter(stageId: SplitWorkflowStageId): FilterStatus {
-  if (stageId === "fully-signed") return "Verified";
-  if (stageId === "draft") return "Draft";
+type QuickAccessMoment = {
+  id: string;
+  label: string;
+  title: string;
+  detail: string;
+  meta: string;
+  agreement: Agreement;
+  icon: typeof MessageCircle;
+  tone: string;
+  action: "messages" | "agreement";
+};
 
-  const stage = getSplitWorkflowStageById(stageId);
-  return (stage.statuses[0] as FilterStatus) || "All";
+function buildQuickAccessMoments(agreements: Agreement[]) {
+  const recent = [...agreements].sort((a, b) => agreementTimeValue(b) - agreementTimeValue(a));
+  const continueAgreement =
+    recent.find((agreement) => ["Pending Split Approval", "Pending Collaborator Acceptance", "Revision Requested", "Amended", "Disputed"].includes(agreement.status)) ??
+    recent.find((agreement) => PENDING_SPLIT_STATUSES.includes(agreement.status)) ??
+    recent[0];
+
+  const primary = continueAgreement
+    ? {
+        id: `${continueAgreement.id}-continue`,
+        label: continueAgreement.status === "Disputed" ? "Dispute thread" : "Continue negotiation",
+        title: continueAgreement.title,
+        detail: quickAccessDetail(continueAgreement),
+        meta: formatAgreementActivityTime(continueAgreement),
+        agreement: continueAgreement,
+        icon: continueAgreement.status === "Disputed" ? AlertTriangle : MessageCircle,
+        tone: continueAgreement.status === "Disputed" ? "bg-destructive/10 text-destructive" : "bg-primary/10 text-primary",
+        action: "messages" as const,
+      }
+    : null;
+
+  const secondary: QuickAccessMoment[] = [];
+  const signingAgreement = recent.find((agreement) => ["Ready to Sign", "Pending Signatures"].includes(agreement.status));
+  const disputeAgreement = recent.find((agreement) => ["Disputed", "Revision Requested", "Amended"].includes(agreement.status));
+  const signedAgreement = recent.find((agreement) => VERIFIED_SPLIT_STATUSES.includes(agreement.status));
+  const draftAgreement = recent.find((agreement) => agreement.status === "Draft");
+
+  if (signingAgreement) {
+    secondary.push({
+      id: `${signingAgreement.id}-signature`,
+      label: "Ready for signature",
+      title: signingAgreement.title,
+      detail: "All approvals are in. Finish signatures to lock the record.",
+      meta: formatAgreementActivityTime(signingAgreement),
+      agreement: signingAgreement,
+      icon: PenLine,
+      tone: "bg-primary/10 text-primary",
+      action: "messages",
+    });
+  }
+
+  if (disputeAgreement && disputeAgreement.id !== signingAgreement?.id) {
+    secondary.push({
+      id: `${disputeAgreement.id}-dispute`,
+      label: disputeAgreement.status === "Disputed" ? "Dispute updated" : "Revision requested",
+      title: disputeAgreement.title,
+      detail: "Review the latest notes before anyone signs.",
+      meta: formatAgreementActivityTime(disputeAgreement),
+      agreement: disputeAgreement,
+      icon: AlertTriangle,
+      tone: "bg-destructive/10 text-destructive",
+      action: "messages",
+    });
+  }
+
+  if (signedAgreement && secondary.length < 2) {
+    secondary.push({
+      id: `${signedAgreement.id}-signed`,
+      label: "Recent signing",
+      title: signedAgreement.title,
+      detail: "Signed and stored in your split archive.",
+      meta: formatAgreementActivityTime(signedAgreement),
+      agreement: signedAgreement,
+      icon: CheckCircle2,
+      tone: "bg-[hsl(var(--split-verified)/0.12)] text-[hsl(var(--split-verified))]",
+      action: "agreement",
+    });
+  }
+
+  if (draftAgreement && secondary.length < 2) {
+    secondary.push({
+      id: `${draftAgreement.id}-draft`,
+      label: "Recent draft",
+      title: draftAgreement.title,
+      detail: "Keep building this split sheet before invitations go out.",
+      meta: formatAgreementActivityTime(draftAgreement),
+      agreement: draftAgreement,
+      icon: FileText,
+      tone: "bg-secondary text-muted-foreground",
+      action: "agreement",
+    });
+  }
+
+  const fallbackAgreement = recent.find((agreement) => agreement.id !== primary?.agreement.id && !secondary.some((item) => item.agreement.id === agreement.id));
+
+  if (fallbackAgreement && secondary.length < 2) {
+    secondary.push({
+      id: `${fallbackAgreement.id}-latest`,
+      label: "Latest update",
+      title: fallbackAgreement.title,
+      detail: quickAccessDetail(fallbackAgreement),
+      meta: formatAgreementActivityTime(fallbackAgreement),
+      agreement: fallbackAgreement,
+      icon: FileText,
+      tone: "bg-primary/10 text-primary",
+      action: "agreement",
+    });
+  }
+
+  return { primary, secondary: secondary.slice(0, 2) };
 }
 
-function WorkflowStrip({
-  agreements,
-  onOpenStage,
+function QuickAccessSection({
+  moments,
+  onNew,
+  onOpenAgreement,
+  onOpenMessages,
 }: {
-  agreements: Agreement[];
-  onOpenStage: (stageId: SplitWorkflowStageId) => void;
+  moments: ReturnType<typeof buildQuickAccessMoments>;
+  onNew: () => void;
+  onOpenAgreement: (agreementId: string) => void;
+  onOpenMessages: (agreementId: string) => void;
 }) {
-  const counts = SPLIT_WORKFLOW_STAGES.map((stage) => ({
-    ...stage,
-    count: agreements.filter((agreement) => stage.statuses.includes(agreement.status)).length,
-  }));
+  const primary = moments.primary;
 
   return (
-    <section className="rounded-xl border border-border bg-card px-4 py-4 shadow-sm md:px-5">
-      <div className="mb-3 flex items-center justify-between gap-3">
+    <section className="mt-6 md:mt-7">
+      <div className="mb-3 flex items-end justify-between gap-3">
         <div>
-          <h2 className="text-sm font-bold">Split workflow</h2>
-          <p className="mt-0.5 text-xs text-muted-foreground">Draft to locked record, using SPLIT status language.</p>
+          <h2 className="text-base font-bold tracking-tight md:text-lg">Quick access</h2>
+          <p className="mt-0.5 text-xs leading-5 text-muted-foreground md:text-sm">Jump back into active split moments.</p>
         </div>
-        <span className="hidden rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-semibold text-primary md:inline-flex">
-          {agreements.length} total
-        </span>
+        <button
+          type="button"
+          onClick={onNew}
+          className="hidden rounded-lg border border-border bg-card px-3 py-2 text-xs font-semibold text-primary transition-colors hover:bg-secondary md:inline-flex"
+        >
+          New SPLIT Sheet
+        </button>
       </div>
 
-      <div className="-mx-1 overflow-x-auto px-1 pb-1">
-        <div className="flex min-w-max gap-2">
-          {counts.map((stage, index) => {
-            const active = stage.count > 0;
-
-            return (
-              <button
-                key={stage.id}
-                type="button"
-                onClick={() => onOpenStage(stage.id)}
-                className={`group flex min-w-[150px] items-center justify-between gap-3 rounded-lg border px-3 py-2.5 text-left transition-colors ${
-                  active
-                    ? "border-primary/25 bg-primary/5 hover:bg-primary/10"
-                    : "border-border bg-background hover:border-primary/20 hover:bg-secondary/40"
-                }`}
-              >
-                <span className="flex min-w-0 items-center gap-2.5">
-                  <span
-                    className={`flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${
-                      active ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground"
-                    }`}
-                  >
-                    {index + 1}
-                  </span>
-                  <span className="truncate text-xs font-semibold text-foreground">{stage.label}</span>
-                </span>
-                <span className={`text-sm font-bold tabular-nums ${active ? "text-primary" : "text-muted-foreground"}`}>{stage.count}</span>
-              </button>
-            );
-          })}
+      {!primary ? (
+        <div className="rounded-lg border border-dashed border-border bg-card px-4 py-7 text-center shadow-sm">
+          <MessageCircle className="mx-auto h-5 w-5 text-muted-foreground" />
+          <h3 className="mt-3 text-sm font-bold">No active split moments yet</h3>
+          <p className="mx-auto mt-1 max-w-md text-xs leading-5 text-muted-foreground">
+            Once you create, send, sign, or dispute a split sheet, SPLIT will keep the next useful action here.
+          </p>
+          <button
+            type="button"
+            onClick={onNew}
+            className="mt-4 inline-flex h-9 items-center justify-center rounded-lg bg-primary px-3 text-xs font-semibold text-primary-foreground hover:bg-primary/90"
+          >
+            Create a split sheet
+          </button>
         </div>
-      </div>
+      ) : (
+        <div className="grid gap-4 lg:grid-cols-[1.45fr_0.95fr]">
+          <PrimaryQuickAccessCard
+            moment={primary}
+            onOpenAgreement={onOpenAgreement}
+            onOpenMessages={onOpenMessages}
+          />
+
+          <div className="grid gap-4">
+            {moments.secondary.map((moment) => (
+              <SecondaryQuickAccessCard
+                key={moment.id}
+                moment={moment}
+                onOpenAgreement={onOpenAgreement}
+                onOpenMessages={onOpenMessages}
+              />
+            ))}
+          </div>
+        </div>
+      )}
     </section>
   );
+}
+
+function PrimaryQuickAccessCard({
+  moment,
+  onOpenAgreement,
+  onOpenMessages,
+}: {
+  moment: QuickAccessMoment;
+  onOpenAgreement: (agreementId: string) => void;
+  onOpenMessages: (agreementId: string) => void;
+}) {
+  const Icon = moment.icon;
+
+  return (
+    <div className="rounded-lg border border-border bg-card p-4 shadow-sm md:p-5">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <span className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg ${moment.tone}`}>
+            <Icon className="h-4 w-4" />
+          </span>
+          <div>
+            <div className="text-sm font-bold text-foreground">{moment.label}</div>
+            <div className="mt-0.5 text-xs font-medium text-muted-foreground">{moment.meta}</div>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={() => onOpenMessages(moment.agreement.id)}
+          className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+          aria-label={`Open messages for ${moment.title}`}
+        >
+          <ChevronRight className="h-4 w-4" />
+        </button>
+      </div>
+
+      <div className="mt-5 flex items-start gap-3">
+        <AgreementIcon type={moment.agreement.type} />
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="truncate text-lg font-bold tracking-tight text-foreground">{moment.title}</h3>
+            <StatusBadge status={moment.agreement.status} />
+          </div>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <QuickPartyPills parties={moment.agreement.parties} />
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-5 border-t border-border pt-4">
+        <p className="text-sm leading-6 text-muted-foreground">{moment.detail}</p>
+      </div>
+
+      <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:justify-end">
+        <button
+          type="button"
+          onClick={() => onOpenMessages(moment.agreement.id)}
+          className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-border bg-background px-3 text-sm font-semibold text-foreground transition-colors hover:bg-secondary"
+        >
+          <MessageCircle className="h-4 w-4 text-primary" />
+          Open messages
+        </button>
+        <button
+          type="button"
+          onClick={() => onOpenAgreement(moment.agreement.id)}
+          className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-border bg-background px-3 text-sm font-semibold text-primary transition-colors hover:bg-secondary"
+        >
+          <FileText className="h-4 w-4" />
+          View split
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function SecondaryQuickAccessCard({
+  moment,
+  onOpenAgreement,
+  onOpenMessages,
+}: {
+  moment: QuickAccessMoment;
+  onOpenAgreement: (agreementId: string) => void;
+  onOpenMessages: (agreementId: string) => void;
+}) {
+  const Icon = moment.icon;
+  const openMoment = () => {
+    if (moment.action === "messages") {
+      onOpenMessages(moment.agreement.id);
+      return;
+    }
+
+    onOpenAgreement(moment.agreement.id);
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={openMoment}
+      className="rounded-lg border border-border bg-card p-4 text-left shadow-sm transition-colors hover:border-primary/20 hover:bg-secondary/30"
+    >
+      <div className="flex items-start justify-between gap-3">
+        <span className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg ${moment.tone}`}>
+          <Icon className="h-4 w-4" />
+        </span>
+        <ChevronRight className="mt-1 h-4 w-4 flex-shrink-0 text-muted-foreground" />
+      </div>
+      <div className="mt-4">
+        <div className="text-sm font-bold text-foreground">{moment.label}</div>
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <span className="truncate text-base font-bold text-foreground">{moment.title}</span>
+          <StatusBadge status={moment.agreement.status} />
+        </div>
+        <p className="mt-2 text-xs leading-5 text-muted-foreground">{moment.detail}</p>
+        <div className="mt-3 text-[11px] font-medium text-muted-foreground">{moment.meta}</div>
+      </div>
+    </button>
+  );
+}
+
+function QuickPartyPills({ parties }: { parties: string[] }) {
+  const visibleParties = parties.filter(Boolean).slice(0, 3);
+  const hiddenCount = Math.max(0, parties.length - visibleParties.length);
+
+  return (
+    <>
+      {visibleParties.map((party) => (
+        <span key={party} className="inline-flex items-center gap-1.5 rounded-full bg-secondary px-2.5 py-1 text-[11px] font-semibold text-muted-foreground">
+          <span className="flex h-4 w-4 items-center justify-center rounded-full bg-background text-[9px] font-bold text-primary">
+            {initialsForName(party)}
+          </span>
+          {party}
+        </span>
+      ))}
+      {hiddenCount > 0 && (
+        <span className="inline-flex rounded-full border border-border bg-background px-2.5 py-1 text-[11px] font-semibold text-muted-foreground">
+          +{hiddenCount}
+        </span>
+      )}
+    </>
+  );
+}
+
+function quickAccessDetail(agreement: Agreement) {
+  const collaborator = agreement.parties[1] ?? agreement.parties[0] ?? "Collaborator";
+
+  if (agreement.status === "Disputed") return `${collaborator} raised a dispute. Review the thread before a new split version is signed.`;
+  if (agreement.status === "Revision Requested" || agreement.status === "Amended") return `${collaborator} requested changes. Open the negotiation to compare versions.`;
+  if (agreement.status === "Ready to Sign" || agreement.status === "Pending Signatures") return "All approvals are in. Finish signatures to lock the record.";
+  if (agreement.status === "Pending Collaborator Acceptance") return `${collaborator} still needs to accept the invite before the split can move forward.`;
+  if (agreement.status === "Pending Split Approval") return `${collaborator} has a split proposal waiting for review in Messages.`;
+  if (agreement.status === "Draft") return "Draft saved. Add collaborators when you are ready to send the split sheet.";
+  if (VERIFIED_SPLIT_STATUSES.includes(agreement.status)) return "Signed and stored in your split archive.";
+
+  return "Open this split sheet to review the latest status.";
+}
+
+function agreementTimeValue(agreement: Agreement) {
+  const timestamp = Date.parse(agreement.updated || agreement.created);
+  return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+function formatAgreementActivityTime(agreement: Agreement) {
+  const timestamp = agreementTimeValue(agreement);
+  if (!timestamp) return "Recently updated";
+
+  const diffMs = Date.now() - timestamp;
+  const minute = 60 * 1000;
+  const hour = 60 * minute;
+  const day = 24 * hour;
+
+  if (diffMs >= 0 && diffMs < minute) return "Just now";
+  if (diffMs >= 0 && diffMs < hour) return `${Math.max(1, Math.floor(diffMs / minute))} min ago`;
+  if (diffMs >= 0 && diffMs < day) return `${Math.floor(diffMs / hour)}h ago`;
+  if (diffMs >= 0 && diffMs < 7 * day) return `${Math.floor(diffMs / day)}d ago`;
+
+  return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(new Date(timestamp));
+}
+
+function initialsForName(name: string) {
+  const initials = name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase();
+
+  return initials || "SS";
 }
 
 function StatCard({
@@ -1008,21 +1433,71 @@ function StatCard({
   );
 }
 
+function notificationPresentation(notification: SplitNotification): {
+  icon: LucideIcon;
+  tone: string;
+  actionLabel: string;
+} {
+  const actionLabel = notification.actionTarget === "agreement"
+    ? "View split"
+    : notification.actionTarget === "activity"
+      ? "View activity"
+      : "Open messages";
+
+  if (notification.eventType === "chat_message") {
+    return { icon: MessageCircle, tone: "bg-primary/10 text-primary", actionLabel };
+  }
+
+  if (notification.eventType === "counter_offer") {
+    return { icon: GitBranch, tone: "bg-[hsl(var(--split-amended)/0.12)] text-[hsl(var(--split-amended))]", actionLabel };
+  }
+
+  if (notification.eventType === "split_reject" || notification.eventType === "invite_decline") {
+    return { icon: AlertTriangle, tone: "bg-destructive/10 text-destructive", actionLabel };
+  }
+
+  if (notification.eventType === "signature" || notification.eventType === "split_verified" || notification.eventType === "split_accept" || notification.eventType === "invite_accept") {
+    return { icon: CheckCircle2, tone: "bg-[hsl(var(--split-verified)/0.12)] text-[hsl(var(--split-verified))]", actionLabel };
+  }
+
+  return { icon: FileText, tone: "bg-secondary text-primary", actionLabel };
+}
+
+function notificationTime(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value || "Now";
+
+  const diffMs = Date.now() - date.getTime();
+  const diffMinutes = Math.max(0, Math.round(diffMs / 60000));
+  if (diffMinutes < 1) return "Now";
+  if (diffMinutes < 60) return `${diffMinutes}m ago`;
+  const diffHours = Math.round(diffMinutes / 60);
+  if (diffHours < 24) return `${diffHours}h ago`;
+  return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
 function NotificationsPopover({
+  notifications,
+  loading,
   onViewAll,
-  onOpenAgreement,
+  onOpenNotification,
+  onMarkAllRead,
 }: {
+  notifications: SplitNotification[];
+  loading: boolean;
   onViewAll: () => void;
-  onOpenAgreement: (agreementId: string) => void;
+  onOpenNotification: (notification: SplitNotification) => void;
+  onMarkAllRead: () => void;
 }) {
   const [open, setOpen] = useState(false);
+  const unreadCount = notifications.filter((notification) => !notification.readAt).length;
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <button className="relative p-2 rounded-lg hover:bg-accent text-muted-foreground hover:text-foreground transition-colors">
+        <button aria-label="Open notifications" className="relative p-2 rounded-lg hover:bg-accent text-muted-foreground hover:text-foreground transition-colors">
           <Bell className="h-4 w-4" />
-          {AGREEMENT_NOTIFICATIONS.length > 0 && (
+          {unreadCount > 0 && (
             <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-primary ring-2 ring-background" />
           )}
         </button>
@@ -1034,45 +1509,69 @@ function NotificationsPopover({
               <h2 className="text-sm font-bold">Recent Notifications</h2>
               <p className="mt-0.5 text-xs text-muted-foreground">Signatures, approvals, invites, and split-sheet updates.</p>
             </div>
-            <span className="inline-flex h-7 items-center whitespace-nowrap rounded-full bg-primary/10 px-2.5 text-xs font-semibold text-primary">
-              {AGREEMENT_NOTIFICATIONS.length}
-            </span>
+            <div className="flex items-center gap-2">
+              {unreadCount > 0 && (
+                <button
+                  type="button"
+                  onClick={onMarkAllRead}
+                  className="text-[11px] font-semibold text-primary hover:underline"
+                >
+                  Mark all read
+                </button>
+              )}
+              <span className="inline-flex h-7 items-center whitespace-nowrap rounded-full bg-primary/10 px-2.5 text-xs font-semibold text-primary">
+                {unreadCount || notifications.length}
+              </span>
+            </div>
           </div>
         </div>
 
         <div className="max-h-[420px] space-y-2 overflow-y-auto px-3 py-3">
-          {AGREEMENT_NOTIFICATIONS.length === 0 ? (
+          {loading && notifications.length === 0 ? (
+            <div className="rounded-lg border border-border bg-background px-4 py-6 text-center">
+              <Loader2 className="mx-auto h-5 w-5 animate-spin text-muted-foreground" />
+              <p className="mt-2 text-sm font-semibold text-foreground">Loading notifications</p>
+            </div>
+          ) : notifications.length === 0 ? (
             <div className="rounded-lg border border-dashed border-border bg-background px-4 py-6 text-center">
               <Bell className="mx-auto h-5 w-5 text-muted-foreground" />
               <p className="mt-2 text-sm font-semibold text-foreground">No notifications yet</p>
               <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                Real invites, approvals, signatures, and stored split updates will show up here.
+                Invites, approvals, signatures, disputes, and messages will show up here.
               </p>
             </div>
           ) : (
-            AGREEMENT_NOTIFICATIONS.map(({ id, title, detail, time, agreementId, actionLabel, icon: Icon, tone }) => (
-              <button
-                key={id}
-                onClick={() => {
-                  setOpen(false);
-                  onOpenAgreement(agreementId);
-                }}
-                className="flex w-full items-center gap-3 rounded-lg border border-border bg-background px-3 py-2.5 text-left transition-colors hover:border-primary/25 hover:bg-secondary/50"
-              >
-                <span className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg ${tone}`}>
-                  <Icon className="h-3.5 w-3.5" />
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-semibold text-foreground">{title}</span>
-                  <span className="mt-0.5 block truncate text-xs text-muted-foreground">{detail}</span>
-                  <span className="mt-1 block text-[11px] font-medium text-muted-foreground/80">{time}</span>
-                </span>
-                <span className="inline-flex flex-shrink-0 items-center gap-1 text-[11px] font-semibold text-primary">
-                  <span className="hidden sm:inline">{actionLabel}</span>
-                  <ChevronRight className="h-3.5 w-3.5" />
-                </span>
-              </button>
-            ))
+            notifications.map((notification) => {
+              const { icon: Icon, tone, actionLabel } = notificationPresentation(notification);
+              return (
+                <button
+                  key={notification.id}
+                  onClick={() => {
+                    setOpen(false);
+                    onOpenNotification(notification);
+                  }}
+                  className={`flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 text-left transition-colors hover:border-primary/25 hover:bg-secondary/50 ${
+                    notification.readAt ? "border-border bg-background" : "border-primary/20 bg-primary/5"
+                  }`}
+                >
+                  <span className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg ${tone}`}>
+                    <Icon className="h-3.5 w-3.5" />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="flex min-w-0 items-center gap-2">
+                      <span className="block truncate text-sm font-semibold text-foreground">{notification.title}</span>
+                      {!notification.readAt && <span className="h-1.5 w-1.5 flex-shrink-0 rounded-full bg-primary" />}
+                    </span>
+                    <span className="mt-0.5 block truncate text-xs text-muted-foreground">{notification.body}</span>
+                    <span className="mt-1 block text-[11px] font-medium text-muted-foreground/80">{notificationTime(notification.createdAt)}</span>
+                  </span>
+                  <span className="inline-flex flex-shrink-0 items-center gap-1 text-[11px] font-semibold text-primary">
+                    <span className="hidden sm:inline">{actionLabel}</span>
+                    <ChevronRight className="h-3.5 w-3.5" />
+                  </span>
+                </button>
+              );
+            })
           )}
         </div>
 
@@ -1094,15 +1593,17 @@ function NotificationsPopover({
 
 function AgreementActivityPage({
   agreements,
-  onOpenAgreement,
+  notifications,
+  onOpenNotification,
 }: {
   agreements: Agreement[];
-  onOpenAgreement: (agreementId: string) => void;
+  notifications: SplitNotification[];
+  onOpenNotification: (notification: SplitNotification) => void;
 }) {
-  const executed = AGREEMENT_NOTIFICATIONS.filter((item) => item.type === "executed").length;
-  const needsAction = AGREEMENT_NOTIFICATIONS.filter((item) => item.type !== "executed").length;
-  const priorityItems = AGREEMENT_NOTIFICATIONS.filter((item) => item.type !== "executed");
-  const executedItems = AGREEMENT_NOTIFICATIONS.filter((item) => item.type === "executed");
+  const priorityItems = notifications.filter((notification) => !notification.readAt);
+  const executedItems = notifications.filter((notification) => ["signature", "split_verified"].includes(notification.eventType));
+  const needsAction = priorityItems.length;
+  const executed = executedItems.length;
 
   return (
     <div className="h-full overflow-y-auto">
@@ -1128,23 +1629,26 @@ function AgreementActivityPage({
                 {priorityItems.length === 0 ? (
                   <ActivityEmptyState label="No pending activity" />
                 ) : (
-                  priorityItems.map(({ id, title, detail, agreementId, actionLabel, icon: Icon, tone }) => (
-                    <div key={id} className="flex items-start gap-3 rounded-lg border border-border bg-background p-3">
+                  priorityItems.map((notification) => {
+                    const { icon: Icon, tone, actionLabel } = notificationPresentation(notification);
+                    return (
+                    <div key={notification.id} className="flex items-start gap-3 rounded-lg border border-primary/20 bg-primary/5 p-3">
                       <span className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg ${tone}`}>
                         <Icon className="h-4 w-4" />
                       </span>
                       <div className="min-w-0 flex-1">
-                        <div className="text-sm font-bold">{title}</div>
-                        <p className="mt-0.5 text-xs leading-5 text-muted-foreground">{detail}</p>
+                        <div className="text-sm font-bold">{notification.title}</div>
+                        <p className="mt-0.5 text-xs leading-5 text-muted-foreground">{notification.body}</p>
                       </div>
                       <button
-                        onClick={() => onOpenAgreement(agreementId)}
+                        onClick={() => onOpenNotification(notification)}
                         className="rounded-lg border border-border bg-card px-3 py-2 text-xs font-semibold text-primary hover:bg-secondary"
                       >
                         {actionLabel}
                       </button>
                     </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
           </section>
@@ -1164,28 +1668,31 @@ function AgreementActivityPage({
               {executedItems.length === 0 ? (
                 <ActivityEmptyState label="No verified records yet" />
               ) : (
-                executedItems.map(({ id, title, detail, agreementId, actionLabel, icon: Icon, tone, time }) => (
-                  <div key={id} className="rounded-lg border border-border bg-background p-3">
+                executedItems.map((notification) => {
+                  const { icon: Icon, tone, actionLabel } = notificationPresentation(notification);
+                  return (
+                  <div key={notification.id} className="rounded-lg border border-border bg-background p-3">
                     <div className="flex items-start gap-3">
                       <span className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg ${tone}`}>
                         <Icon className="h-4 w-4" />
                       </span>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center justify-between gap-3">
-                          <div className="text-sm font-bold">{title}</div>
-                          <span className="text-[11px] font-medium text-muted-foreground">{time}</span>
+                          <div className="text-sm font-bold">{notification.title}</div>
+                          <span className="text-[11px] font-medium text-muted-foreground">{notificationTime(notification.createdAt)}</span>
                         </div>
-                        <p className="mt-0.5 text-xs leading-5 text-muted-foreground">{detail}</p>
+                        <p className="mt-0.5 text-xs leading-5 text-muted-foreground">{notification.body}</p>
                       </div>
                     </div>
                     <button
-                      onClick={() => onOpenAgreement(agreementId)}
+                      onClick={() => onOpenNotification(notification)}
                       className="mt-3 w-full rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground hover:bg-primary/90"
                     >
                       {actionLabel}
                     </button>
                   </div>
-                ))
+                  );
+                })
               )}
             </div>
           </section>
@@ -1194,29 +1701,31 @@ function AgreementActivityPage({
         <div className="rounded-lg border border-border bg-card">
           <div className="flex items-center justify-between border-b border-border px-4 py-3">
             <h2 className="text-sm font-bold">Activity Inbox</h2>
-            <span className="text-xs font-medium text-muted-foreground">{AGREEMENT_NOTIFICATIONS.length} total updates</span>
+            <span className="text-xs font-medium text-muted-foreground">{notifications.length} total updates</span>
           </div>
 
           <div className="divide-y divide-border">
-            {AGREEMENT_NOTIFICATIONS.length === 0 ? (
+            {notifications.length === 0 ? (
               <div className="px-4 py-8">
                 <ActivityEmptyState label="No activity yet" />
               </div>
-            ) : AGREEMENT_NOTIFICATIONS.map(({ id, title, detail, time, agreementId, actionLabel, icon: Icon, tone }) => {
-              const agreement = agreements.find((item) => item.id === agreementId);
+            ) : notifications.map((notification) => {
+              const { icon: Icon, tone, actionLabel } = notificationPresentation(notification);
+              const agreement = agreements.find((item) => item.id === notification.splitSheetId);
 
               return (
-                <div key={id} className="grid gap-4 px-4 py-4 md:grid-cols-[1fr_auto] md:items-center">
+                <div key={notification.id} className="grid gap-4 px-4 py-4 md:grid-cols-[1fr_auto] md:items-center">
                   <div className="flex gap-3">
                     <span className={`mt-0.5 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full ${tone}`}>
                       <Icon className="h-4 w-4" />
                     </span>
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="text-sm font-bold text-foreground">{title}</h3>
-                        <span className="text-[11px] font-medium text-muted-foreground">{time}</span>
+                        <h3 className="text-sm font-bold text-foreground">{notification.title}</h3>
+                        {!notification.readAt && <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold text-primary">New</span>}
+                        <span className="text-[11px] font-medium text-muted-foreground">{notificationTime(notification.createdAt)}</span>
                       </div>
-                      <p className="mt-1 text-xs leading-5 text-muted-foreground">{detail}</p>
+                      <p className="mt-1 text-xs leading-5 text-muted-foreground">{notification.body}</p>
                       {agreement && (
                         <p className="mt-1 text-xs font-medium text-foreground">
                           Related split sheet: <span className="text-primary">{agreement.title}</span>
@@ -1225,7 +1734,7 @@ function AgreementActivityPage({
                     </div>
                   </div>
                   <button
-                    onClick={() => onOpenAgreement(agreementId)}
+                    onClick={() => onOpenNotification(notification)}
                     className="rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground hover:bg-primary/90"
                   >
                     {actionLabel}
@@ -1246,7 +1755,7 @@ function ActivityEmptyState({ label }: { label: string }) {
       <Bell className="mx-auto h-5 w-5 text-muted-foreground" />
       <p className="mt-2 text-sm font-semibold text-foreground">{label}</p>
       <p className="mt-1 text-xs leading-5 text-muted-foreground">
-        Once backend events are connected, SPLIT will show real updates here.
+        SPLIT will show invites, signatures, disputes, and messages here as they happen.
       </p>
     </div>
   );

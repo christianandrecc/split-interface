@@ -180,6 +180,7 @@ export default function CollaborationView({ documents, userProfile, initialDealI
     setComposerText("");
     await updateDocument(updatedDocument, {
       action: "local_chat",
+      notes: body,
       successMessage: "Message sent",
     });
   };

@@ -12,10 +12,10 @@ function renderAccountAccess(onCreateAccount = vi.fn(), onSignIn = vi.fn()) {
 }
 
 function completePersonalPage() {
-  fireEvent.change(screen.getByLabelText(/username/i), { target: { value: "Chori_One" } });
-  fireEvent.change(screen.getByLabelText(/email address/i), { target: { value: "CHORI@Example.COM " } });
-  fireEvent.change(screen.getByLabelText(/legal name/i), { target: { value: "Christian Carrera" } });
-  fireEvent.change(screen.getByLabelText(/phone number/i), { target: { value: "2168578164" } });
+  fireEvent.change(screen.getByRole("textbox", { name: /username/i }), { target: { value: "Chori_One" } });
+  fireEvent.change(screen.getByRole("textbox", { name: /email address/i }), { target: { value: "CHORI@Example.COM " } });
+  fireEvent.change(screen.getByRole("textbox", { name: /legal name/i }), { target: { value: "Christian Carrera" } });
+  fireEvent.change(screen.getByRole("textbox", { name: /phone number/i }), { target: { value: "2168578164" } });
   fireEvent.click(screen.getByRole("button", { name: /next/i }));
 }
 
@@ -47,6 +47,33 @@ describe("AccountAccess registration flow", () => {
     expect(screen.queryByText(/mlc number/i)).not.toBeInTheDocument();
   });
 
+  it("exposes focused signup help for artist, PRO, IPI, and publishing fields", () => {
+    renderAccountAccess();
+
+    expect(screen.getByRole("button", { name: /artist name help/i })).toHaveAttribute(
+      "data-help",
+      expect.stringContaining("professionally known as"),
+    );
+
+    completePersonalPage();
+
+    expect(screen.getByRole("button", { name: /pro affiliation help/i })).toHaveAttribute(
+      "data-help",
+      expect.stringContaining("Performance Rights Organization"),
+    );
+    expect(screen.getByRole("button", { name: /ipi \/ cae number help/i })).toHaveAttribute(
+      "data-help",
+      expect.stringContaining("unique songwriter/composer ID"),
+    );
+    expect(screen.getByRole("button", { name: /publishing information help/i })).toHaveAttribute(
+      "data-help",
+      expect.stringContaining("who controls the publishing side"),
+    );
+
+    expect(screen.getByRole("combobox", { name: /pro affiliation/i })).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: /publishing information/i })).toBeInTheDocument();
+  });
+
   it("submits normalized email and consent metadata after all pages are valid", async () => {
     const onCreateAccount = vi.fn().mockResolvedValue(undefined);
     renderAccountAccess(onCreateAccount);
@@ -55,8 +82,8 @@ describe("AccountAccess registration flow", () => {
     fireEvent.click(screen.getByRole("button", { name: "Producer" }));
     fireEvent.click(screen.getByRole("button", { name: /next/i }));
 
-    fireEvent.change(screen.getByLabelText(/^Create Password/i), { target: { value: "password123" } });
-    fireEvent.change(screen.getByLabelText(/^Confirm Password/i), { target: { value: "password123" } });
+    fireEvent.change(screen.getByPlaceholderText("8 characters minimum"), { target: { value: "password123" } });
+    fireEvent.change(screen.getByPlaceholderText("Repeat password"), { target: { value: "password123" } });
     fireEvent.click(screen.getByLabelText(/terms & conditions/i));
     fireEvent.click(screen.getByLabelText(/privacy policy/i));
     fireEvent.click(screen.getAllByRole("button", { name: /create account/i })[1]);
@@ -72,5 +99,31 @@ describe("AccountAccess registration flow", () => {
     expect(profile.termsVersion).toBe("split-terms-2026-08-12");
     expect(profile.privacyAcknowledgedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
     expect(profile.privacyPolicyVersion).toBe("split-privacy-2026-08-12");
+  });
+
+  it("moves email confirmation into a dedicated success screen", async () => {
+    const onCreateAccount = vi.fn().mockResolvedValue({
+      needsEmailConfirmation: true,
+      emailAddress: "chori@example.com",
+    });
+    renderAccountAccess(onCreateAccount);
+
+    completePersonalPage();
+    fireEvent.click(screen.getByRole("button", { name: "Producer" }));
+    fireEvent.click(screen.getByRole("button", { name: /next/i }));
+
+    fireEvent.change(screen.getByPlaceholderText("8 characters minimum"), { target: { value: "password123" } });
+    fireEvent.change(screen.getByPlaceholderText("Repeat password"), { target: { value: "password123" } });
+    fireEvent.click(screen.getByLabelText(/terms & conditions/i));
+    fireEvent.click(screen.getByLabelText(/privacy policy/i));
+    fireEvent.click(screen.getAllByRole("button", { name: /create account/i })[1]);
+
+    expect(await screen.findByRole("heading", { name: /check your inbox/i })).toBeInTheDocument();
+    expect(screen.getByText("chori@example.com")).toBeInTheDocument();
+    expect(screen.queryByText(/supabase created the account/i)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /go to sign in/i }));
+    expect(screen.getByRole("heading", { name: /sign in to split/i })).toBeInTheDocument();
+    expect(screen.getByDisplayValue("chori@example.com")).toBeInTheDocument();
   });
 });

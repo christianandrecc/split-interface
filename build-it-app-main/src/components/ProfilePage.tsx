@@ -1,5 +1,6 @@
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import AddressSearchField from "@/components/AddressSearchField";
+import { CREATOR_ROLE_OPTIONS } from "@/lib/creatorRoles";
 import { normalizeUserProfile, normalizeUsername, type UserProfile } from "@/lib/userProfile";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,7 +13,6 @@ import { AtSign, Check, Eye, HelpCircle, IdCard, Link2, Mail, MapPin, Music2, Sa
 const proOptions = ["ASCAP", "BMI", "SESAC", "Other", "Skip PRO Registration"];
 const publishingStatusOptions = ["Self-published", "Signed to publisher", "Co-published"];
 
-const creatorRoleOptions = ["Producer", "Writer", "Artist", "Engineer", "Topliner"];
 const visibilityOptions = ["Public", "Collaborators only", "Private"];
 
 const usStateOptions = [
@@ -232,7 +232,7 @@ export default function ProfilePage({ userProfile, onUpdateProfile, onBackToPubl
               </div>
             </div>
             <div className="flex flex-wrap gap-2 lg:max-w-[58%] lg:justify-end">
-              {creatorRoleOptions.map((role) => {
+                    {CREATOR_ROLE_OPTIONS.map((role) => {
                 const active = selectedRoles.includes(role);
                 return (
                   <button

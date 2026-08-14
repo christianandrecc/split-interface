@@ -14,6 +14,14 @@ const globalSearchSql = readFileSync(
   resolve(process.cwd(), "supabase/migrations/20260813133000_global_search.sql"),
   "utf8",
 );
+const accountIsolationSql = readFileSync(
+  resolve(process.cwd(), "supabase/migrations/20260814122000_split_sheet_account_isolation.sql"),
+  "utf8",
+);
+const notificationSql = readFileSync(
+  resolve(process.cwd(), "supabase/migrations/20260814183000_split_notifications.sql"),
+  "utf8",
+);
 
 describe("split sheet Supabase migration", () => {
   it("creates the core workflow tables", () => {
@@ -113,5 +121,38 @@ describe("split sheet Supabase migration", () => {
     expect(globalSearchSql).not.toContain("pro_affiliation text");
     expect(globalSearchSql).not.toContain("ipi_number text");
     expect(globalSearchSql).not.toContain("tax_id text");
+  });
+
+  it("prevents deleted collaborator accounts from being reattached to fresh accounts", () => {
+    expect(accountIsolationSql).toContain("on delete cascade");
+    expect(accountIsolationSql).toContain("new.invite_status = 'Pending'");
+    expect(accountIsolationSql).toContain("collaborator.invite_status = 'Pending'");
+    expect(accountIsolationSql).toContain("collaborator.approval_status = 'Pending'");
+    expect(accountIsolationSql).toContain("collaborator.signature_status = 'Pending'");
+    expect(accountIsolationSql).toContain("collaborator.responded_at is null");
+    expect(accountIsolationSql).toContain("collaborator.signed_at is null");
+  });
+
+  it("adds recipient-owned split notifications with RLS and read-state RPCs", () => {
+    expect(notificationSql).toContain("create table if not exists public.split_notifications");
+    expect(notificationSql).toContain("recipient_user_id uuid not null references auth.users(id) on delete cascade");
+    expect(notificationSql).toContain("dedupe_key text unique");
+    expect(notificationSql).toContain("alter table public.split_notifications enable row level security");
+    expect(notificationSql).toContain("recipient_user_id = (select auth.uid())");
+    expect(notificationSql).toContain("create or replace function public.load_my_split_notifications");
+    expect(notificationSql).toContain("create or replace function public.mark_split_notifications_read");
+    expect(notificationSql).toContain("grant execute on function public.load_my_split_notifications(integer) to authenticated");
+    expect(notificationSql).toContain("grant execute on function public.mark_split_notifications_read(uuid[], uuid) to authenticated");
+  });
+
+  it("creates notifications from invites, chat, participant responses, counters, and signatures", () => {
+    expect(notificationSql).toContain("create trigger notify_split_collaborator_invite");
+    expect(notificationSql).toContain("'split_invite'");
+    expect(notificationSql).toContain("p_action not in ('invite_accept', 'invite_decline', 'split_accept', 'split_reject', 'counter_offer', 'sign', 'local_chat')");
+    expect(notificationSql).toContain("when p_action = 'local_chat' then 'chat_message'");
+    expect(notificationSql).toContain("when p_action = 'counter_offer' then actor_label || ' sent a counter-offer'");
+    expect(notificationSql).toContain("when p_action = 'sign' and next_status in ('Fully Signed', 'Verified and Stored', 'Executed') then 'Split sheet fully signed'");
+    expect(notificationSql).toContain("perform public.notify_split_sheet_participants");
+    expect(notificationSql).toContain("alter publication supabase_realtime add table public.split_notifications");
   });
 });

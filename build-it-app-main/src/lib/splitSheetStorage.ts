@@ -13,6 +13,7 @@ import { validateDocumentSplit } from "@/lib/splitSheetWorkflow";
 import type { UserProfile } from "@/lib/userProfile";
 
 const LOCAL_DOCUMENTS_KEY = "split.generatedDocuments.v3";
+const LOCAL_DOCUMENTS_BY_OWNER_KEY = "split.generatedDocuments.byOwner.v1";
 
 type SplitSheetRow = Tables<"split_sheets">;
 type SplitSheetInsert = TablesInsert<"split_sheets">;
@@ -51,6 +52,44 @@ function ensureBrowserStorage() {
   return window.localStorage;
 }
 
+export function splitSheetLocalStorageOwnerForAuthUser(userId?: string | null) {
+  const cleanedUserId = (userId ?? "").trim();
+  return cleanedUserId ? `auth:${cleanedUserId}` : undefined;
+}
+
+function readOwnedLocalDocuments(ownerKey: string) {
+  const storage = ensureBrowserStorage();
+  if (!storage) return [];
+
+  try {
+    const stored = storage.getItem(LOCAL_DOCUMENTS_BY_OWNER_KEY);
+    if (!stored) return [];
+
+    const parsed = JSON.parse(stored);
+    const documents = parsed?.[ownerKey];
+    return Array.isArray(documents)
+      ? documents.filter(isStoredSplitSheetDocument)
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeOwnedLocalDocuments(ownerKey: string, documents: StoredSplitSheetDocument[]) {
+  const storage = ensureBrowserStorage();
+  if (!storage) return;
+
+  try {
+    const stored = storage.getItem(LOCAL_DOCUMENTS_BY_OWNER_KEY);
+    const parsed = stored ? JSON.parse(stored) : {};
+    const next = parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+    next[ownerKey] = documents;
+    storage.setItem(LOCAL_DOCUMENTS_BY_OWNER_KEY, JSON.stringify(next));
+  } catch {
+    storage.setItem(LOCAL_DOCUMENTS_BY_OWNER_KEY, JSON.stringify({ [ownerKey]: documents }));
+  }
+}
+
 function documentVisibleToProfile(document: StoredSplitSheetDocument, profile?: UserProfile) {
   if (!profile) return true;
   if (documentBelongsToProfile(document, profile)) return true;
@@ -58,7 +97,11 @@ function documentVisibleToProfile(document: StoredSplitSheetDocument, profile?: 
   return Boolean(findInviteForProfile(document, profile));
 }
 
-export function loadLocalSplitSheetDocuments(profile?: UserProfile): StoredSplitSheetDocument[] {
+export function loadLocalSplitSheetDocuments(profile?: UserProfile, ownerKey?: string): StoredSplitSheetDocument[] {
+  if (ownerKey) {
+    return readOwnedLocalDocuments(ownerKey).filter((document) => documentVisibleToProfile(document, profile));
+  }
+
   const storage = ensureBrowserStorage();
   if (!storage) return [];
 
@@ -77,20 +120,25 @@ export function loadLocalSplitSheetDocuments(profile?: UserProfile): StoredSplit
   }
 }
 
-export function saveLocalSplitSheetDocuments(documents: StoredSplitSheetDocument[]) {
+export function saveLocalSplitSheetDocuments(documents: StoredSplitSheetDocument[], ownerKey?: string) {
+  if (ownerKey) {
+    writeOwnedLocalDocuments(ownerKey, documents);
+    return;
+  }
+
   const storage = ensureBrowserStorage();
   if (!storage) return;
 
   storage.setItem(LOCAL_DOCUMENTS_KEY, JSON.stringify(documents));
 }
 
-function upsertLocalDocument(document: StoredSplitSheetDocument) {
-  const current = loadLocalSplitSheetDocuments();
+function upsertLocalDocument(document: StoredSplitSheetDocument, ownerKey?: string) {
+  const current = loadLocalSplitSheetDocuments(undefined, ownerKey);
   const next = current.some((item) => item.id === document.id)
     ? current.map((item) => (item.id === document.id ? document : item))
     : [document, ...current];
 
-  saveLocalSplitSheetDocuments(next);
+  saveLocalSplitSheetDocuments(next, ownerKey);
 }
 
 function dedupeDocuments(documents: StoredSplitSheetDocument[]) {
@@ -421,27 +469,31 @@ export async function loadSplitSheetDocuments(profile?: UserProfile): Promise<Sp
 
   if (!isSupabaseConfigured) return localDocuments;
 
+  let scopedLocalDocuments: SplitSheetSaveResult[] = [];
+  let authenticatedUserLoaded = false;
+
   try {
-    await getActiveUserId();
+    const userId = await getActiveUserId();
+    authenticatedUserLoaded = true;
+    const ownerKey = splitSheetLocalStorageOwnerForAuthUser(userId);
+    scopedLocalDocuments = loadLocalSplitSheetDocuments(profile, ownerKey).map((document) => ({ document, persisted: false }));
     const { data, error } = await supabase.rpc("load_my_split_sheets");
     if (error) throw new Error(error.message);
 
     const remoteDocuments = ((data ?? []) as SplitSheetRpcRow[])
       .map(rpcRowToDocument)
       .filter((document): document is StoredSplitSheetDocument => Boolean(document));
-    const mergedDocuments = dedupeDocuments([
-      ...remoteDocuments,
-      ...localDocuments.map((result) => result.document),
-    ]);
-    const remoteIds = new Set(remoteDocuments.map((document) => document.id));
 
-    return mergedDocuments.map((document) => ({
+    saveLocalSplitSheetDocuments(remoteDocuments, ownerKey);
+    saveLocalSplitSheetDocuments([]);
+
+    return dedupeDocuments(remoteDocuments).map((document) => ({
       document,
-      persisted: remoteIds.has(document.id),
+      persisted: true,
     }));
   } catch (error) {
     console.warn("SPLIT could not load split sheets from Supabase.", error);
-    return localDocuments;
+    return authenticatedUserLoaded ? scopedLocalDocuments : localDocuments;
   }
 }
 
@@ -456,14 +508,15 @@ export async function saveSplitSheetDocument(
     throw new Error(splitValidation.errors.join(" "));
   }
 
-  upsertLocalDocument(document);
-
   if (!isSupabaseConfigured) {
+    upsertLocalDocument(document);
     return { document, persisted: false };
   }
 
   try {
     const userId = await getActiveUserId();
+    const ownerKey = splitSheetLocalStorageOwnerForAuthUser(userId);
+    upsertLocalDocument(document, ownerKey);
     const row = documentToSplitSheetRow(document, userId);
 
     const { data, error } = await supabase
@@ -507,13 +560,16 @@ export async function saveSplitSheetParticipantAction(
     throw new Error(splitValidation.errors.join(" "));
   }
 
-  upsertLocalDocument(document);
-
   if (!isSupabaseConfigured || !context.action || context.action === "creator_update") {
+    upsertLocalDocument(document);
     return { document, persisted: false };
   }
 
   try {
+    const userId = await getActiveUserId();
+    const ownerKey = splitSheetLocalStorageOwnerForAuthUser(userId);
+    upsertLocalDocument(document, ownerKey);
+
     const { data, error } = await supabase.rpc("apply_split_sheet_participant_update", {
       p_split_sheet_id: document.id,
       p_document_payload: document as unknown as Json,
@@ -526,7 +582,7 @@ export async function saveSplitSheetParticipantAction(
     if (error) throw new Error(error.message);
 
     const persistedDocument = isStoredSplitSheetDocument(data) ? data : document;
-    upsertLocalDocument(persistedDocument);
+    upsertLocalDocument(persistedDocument, ownerKey);
 
     return {
       document: persistedDocument,

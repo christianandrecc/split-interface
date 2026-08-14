@@ -3,6 +3,8 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { CREATOR_ROLE_OPTIONS, getPrimaryCreatorRole } from "@/lib/creatorRoles";
+import type { UserProfile } from "@/lib/userProfile";
 import { Bell, FileText, Lock, Save, Settings2 } from "lucide-react";
 
 type AppSettings = {
@@ -21,7 +23,7 @@ type AppSettings = {
 const defaultSettings: AppSettings = {
   defaultSplitMethod: "Custom",
   defaultTerritory: "Worldwide",
-  defaultUserRole: "Songwriter",
+  defaultUserRole: CREATOR_ROLE_OPTIONS[0],
   emailOnSignature: true,
   emailOnComment: true,
   remindUnsignedParties: true,
@@ -31,8 +33,11 @@ const defaultSettings: AppSettings = {
   includeAuditTrail: true,
 };
 
-export default function SettingsPage() {
-  const [settings, setSettings] = useState<AppSettings>(defaultSettings);
+export default function SettingsPage({ userProfile }: { userProfile: UserProfile }) {
+  const [settings, setSettings] = useState<AppSettings>(() => ({
+    ...defaultSettings,
+    defaultUserRole: getPrimaryCreatorRole(userProfile.roleTags),
+  }));
   const [saved, setSaved] = useState(false);
 
   const update = <Key extends keyof AppSettings>(key: Key, value: AppSettings[Key]) => {
@@ -73,7 +78,7 @@ export default function SettingsPage() {
                 label="Default Role"
                 value={settings.defaultUserRole}
                 onValueChange={(value) => update("defaultUserRole", value)}
-                options={["Songwriter", "Composer", "Lyricist", "Topliner", "Beatmaker (Composition)", "Contributor"]}
+                options={CREATOR_ROLE_OPTIONS}
               />
             </div>
           </SettingsSection>

@@ -182,6 +182,54 @@ export type Database = {
         }
         Relationships: []
       }
+      split_notifications: {
+        Row: {
+          action_target: string
+          actor_label: string
+          actor_user_id: string | null
+          body: string
+          created_at: string
+          dedupe_key: string | null
+          event_type: string
+          id: string
+          metadata: Json
+          read_at: string | null
+          recipient_user_id: string
+          split_sheet_id: string | null
+          title: string
+        }
+        Insert: {
+          action_target?: string
+          actor_label?: string
+          actor_user_id?: string | null
+          body: string
+          created_at?: string
+          dedupe_key?: string | null
+          event_type: string
+          id?: string
+          metadata?: Json
+          read_at?: string | null
+          recipient_user_id: string
+          split_sheet_id?: string | null
+          title: string
+        }
+        Update: {
+          action_target?: string
+          actor_label?: string
+          actor_user_id?: string | null
+          body?: string
+          created_at?: string
+          dedupe_key?: string | null
+          event_type?: string
+          id?: string
+          metadata?: Json
+          read_at?: string | null
+          recipient_user_id?: string
+          split_sheet_id?: string | null
+          title?: string
+        }
+        Relationships: []
+      }
       split_sheet_audit_records: {
         Row: {
           action: string
@@ -483,6 +531,25 @@ export type Database = {
         }
         Returns: Json
       }
+      load_my_split_notifications: {
+        Args: {
+          p_limit?: number
+        }
+        Returns: {
+          action_target: string
+          actor_label: string
+          actor_user_id: string | null
+          body: string
+          created_at: string
+          event_type: string
+          id: string
+          metadata: Json
+          read_at: string | null
+          recipient_user_id: string
+          split_sheet_id: string | null
+          title: string
+        }[]
+      }
       load_my_split_sheets: {
         Args: Record<PropertyKey, never>
         Returns: {
@@ -490,6 +557,26 @@ export type Database = {
           id: string
           updated_at: string | null
         }[]
+      }
+      mark_split_notifications_read: {
+        Args: {
+          p_notification_ids?: string[] | null
+          p_split_sheet_id?: string | null
+        }
+        Returns: number
+      }
+      notify_split_sheet_event: {
+        Args: {
+          p_action_target?: string
+          p_actor_label: string
+          p_body: string
+          p_dedupe_prefix?: string | null
+          p_event_type: string
+          p_metadata?: Json
+          p_split_sheet_id: string
+          p_title: string
+        }
+        Returns: number
       }
       resolve_all_pending_split_sheet_collaborators: {
         Args: Record<PropertyKey, never>

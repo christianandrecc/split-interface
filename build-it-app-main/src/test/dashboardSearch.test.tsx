@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import Dashboard from "@/components/Dashboard";
 import { saveLocalSplitSheetDocuments } from "@/lib/splitSheetStorage";
@@ -23,17 +23,19 @@ function makeCollaboratorProfile(): UserProfile {
   };
 }
 
-function openNightSwimFromSearch() {
+async function openNightSwimFromSearch() {
   const searchInput = screen.getByPlaceholderText(/search split sheets or users/i);
   fireEvent.focus(searchInput);
   fireEvent.change(searchInput, {
     target: { value: "night" },
   });
-  fireEvent.mouseDown(screen.getByText("Night Swim").closest("button")!);
+  const searchResults = screen.getByRole("listbox", { name: /search results/i });
+  const result = await within(searchResults).findByText("Night Swim");
+  fireEvent.mouseDown(result.closest("button")!);
 }
 
 describe("dashboard global search", () => {
-  it("finds and opens a split sheet from the top search bar", () => {
+  it("finds and opens a split sheet from the top search bar", async () => {
     const document = makeDocument();
     document.sentAt = document.createdAt;
     saveLocalSplitSheetDocuments([document]);
@@ -49,15 +51,17 @@ describe("dashboard global search", () => {
     const searchInput = screen.getByPlaceholderText(/search split sheets or users/i);
     fireEvent.focus(searchInput);
     fireEvent.change(searchInput, { target: { value: "night" } });
-    expect(screen.getByRole("listbox", { name: /search results/i })).toBeInTheDocument();
-    fireEvent.mouseDown(screen.getByText("Night Swim").closest("button")!);
+    const searchResults = screen.getByRole("listbox", { name: /search results/i });
+    expect(searchResults).toBeInTheDocument();
+    const result = await within(searchResults).findByText("Night Swim");
+    fireEvent.mouseDown(result.closest("button")!);
 
     expect(screen.getAllByRole("heading", { name: "Night Swim" }).length).toBeGreaterThan(0);
     expect(screen.getByText("Current proposal v1")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Open in Messages" })).toBeInTheDocument();
   });
 
-  it("lets a collaborator approve a split when Supabase records point at their party id", () => {
+  it("lets a collaborator approve a split when Supabase records point at their party id", async () => {
     const document = makeDocument();
     document.sentAt = document.createdAt;
     document.splitApprovals[1].collaboratorId = "maya-party";
@@ -71,14 +75,14 @@ describe("dashboard global search", () => {
       />,
     );
 
-    openNightSwimFromSearch();
+    await openNightSwimFromSearch();
     fireEvent.click(screen.getByRole("button", { name: "Open in Messages" }));
 
     expect(screen.getByRole("button", { name: "Accept" })).not.toBeDisabled();
     expect(screen.getByRole("button", { name: "Dispute" })).not.toBeDisabled();
   });
 
-  it("lets a collaborator sign a ready split when Supabase records point at their party id", () => {
+  it("lets a collaborator sign a ready split when Supabase records point at their party id", async () => {
     const document = makeDocument();
     document.sentAt = document.createdAt;
     document.status = "Ready to Sign";
@@ -114,7 +118,7 @@ describe("dashboard global search", () => {
       />,
     );
 
-    openNightSwimFromSearch();
+    await openNightSwimFromSearch();
     fireEvent.click(screen.getByRole("button", { name: "Open in Messages" }));
 
     const signButtons = screen.getAllByRole("button", { name: /^Sign$/ });

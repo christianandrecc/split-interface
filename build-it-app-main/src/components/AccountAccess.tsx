@@ -11,11 +11,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import { supabase } from "@/integrations/supabase/client";
 import { formatNationalPhoneNumber, getPhoneInputMaxLength } from "@/lib/phone";
 import {
@@ -24,8 +19,9 @@ import {
   requestSupabasePasswordReset,
   updateSupabasePassword,
 } from "@/lib/profileStorage";
+import { CREATOR_ROLE_OPTIONS } from "@/lib/creatorRoles";
 import { createEmptyProfile, normalizeUserProfile, normalizeUsername, type UserProfile } from "@/lib/userProfile";
-import { ArrowLeft, ArrowRight, HelpCircle, LogIn, ShieldCheck, UserPlus } from "lucide-react";
+import { ArrowLeft, ArrowRight, HelpCircle, LogIn, MailCheck, ShieldCheck, UserPlus } from "lucide-react";
 
 const TERMS_VERSION = "split-terms-2026-08-12";
 const PRIVACY_VERSION = "split-privacy-2026-08-12";
@@ -50,9 +46,22 @@ const accountPages = [
   },
 ];
 
-const creatorRoleOptions = ["Producer", "Writer", "Artist", "Engineer", "Topliner"];
 const proOptions = ["ASCAP", "BMI", "SESAC", "Other", "Skip PRO Registration"];
 const publishingStatusOptions = ["Self-published", "Signed to publisher", "Co-published"];
+
+const proOptionHelp: Record<string, string> = {
+  ASCAP: "Choose ASCAP if your songwriter or composer account is registered there.",
+  BMI: "Choose BMI if your songwriter or composer account is registered there.",
+  SESAC: "Choose SESAC if your songwriter or composer account is registered there.",
+  Other: "Choose Other if your PRO or music rights society is not listed, then enter the society name.",
+  "Skip PRO Registration": "Choose this if you have not registered with a PRO yet. You can create the account now and add it later.",
+};
+
+const publishingStatusHelp: Record<string, string> = {
+  "Self-published": "You currently control your own publishing. SPLIT will default your publishing share to 100% of your writer share.",
+  "Signed to publisher": "A publisher or administrator controls or manages your publishing. SPLIT will ask for the company, PRO, IPI, contact, and share details.",
+  "Co-published": "You and a publisher both control part of the publishing. Use this when your agreement splits publishing ownership or administration.",
+};
 
 const phoneCountries = [
   { value: "+1", label: "🇺🇸 +1", country: "United States" },
@@ -96,9 +105,14 @@ const phoneCountries = [
 type AccountAccessProps = {
   initialProfile?: UserProfile | null;
   forcePasswordReset?: boolean;
-  onCreateAccount: (profile: UserProfile, password: string) => Promise<void>;
+  onCreateAccount: (profile: UserProfile, password: string) => Promise<AccountCreationResult | void>;
   onSignIn: (emailAddress: string, password: string) => Promise<void>;
   onPasswordResetComplete?: () => void;
+};
+
+type AccountCreationResult = {
+  needsEmailConfirmation?: boolean;
+  emailAddress?: string;
 };
 
 export default function AccountAccess({
@@ -108,7 +122,7 @@ export default function AccountAccess({
   onSignIn,
   onPasswordResetComplete,
 }: AccountAccessProps) {
-  const [mode, setMode] = useState<"create" | "signin" | "forgot" | "reset">(
+  const [mode, setMode] = useState<"create" | "signin" | "forgot" | "reset" | "confirm">(
     forcePasswordReset || hasRecoveryUrl() ? "reset" : "create",
   );
   const [profile, setProfile] = useState<UserProfile>(() =>
@@ -126,6 +140,7 @@ export default function AccountAccess({
   const [accountPage, setAccountPage] = useState(0);
   const [formError, setFormError] = useState("");
   const [formNotice, setFormNotice] = useState("");
+  const [pendingConfirmationEmail, setPendingConfirmationEmail] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   const currentPage = accountPages[accountPage];
@@ -172,7 +187,15 @@ export default function AccountAccess({
 
     try {
       setSubmitting(true);
-      await onCreateAccount(prepareProfileForRegistration(profile), accountPassword);
+      const preparedProfile = prepareProfileForRegistration(profile);
+      const result = await onCreateAccount(preparedProfile, accountPassword);
+
+      if (result?.needsEmailConfirmation) {
+        setPendingConfirmationEmail(result.emailAddress || preparedProfile.emailAddress);
+        setAccountPassword("");
+        setAccountPasswordConfirm("");
+        setMode("confirm");
+      }
     } catch (error) {
       setFormError(error instanceof Error ? error.message : "Could not create the Supabase account.");
     } finally {
@@ -274,36 +297,57 @@ export default function AccountAccess({
 
         <section className="flex items-start justify-center px-4 py-6 md:px-8 lg:items-center lg:py-10">
           <div className="w-full max-w-2xl">
-            <div className="mb-5 grid grid-cols-2 rounded-lg border border-border bg-secondary p-1">
-              <button
-                type="button"
-                onClick={() => {
-                  setMode("create");
-                  setFormError("");
-                  setFormNotice("");
-                }}
-                className={`flex h-10 items-center justify-center gap-2 rounded-md text-sm font-semibold transition-colors ${
-                  mode === "create" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                <UserPlus className="h-4 w-4" />
-                Create Account
-              </button>
-              <button
-                type="button"
-                onClick={() => {
+            {mode !== "confirm" && (
+              <div className="mb-5 grid grid-cols-2 rounded-lg border border-border bg-secondary p-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMode("create");
+                    setFormError("");
+                    setFormNotice("");
+                  }}
+                  className={`flex h-10 items-center justify-center gap-2 rounded-md text-sm font-semibold transition-colors ${
+                    mode === "create" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <UserPlus className="h-4 w-4" />
+                  Create Account
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMode("signin");
+                    setFormError("");
+                    setFormNotice("");
+                  }}
+                  className={`flex h-10 items-center justify-center gap-2 rounded-md text-sm font-semibold transition-colors ${
+                    mode !== "create" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <LogIn className="h-4 w-4" />
+                  Sign In
+                </button>
+              </div>
+            )}
+
+            {mode === "confirm" && (
+              <EmailConfirmationPage
+                emailAddress={pendingConfirmationEmail}
+                onGoToSignIn={() => {
                   setMode("signin");
                   setFormError("");
-                  setFormNotice("");
+                  setFormNotice("Once your email is confirmed, sign in to finish loading your SPLIT account.");
+                  setSignInEmail(pendingConfirmationEmail);
                 }}
-                className={`flex h-10 items-center justify-center gap-2 rounded-md text-sm font-semibold transition-colors ${
-                  mode !== "create" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                <LogIn className="h-4 w-4" />
-                Sign In
-              </button>
-            </div>
+                onUseAnotherEmail={() => {
+                  setMode("create");
+                  setAccountPage(0);
+                  setFormError("");
+                  setFormNotice("");
+                  setPendingConfirmationEmail("");
+                }}
+              />
+            )}
 
             {mode === "create" && (
               <form onSubmit={handleCreateAccount} className="rounded-lg border border-border bg-card p-4 shadow-sm md:p-6">
@@ -522,6 +566,67 @@ export default function AccountAccess({
   );
 }
 
+function EmailConfirmationPage({
+  emailAddress,
+  onGoToSignIn,
+  onUseAnotherEmail,
+}: {
+  emailAddress: string;
+  onGoToSignIn: () => void;
+  onUseAnotherEmail: () => void;
+}) {
+  return (
+    <section className="overflow-hidden rounded-lg border border-primary/15 bg-card shadow-sm">
+      <div className="border-b border-border bg-gradient-to-br from-primary/10 via-card to-secondary/60 px-6 py-8">
+        <div className="flex h-14 w-14 items-center justify-center rounded-lg border border-primary/20 bg-background/70 text-primary shadow-sm backdrop-blur">
+          <MailCheck className="h-7 w-7" />
+        </div>
+        <p className="mt-6 text-xs font-semibold uppercase tracking-[0.18em] text-primary">
+          Email confirmation sent
+        </p>
+        <h2 className="mt-3 max-w-lg text-3xl font-bold tracking-tight">
+          Check your inbox to activate your SPLIT account.
+        </h2>
+        <p className="mt-3 max-w-xl text-sm leading-6 text-muted-foreground">
+          We sent a secure confirmation link to{" "}
+          {emailAddress ? <span className="font-semibold text-foreground">{emailAddress}</span> : "your email address"}.
+          Open that link, then come back and sign in.
+        </p>
+      </div>
+
+      <div className="px-6 py-6">
+        <div className="grid gap-3 text-sm text-muted-foreground md:grid-cols-3">
+          <div className="rounded-lg border border-border bg-background p-4">
+            <div className="text-xs font-semibold uppercase tracking-[0.14em] text-primary">1</div>
+            <div className="mt-2 font-semibold text-foreground">Open your email</div>
+            <p className="mt-1 text-xs leading-5">Look for the SPLIT confirmation message from Supabase.</p>
+          </div>
+          <div className="rounded-lg border border-border bg-background p-4">
+            <div className="text-xs font-semibold uppercase tracking-[0.14em] text-primary">2</div>
+            <div className="mt-2 font-semibold text-foreground">Confirm the link</div>
+            <p className="mt-1 text-xs leading-5">The link verifies that this inbox belongs to you.</p>
+          </div>
+          <div className="rounded-lg border border-border bg-background p-4">
+            <div className="text-xs font-semibold uppercase tracking-[0.14em] text-primary">3</div>
+            <div className="mt-2 font-semibold text-foreground">Sign in</div>
+            <p className="mt-1 text-xs leading-5">Return here and use the password you just created.</p>
+          </div>
+        </div>
+
+        <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+          <Button type="button" className="h-11 flex-1" onClick={onGoToSignIn}>
+            Go to Sign In
+            <ArrowRight className="h-4 w-4" />
+          </Button>
+          <Button type="button" variant="outline" className="h-11 flex-1" onClick={onUseAnotherEmail}>
+            Use Another Email
+          </Button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function PersonalInformationPage({
   profile,
   updateProfile,
@@ -577,7 +682,7 @@ function PersonalInformationPage({
         />
       </Field>
 
-      <Field label="Artist Name" htmlFor="artistName" help="Optional public artist, producer, or songwriter name. Use the name collaborators know you by.">
+      <Field label="Artist Name" htmlFor="artistName" help="Your professionally known as name: the name you use for music releases, credits, profiles, and collaborations. If you release under your legal name, you can repeat it here or leave it blank.">
         <Input
           id="artistName"
           value={profile.pkaNames ?? ""}
@@ -647,7 +752,7 @@ function ProfessionalInformationPage({
     <div className="space-y-5">
       <Field label="Roles" htmlFor="roleTags" required help="Select the roles that describe how people should credit you on SPLIT. These show on your creator profile.">
         <div id="roleTags" className="flex flex-wrap gap-2">
-          {creatorRoleOptions.map((role) => {
+          {CREATOR_ROLE_OPTIONS.map((role) => {
             const active = selectedRoles.includes(role);
 
             return (
@@ -674,7 +779,7 @@ function ProfessionalInformationPage({
       </Field>
 
       <div className="grid gap-4 md:grid-cols-2">
-        <Field label="PRO Affiliation" htmlFor="proAffiliation" help="A PRO collects public performance royalties. You can find this on your ASCAP, BMI, SESAC, or society account. Choose Skip if you have not registered yet.">
+        <Field label="PRO Affiliation" htmlFor="proAffiliation" help="PRO means Performance Rights Organization. It is the society that collects public performance royalties for songwriters and composers, like ASCAP, BMI, SESAC, PRS, or your local society. Choose Skip if you have not registered yet.">
           <Select
             value={profile.proAffiliation}
             onValueChange={(value) => {
@@ -690,15 +795,13 @@ function ProfessionalInformationPage({
             </SelectTrigger>
             <SelectContent>
               {proOptions.map((pro) => (
-                <SelectItem key={pro} value={pro}>
-                  {pro}
-                </SelectItem>
+                <SelectItemWithHelp key={pro} value={pro} label={pro} help={proOptionHelp[pro]} />
               ))}
             </SelectContent>
           </Select>
         </Field>
 
-        <Field label="IPI / CAE Number" htmlFor="ipiNumber" help="This is your songwriter identifier inside your PRO account. Leave it blank or skip PRO registration if you do not have one yet.">
+        <Field label="IPI / CAE Number" htmlFor="ipiNumber" help="Your IPI or CAE is the unique songwriter/composer ID attached to your PRO account. It is used for royalty registration and is different from a login, member number, or tax ID. Leave it blank if you do not have one yet.">
           <Input
             id="ipiNumber"
             value={profile.ipiNumber ?? ""}
@@ -729,16 +832,14 @@ function ProfessionalInformationPage({
       )}
 
       <div className="rounded-xl border border-border bg-secondary/30 p-4">
-        <Field label="Publishing Information" htmlFor="publishingStatus" help="Publishing details tell SPLIT whether you control your own publishing or work through a publisher. You can find this in your publishing/admin agreement.">
+        <Field label="Publishing Information" htmlFor="publishingStatus" help="Publishing tells SPLIT who controls the publishing side of your writer share. This can be you, a publisher, or a co-publishing setup. It helps future split sheets route registration and contract details correctly.">
           <Select value={profile.publishingStatus ?? ""} onValueChange={(value) => updateProfile("publishingStatus", value)}>
             <SelectTrigger id="publishingStatus" className="h-12 text-base md:text-sm">
               <SelectValue placeholder="Select publishing setup" />
             </SelectTrigger>
             <SelectContent>
               {publishingStatusOptions.map((option) => (
-                <SelectItem key={option} value={option}>
-                  {option}
-                </SelectItem>
+                <SelectItemWithHelp key={option} value={option} label={option} help={publishingStatusHelp[option]} />
               ))}
             </SelectContent>
           </Select>
@@ -1039,29 +1140,47 @@ function Field({
           {label}
           {required ? <span className="text-primary"> *</span> : null}
         </Label>
-        {help && <HelpTip content={help} />}
+        {help && <HelpTip label={label} content={help} />}
       </div>
       {children}
     </div>
   );
 }
 
-function HelpTip({ content }: { content: string }) {
+function SelectItemWithHelp({ value, label, help }: { value: string; label: string; help: string }) {
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <button
-          type="button"
-          aria-label="Help"
-          className="inline-flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+    <SelectItem value={value} title={help} aria-label={`${label}. ${help}`} className="pr-3">
+      <span className="inline-flex items-center gap-2">
+        <span>{label}</span>
+        <span
+          aria-hidden="true"
+          className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-border bg-background/80 text-muted-foreground"
         >
-          <HelpCircle className="h-3.5 w-3.5" />
-        </button>
-      </TooltipTrigger>
-      <TooltipContent className="max-w-xs text-xs leading-5">
+          <HelpCircle className="h-3 w-3" />
+        </span>
+      </span>
+    </SelectItem>
+  );
+}
+
+function HelpTip({ label, content }: { label: string; content: string }) {
+  return (
+    <span className="group/help relative inline-flex">
+      <button
+        type="button"
+        aria-label={`${label} help`}
+        data-help={content}
+        className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-transparent text-muted-foreground transition-colors hover:border-border hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        <HelpCircle className="h-3.5 w-3.5" />
+      </button>
+      <span
+        role="tooltip"
+        className="pointer-events-none absolute left-1/2 top-full z-[100] mt-2 hidden w-[min(18rem,calc(100vw-2rem))] -translate-x-1/2 rounded-lg border border-border bg-popover px-3 py-2 text-xs leading-5 text-popover-foreground shadow-lg group-hover/help:block group-focus-within/help:block"
+      >
         {content}
-      </TooltipContent>
-    </Tooltip>
+      </span>
+    </span>
   );
 }
 
