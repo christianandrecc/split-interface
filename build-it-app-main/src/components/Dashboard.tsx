@@ -468,7 +468,11 @@ export default function Dashboard({
   };
 
   const persistGeneratedDocument = async (document: StoredSplitSheetDocument, mode: SplitSheetSaveMode) => {
-    applyGeneratedDocument(document);
+    const requiresRemoteConfirmation = mode === "send" || mode === "contract_delivery";
+    if (!requiresRemoteConfirmation) {
+      applyGeneratedDocument(document);
+    }
+
     const result = await saveSplitSheetDocument(document, mode, userProfile);
     applyGeneratedDocument(result.document);
     setSplitSheetsPersisted(result.persisted);
@@ -477,10 +481,13 @@ export default function Dashboard({
   };
 
   const updateGeneratedDocument = async (document: StoredSplitSheetDocument, context: SplitSheetUpdateContext = {}) => {
-    applyGeneratedDocument(document);
-    setSelectedAgreement(documentToAgreement(document));
+    const requiresRemoteConfirmation = Boolean(context.action && context.action !== "creator_update");
+    if (!requiresRemoteConfirmation) {
+      applyGeneratedDocument(document);
+      setSelectedAgreement(documentToAgreement(document));
+    }
 
-    const persisted = context.action && context.action !== "creator_update"
+    const persisted = requiresRemoteConfirmation
       ? await saveSplitSheetParticipantAction(document, context, userProfile)
       : await saveSplitSheetDocument(document, "update", userProfile);
 

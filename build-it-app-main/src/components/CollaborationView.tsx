@@ -141,9 +141,15 @@ export default function CollaborationView({ documents, userProfile, initialDealI
   }, [deals, initialDealId]);
 
   const updateDocument = async (document: StoredSplitSheetDocument, context: PersistContext) => {
-    await onUpdateDocument(document, context);
-    if (context.successMessage) {
-      toast.success(context.successMessage);
+    try {
+      await onUpdateDocument(document, context);
+      if (context.successMessage) {
+        toast.success(context.successMessage);
+      }
+    } catch (error) {
+      toast.error("Messages could not sync this update", {
+        description: error instanceof Error ? error.message : "Try again after checking your connection.",
+      });
     }
   };
 

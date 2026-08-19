@@ -156,6 +156,10 @@ function dedupeDocuments(documents: StoredSplitSheetDocument[]) {
   );
 }
 
+function explainPersistenceError(error: unknown) {
+  return error instanceof Error ? error.message : "Supabase did not save this split sheet.";
+}
+
 function requireSupabaseConfig() {
   if (!isSupabaseConfigured) {
     throw new Error("Supabase is not configured for split-sheet storage.");
@@ -483,13 +487,18 @@ export async function loadSplitSheetDocuments(profile?: UserProfile): Promise<Sp
     const remoteDocuments = ((data ?? []) as SplitSheetRpcRow[])
       .map(rpcRowToDocument)
       .filter((document): document is StoredSplitSheetDocument => Boolean(document));
+    const remoteDocumentIds = new Set(remoteDocuments.map((document) => document.id));
+    const scopedLocalOnlyDocuments = scopedLocalDocuments
+      .map((result) => result.document)
+      .filter((document) => !remoteDocumentIds.has(document.id));
+    const mergedDocuments = dedupeDocuments([...remoteDocuments, ...scopedLocalOnlyDocuments]);
 
-    saveLocalSplitSheetDocuments(remoteDocuments, ownerKey);
+    saveLocalSplitSheetDocuments(mergedDocuments, ownerKey);
     saveLocalSplitSheetDocuments([]);
 
-    return dedupeDocuments(remoteDocuments).map((document) => ({
+    return mergedDocuments.map((document) => ({
       document,
-      persisted: true,
+      persisted: remoteDocumentIds.has(document.id),
     }));
   } catch (error) {
     console.warn("SPLIT could not load split sheets from Supabase.", error);
@@ -542,6 +551,10 @@ export async function saveSplitSheetDocument(
     };
   } catch (error) {
     console.warn("SPLIT could not save this split sheet to Supabase.", error);
+    if (mode === "send" || mode === "contract_delivery") {
+      throw new Error(`Could not send this split sheet through Supabase. ${explainPersistenceError(error)}`);
+    }
+
     return {
       document,
       persisted: false,
@@ -590,10 +603,7 @@ export async function saveSplitSheetParticipantAction(
     };
   } catch (error) {
     console.warn("SPLIT could not save this participant action to Supabase.", error);
-    return {
-      document,
-      persisted: false,
-    };
+    throw new Error(`Could not save this Messages update through Supabase. ${explainPersistenceError(error)}`);
   }
 }
 
