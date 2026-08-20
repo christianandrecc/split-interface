@@ -14,6 +14,15 @@ function makeProfile(): UserProfile {
   };
 }
 
+function makeOtherProfile(): UserProfile {
+  return {
+    ...createEmptyProfile(),
+    username: "freshuser",
+    displayName: "Fresh User",
+    emailAddress: "fresh@example.com",
+  };
+}
+
 describe("dashboard quick access", () => {
   beforeEach(() => {
     window.localStorage.clear();
@@ -59,5 +68,34 @@ describe("dashboard quick access", () => {
 
     expect(screen.getAllByRole("heading", { name: "Night Swim" }).length).toBeGreaterThan(0);
     expect(screen.getByText("Current proposal v1")).toBeInTheDocument();
+  });
+
+  it("clears stale quick-access split sheets when the active account changes", async () => {
+    const document = makeDocument();
+    document.sentAt = document.createdAt;
+    saveLocalSplitSheetDocuments([document]);
+
+    const { rerender } = render(
+      <Dashboard
+        userProfile={makeProfile()}
+        activeAuthUserId="old-auth-user"
+        onUpdateProfile={async () => undefined}
+        onOpenAccountCreation={vi.fn()}
+      />,
+    );
+
+    expect(await screen.findByText("Continue negotiation")).toBeInTheDocument();
+
+    rerender(
+      <Dashboard
+        userProfile={makeOtherProfile()}
+        activeAuthUserId="fresh-auth-user"
+        onUpdateProfile={async () => undefined}
+        onOpenAccountCreation={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByText("Continue negotiation")).not.toBeInTheDocument();
+    expect(screen.queryByText("Night Swim")).not.toBeInTheDocument();
   });
 });

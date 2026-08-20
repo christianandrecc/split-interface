@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import splitLogo from "@/assets/split-logo.png";
 import UserProfileSheet from "@/components/UserProfileSheet";
 import ProfilePage from "@/components/ProfilePage";
@@ -319,6 +319,11 @@ export default function Dashboard({
   const [loadingNotifications, setLoadingNotifications] = useState(true);
   const isMobile = useIsMobile();
   const localStorageOwner = splitSheetLocalStorageOwnerForAuthUser(activeAuthUserId);
+  const activeAccountKey = localStorageOwner
+    ?? `profile:${userProfile.emailAddress || userProfile.username || "anonymous"}`;
+  const notificationAccountKey = activeAuthUserId ?? activeAccountKey;
+  const lastDocumentAccountKeyRef = useRef(activeAccountKey);
+  const lastNotificationAccountKeyRef = useRef(notificationAccountKey);
 
   const agreements = useMemo(() => generatedDocuments.map(documentToAgreement), [generatedDocuments]);
   const splitSheetSearchResults = useMemo(
@@ -349,6 +354,15 @@ export default function Dashboard({
 
   useEffect(() => {
     let active = true;
+
+    if (lastDocumentAccountKeyRef.current !== activeAccountKey) {
+      lastDocumentAccountKeyRef.current = activeAccountKey;
+      setGeneratedDocuments([]);
+      setSelectedAgreement(null);
+      setSelectedMessageDealId(undefined);
+      setSplitSheetsPersisted(false);
+      setLoadingSplitSheets(true);
+    }
 
     async function loadDocuments(showLoading = true) {
       if (showLoading) setLoadingSplitSheets(true);
@@ -382,11 +396,16 @@ export default function Dashboard({
       window.removeEventListener("focus", refreshOnFocus);
       document.removeEventListener("visibilitychange", refreshOnVisible);
     };
-  }, [userProfile, localStorageOwner]);
+  }, [activeAccountKey, userProfile, localStorageOwner]);
 
   useEffect(() => {
     let active = true;
     let unsubscribe = () => undefined;
+
+    if (lastNotificationAccountKeyRef.current !== notificationAccountKey) {
+      lastNotificationAccountKeyRef.current = notificationAccountKey;
+      setNotifications([]);
+    }
 
     setLoadingNotifications(true);
     void loadSplitNotifications(50).then((nextNotifications) => {
@@ -426,7 +445,7 @@ export default function Dashboard({
       window.removeEventListener("focus", refreshOnFocus);
       document.removeEventListener("visibilitychange", refreshOnVisible);
     };
-  }, [activeAuthUserId, refreshNotifications, upsertNotification]);
+  }, [activeAuthUserId, notificationAccountKey, refreshNotifications, upsertNotification]);
 
   useEffect(() => {
     const query = searchQuery.trim();

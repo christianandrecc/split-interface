@@ -11,49 +11,82 @@ import { normalizeUserProfile, type UserProfile } from "@/lib/userProfile";
 import {
   createSupabaseAccountProfile,
   loadProfileSessionForActiveSession,
-  normalizeEmailAddress,
   saveSupabaseProfile,
   signInAndLoadSupabaseProfile,
 } from "@/lib/profileStorage";
 import { isSupabaseConfigured } from "@/integrations/supabase/client";
+import { profileSessionMatchesSignIn, type CachedProfileSession } from "@/lib/profileSessionCache";
 import { toast } from "sonner";
 
 const queryClient = new QueryClient();
 const PROFILE_STORAGE_KEY = "split.userProfile.v6";
 const PROFILE_SESSION_STORAGE_KEY = "split.userProfileSession.v1";
 
-type CachedProfileSession = {
-  userId: string;
-  profile: UserProfile;
-};
-
 function readLocalProfile() {
-  const savedProfile = window.localStorage.getItem(PROFILE_STORAGE_KEY);
-  if (!savedProfile) return null;
-
   try {
+    const savedProfile = window.localStorage.getItem(PROFILE_STORAGE_KEY);
+    if (!savedProfile) return null;
+
     const normalizedProfile = normalizeUserProfile(JSON.parse(savedProfile));
     window.localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(normalizedProfile));
     return normalizedProfile;
   } catch {
-    window.localStorage.removeItem(PROFILE_STORAGE_KEY);
+    try {
+      window.localStorage.removeItem(PROFILE_STORAGE_KEY);
+    } catch {
+      // Ignore disabled storage.
+    }
     return null;
   }
 }
 
 function writeLocalProfile(profile: UserProfile) {
-  window.localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(profile));
+  try {
+    window.localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(profile));
+  } catch {
+    // Ignore disabled storage.
+  }
+}
+
+function readProfileSession() {
+  try {
+    const savedSession = window.localStorage.getItem(PROFILE_SESSION_STORAGE_KEY);
+    if (!savedSession) return null;
+
+    const parsed = JSON.parse(savedSession) as Partial<CachedProfileSession>;
+    if (!parsed.userId || !parsed.profile) return null;
+
+    return {
+      userId: parsed.userId,
+      profile: normalizeUserProfile(parsed.profile),
+    };
+  } catch {
+    try {
+      window.localStorage.removeItem(PROFILE_SESSION_STORAGE_KEY);
+    } catch {
+      // Ignore disabled storage.
+    }
+    return null;
+  }
 }
 
 function writeProfileSession(userId: string, profile: UserProfile) {
   const cachedSession: CachedProfileSession = { userId, profile };
-  window.localStorage.setItem(PROFILE_SESSION_STORAGE_KEY, JSON.stringify(cachedSession));
+  try {
+    window.localStorage.setItem(PROFILE_SESSION_STORAGE_KEY, JSON.stringify(cachedSession));
+  } catch {
+    // Ignore disabled storage.
+  }
   writeLocalProfile(profile);
 }
 
 function clearProfileCache() {
-  window.localStorage.removeItem(PROFILE_STORAGE_KEY);
-  window.localStorage.removeItem(PROFILE_SESSION_STORAGE_KEY);
+  try {
+    window.localStorage.removeItem(PROFILE_STORAGE_KEY);
+    window.localStorage.removeItem(PROFILE_SESSION_STORAGE_KEY);
+  } catch {
+    // Ignore disabled storage.
+  }
 }
 
 function hasRicherProfileData(profile: UserProfile | null) {
@@ -187,11 +220,11 @@ const App = () => {
   };
 
   const handleSignIn = async (emailAddress: string, password: string) => {
-    const pendingProfile =
-      userProfile && normalizeEmailAddress(userProfile.emailAddress) === normalizeEmailAddress(emailAddress)
-        ? userProfile
-        : null;
+    const cachedSession = readProfileSession();
     const result = await signInAndLoadSupabaseProfile(emailAddress, password);
+    const pendingProfile = profileSessionMatchesSignIn(cachedSession, result.userId, emailAddress)
+      ? cachedSession.profile
+      : null;
     const profile =
       hasRicherProfileData(pendingProfile)
         ? await saveSupabaseProfile({
@@ -203,6 +236,9 @@ const App = () => {
           })
         : result.profile;
 
+    if (cachedSession?.userId && cachedSession.userId !== result.userId) {
+      clearProfileCache();
+    }
     setActiveAuthUserId(result.userId ?? null);
     persistProfile(profile, result.userId ?? null);
     setShowAccountCreation(false);

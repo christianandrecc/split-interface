@@ -1,6 +1,7 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import App from "@/App";
+import { profileSessionMatchesSignIn } from "@/lib/profileSessionCache";
 import { createEmptyProfile, type UserProfile } from "@/lib/userProfile";
 
 const mocks = vi.hoisted(() => ({
@@ -103,5 +104,20 @@ describe("App profile session loading", () => {
     expect(screen.queryByText("Old Account")).not.toBeInTheDocument();
     expect(window.localStorage.getItem("split.userProfile.v6")).toBeNull();
     expect(window.localStorage.getItem("split.userProfileSession.v1")).toBeNull();
+  });
+
+  it("only reuses cached sign-in profile data for the same Supabase user id", () => {
+    const cachedSession = {
+      userId: "old-auth-user",
+      profile: makeProfile({
+        displayName: "Old Chori",
+        emailAddress: "chori@example.com",
+        phoneNumber: "216-555-1212",
+      }),
+    };
+
+    expect(profileSessionMatchesSignIn(cachedSession, "old-auth-user", "chori@example.com")).toBe(true);
+    expect(profileSessionMatchesSignIn(cachedSession, "new-auth-user", "chori@example.com")).toBe(false);
+    expect(profileSessionMatchesSignIn(cachedSession, "old-auth-user", "other@example.com")).toBe(false);
   });
 });
