@@ -5,7 +5,7 @@ import {
   isSplitSheetChatAuditAction,
   readSplitSheetChatMessages,
 } from "@/lib/splitSheetMessages";
-import { makeDocument } from "@/test/splitSheetWorkflow.test";
+import { makeDocument } from "@/test/fixtures/splitSheet";
 
 describe("split sheet message storage", () => {
   it("stores and reads Messages chat entries through one audit-safe boundary", () => {

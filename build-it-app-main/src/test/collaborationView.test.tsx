@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import CollaborationView from "@/components/CollaborationView";
 import { createEmptyProfile, type UserProfile } from "@/lib/userProfile";
-import { makeDocument } from "@/test/splitSheetWorkflow.test";
+import { makeDocument } from "@/test/fixtures/splitSheet";
 
 function makeCollaboratorProfile(): UserProfile {
   return {

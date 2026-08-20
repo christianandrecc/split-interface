@@ -5,7 +5,7 @@ import {
   getSplitSheetAcceptedParticipantIds,
   normalizeSplitSheetParticipantId,
 } from "@/lib/splitSheetParticipantState";
-import { makeDocument } from "@/test/splitSheetWorkflow.test";
+import { makeDocument } from "@/test/fixtures/splitSheet";
 
 describe("split sheet participant state", () => {
   it("adds the creator approval back when an initial creator proposal is missing it", () => {

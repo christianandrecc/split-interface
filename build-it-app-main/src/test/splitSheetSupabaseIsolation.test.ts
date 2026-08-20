@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createEmptyProfile } from "@/lib/userProfile";
-import { makeDocument } from "@/test/splitSheetWorkflow.test";
+import { makeDocument } from "@/test/fixtures/splitSheet";
 
 describe("split sheet Supabase isolation", () => {
   beforeEach(() => {

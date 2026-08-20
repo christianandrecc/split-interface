@@ -5,7 +5,7 @@ import {
   splitSheetParticipantDisplayName,
   splitSheetPartyDisplayName,
 } from "@/lib/splitSheetDisplay";
-import { makeDocument } from "@/test/splitSheetWorkflow.test";
+import { makeDocument } from "@/test/fixtures/splitSheet";
 
 describe("split sheet display helpers", () => {
   it("uses accepted profile snapshots instead of invited-writer placeholders", () => {

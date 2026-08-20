@@ -6,7 +6,7 @@ import {
   loadLocalSplitSheetDocuments,
   saveLocalSplitSheetDocuments,
 } from "@/lib/splitSheetStorage";
-import { makeDocument } from "@/test/splitSheetWorkflow.test";
+import { makeDocument } from "@/test/fixtures/splitSheet";
 import { createEmptyProfile } from "@/lib/userProfile";
 
 describe("split sheet profile matching", () => {

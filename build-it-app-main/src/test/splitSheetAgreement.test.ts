@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { documentToAgreement } from "@/lib/splitSheetAgreement";
-import { makeDocument } from "@/test/splitSheetWorkflow.test";
+import { makeDocument } from "@/test/fixtures/splitSheet";
 
 describe("split sheet agreement mapping", () => {
   it("normalizes a stored split sheet into the shared dashboard agreement shape", () => {

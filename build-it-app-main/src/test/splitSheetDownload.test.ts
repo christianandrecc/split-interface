@@ -3,7 +3,7 @@ import {
   buildSplitSheetDownloadFilename,
   buildSplitSheetRecordPdf,
 } from "@/lib/splitSheetDownload";
-import { makeDocument } from "@/test/splitSheetWorkflow.test";
+import { makeDocument } from "@/test/fixtures/splitSheet";
 
 async function blobText(blob: Blob) {
   return await new Promise<string>((resolve, reject) => {
