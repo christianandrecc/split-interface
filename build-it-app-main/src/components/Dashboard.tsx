@@ -19,11 +19,12 @@ import {
   type SplitSheetSearchResult,
 } from "@/lib/globalSearch";
 import { documentToAgreement, type Agreement } from "@/lib/splitSheetAgreement";
+import { getSplitWorkflowLabel, VERIFIED_SPLIT_STATUSES } from "@/lib/splitWorkflow";
 import {
-  getSplitWorkflowLabel,
-  PENDING_SPLIT_STATUSES,
-  VERIFIED_SPLIT_STATUSES,
-} from "@/lib/splitWorkflow";
+  buildDashboardSplitSummary,
+  type DashboardQuickAccessKind,
+  type DashboardQuickAccessMoment,
+} from "@/lib/dashboardSplitSummary";
 import {
   loadSplitSheetDocuments,
   saveLocalSplitSheetDocuments,
@@ -117,6 +118,7 @@ export default function Dashboard({
   const lastNotificationAccountKeyRef = useRef(notificationAccountKey);
 
   const agreements = useMemo(() => generatedDocuments.map(documentToAgreement), [generatedDocuments]);
+  const dashboardSummary = useMemo(() => buildDashboardSplitSummary(agreements), [agreements]);
   const splitSheetSearchResults = useMemo(
     () => searchSplitSheets(agreements, searchQuery, 5),
     [agreements, searchQuery],
@@ -312,9 +314,6 @@ export default function Dashboard({
     return persisted.document;
   };
 
-  const executed = agreements.filter((a) => VERIFIED_SPLIT_STATUSES.includes(a.status)).length;
-  const pending = agreements.filter((a) => PENDING_SPLIT_STATUSES.includes(a.status)).length;
-  const drafts = agreements.filter((a) => a.status === "Draft").length;
   const openAgreement = (agreementId: string) => {
     const agreement = agreements.find((item) => item.id === agreementId);
 
@@ -543,10 +542,10 @@ export default function Dashboard({
         <main className="flex-1 overflow-hidden safe-bottom">
           {activeView === "dashboard" && (
             <DashboardHome
-              agreements={agreements}
-              executed={executed}
-              pending={pending}
-              drafts={drafts}
+              executed={dashboardSummary.executed}
+              pending={dashboardSummary.pending}
+              drafts={dashboardSummary.drafts}
+              quickAccess={dashboardSummary.quickAccess}
               loading={loadingSplitSheets}
               persisted={splitSheetsPersisted}
               onOpenBucket={(filter) => {
@@ -755,10 +754,10 @@ function SearchSection({ title, children }: { title: string; children: React.Rea
 }
 
 function DashboardHome({
-  agreements,
   executed,
   pending,
   drafts,
+  quickAccess,
   loading,
   persisted,
   onOpenBucket,
@@ -767,10 +766,10 @@ function DashboardHome({
   onOpenMessages,
   isMobile,
 }: {
-  agreements: Agreement[];
   executed: number;
   pending: number;
   drafts: number;
+  quickAccess: ReturnType<typeof buildDashboardSplitSummary>["quickAccess"];
   loading: boolean;
   persisted: boolean;
   onOpenBucket: (filter: FilterStatus) => void;
@@ -779,8 +778,6 @@ function DashboardHome({
   onOpenMessages: (agreementId: string) => void;
   isMobile: boolean;
 }) {
-  const quickAccess = useMemo(() => buildQuickAccessMoments(agreements), [agreements]);
-
   return (
     <div className="h-full overflow-y-auto">
       <div className={`max-w-5xl mx-auto ${isMobile ? "px-4 py-5" : "px-8 py-8"}`}>
@@ -847,127 +844,13 @@ function DashboardHome({
   );
 }
 
-type QuickAccessMoment = {
-  id: string;
-  label: string;
-  title: string;
-  detail: string;
-  meta: string;
-  agreement: Agreement;
-  icon: typeof MessageCircle;
-  tone: string;
-  action: "messages" | "agreement";
-};
-
-function buildQuickAccessMoments(agreements: Agreement[]) {
-  const recent = [...agreements].sort((a, b) => agreementTimeValue(b) - agreementTimeValue(a));
-  const continueAgreement =
-    recent.find((agreement) => ["Pending Split Approval", "Pending Collaborator Acceptance", "Revision Requested", "Amended", "Disputed"].includes(agreement.status)) ??
-    recent.find((agreement) => PENDING_SPLIT_STATUSES.includes(agreement.status)) ??
-    recent[0];
-
-  const primary = continueAgreement
-    ? {
-        id: `${continueAgreement.id}-continue`,
-        label: continueAgreement.status === "Disputed" ? "Dispute thread" : "Continue negotiation",
-        title: continueAgreement.title,
-        detail: quickAccessDetail(continueAgreement),
-        meta: formatAgreementActivityTime(continueAgreement),
-        agreement: continueAgreement,
-        icon: continueAgreement.status === "Disputed" ? AlertTriangle : MessageCircle,
-        tone: continueAgreement.status === "Disputed" ? "bg-destructive/10 text-destructive" : "bg-primary/10 text-primary",
-        action: "messages" as const,
-      }
-    : null;
-
-  const secondary: QuickAccessMoment[] = [];
-  const signingAgreement = recent.find((agreement) => ["Ready to Sign", "Pending Signatures"].includes(agreement.status));
-  const disputeAgreement = recent.find((agreement) => ["Disputed", "Revision Requested", "Amended"].includes(agreement.status));
-  const signedAgreement = recent.find((agreement) => VERIFIED_SPLIT_STATUSES.includes(agreement.status));
-  const draftAgreement = recent.find((agreement) => agreement.status === "Draft");
-
-  if (signingAgreement) {
-    secondary.push({
-      id: `${signingAgreement.id}-signature`,
-      label: "Ready for signature",
-      title: signingAgreement.title,
-      detail: "All approvals are in. Finish signatures to lock the record.",
-      meta: formatAgreementActivityTime(signingAgreement),
-      agreement: signingAgreement,
-      icon: PenLine,
-      tone: "bg-primary/10 text-primary",
-      action: "messages",
-    });
-  }
-
-  if (disputeAgreement && disputeAgreement.id !== signingAgreement?.id) {
-    secondary.push({
-      id: `${disputeAgreement.id}-dispute`,
-      label: disputeAgreement.status === "Disputed" ? "Dispute updated" : "Revision requested",
-      title: disputeAgreement.title,
-      detail: "Review the latest notes before anyone signs.",
-      meta: formatAgreementActivityTime(disputeAgreement),
-      agreement: disputeAgreement,
-      icon: AlertTriangle,
-      tone: "bg-destructive/10 text-destructive",
-      action: "messages",
-    });
-  }
-
-  if (signedAgreement && secondary.length < 2) {
-    secondary.push({
-      id: `${signedAgreement.id}-signed`,
-      label: "Recent signing",
-      title: signedAgreement.title,
-      detail: "Signed and stored in your split archive.",
-      meta: formatAgreementActivityTime(signedAgreement),
-      agreement: signedAgreement,
-      icon: CheckCircle2,
-      tone: "bg-[hsl(var(--split-verified)/0.12)] text-[hsl(var(--split-verified))]",
-      action: "agreement",
-    });
-  }
-
-  if (draftAgreement && secondary.length < 2) {
-    secondary.push({
-      id: `${draftAgreement.id}-draft`,
-      label: "Recent draft",
-      title: draftAgreement.title,
-      detail: "Keep building this split sheet before invitations go out.",
-      meta: formatAgreementActivityTime(draftAgreement),
-      agreement: draftAgreement,
-      icon: FileText,
-      tone: "bg-secondary text-muted-foreground",
-      action: "agreement",
-    });
-  }
-
-  const fallbackAgreement = recent.find((agreement) => agreement.id !== primary?.agreement.id && !secondary.some((item) => item.agreement.id === agreement.id));
-
-  if (fallbackAgreement && secondary.length < 2) {
-    secondary.push({
-      id: `${fallbackAgreement.id}-latest`,
-      label: "Latest update",
-      title: fallbackAgreement.title,
-      detail: quickAccessDetail(fallbackAgreement),
-      meta: formatAgreementActivityTime(fallbackAgreement),
-      agreement: fallbackAgreement,
-      icon: FileText,
-      tone: "bg-primary/10 text-primary",
-      action: "agreement",
-    });
-  }
-
-  return { primary, secondary: secondary.slice(0, 2) };
-}
-
 function QuickAccessSection({
   moments,
   onNew,
   onOpenAgreement,
   onOpenMessages,
 }: {
-  moments: ReturnType<typeof buildQuickAccessMoments>;
+  moments: ReturnType<typeof buildDashboardSplitSummary>["quickAccess"];
   onNew: () => void;
   onOpenAgreement: (agreementId: string) => void;
   onOpenMessages: (agreementId: string) => void;
@@ -1029,22 +912,49 @@ function QuickAccessSection({
   );
 }
 
+function quickAccessPresentation(kind: DashboardQuickAccessKind): {
+  icon: LucideIcon;
+  tone: string;
+} {
+  if (kind === "dispute") {
+    return { icon: AlertTriangle, tone: "bg-destructive/10 text-destructive" };
+  }
+
+  if (kind === "signature") {
+    return { icon: PenLine, tone: "bg-primary/10 text-primary" };
+  }
+
+  if (kind === "verified") {
+    return { icon: CheckCircle2, tone: "bg-[hsl(var(--split-verified)/0.12)] text-[hsl(var(--split-verified))]" };
+  }
+
+  if (kind === "draft") {
+    return { icon: FileText, tone: "bg-secondary text-muted-foreground" };
+  }
+
+  if (kind === "latest") {
+    return { icon: FileText, tone: "bg-primary/10 text-primary" };
+  }
+
+  return { icon: MessageCircle, tone: "bg-primary/10 text-primary" };
+}
+
 function PrimaryQuickAccessCard({
   moment,
   onOpenAgreement,
   onOpenMessages,
 }: {
-  moment: QuickAccessMoment;
+  moment: DashboardQuickAccessMoment;
   onOpenAgreement: (agreementId: string) => void;
   onOpenMessages: (agreementId: string) => void;
 }) {
-  const Icon = moment.icon;
+  const { icon: Icon, tone } = quickAccessPresentation(moment.kind);
 
   return (
     <div className="rounded-lg border border-border bg-card p-4 shadow-sm md:p-5">
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-3">
-          <span className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg ${moment.tone}`}>
+          <span className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg ${tone}`}>
             <Icon className="h-4 w-4" />
           </span>
           <div>
@@ -1106,11 +1016,11 @@ function SecondaryQuickAccessCard({
   onOpenAgreement,
   onOpenMessages,
 }: {
-  moment: QuickAccessMoment;
+  moment: DashboardQuickAccessMoment;
   onOpenAgreement: (agreementId: string) => void;
   onOpenMessages: (agreementId: string) => void;
 }) {
-  const Icon = moment.icon;
+  const { icon: Icon, tone } = quickAccessPresentation(moment.kind);
   const openMoment = () => {
     if (moment.action === "messages") {
       onOpenMessages(moment.agreement.id);
@@ -1127,7 +1037,7 @@ function SecondaryQuickAccessCard({
       className="rounded-lg border border-border bg-card p-4 text-left shadow-sm transition-colors hover:border-primary/20 hover:bg-secondary/30"
     >
       <div className="flex items-start justify-between gap-3">
-        <span className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg ${moment.tone}`}>
+        <span className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg ${tone}`}>
           <Icon className="h-4 w-4" />
         </span>
         <ChevronRight className="mt-1 h-4 w-4 flex-shrink-0 text-muted-foreground" />
@@ -1166,42 +1076,6 @@ function QuickPartyPills({ parties }: { parties: string[] }) {
       )}
     </>
   );
-}
-
-function quickAccessDetail(agreement: Agreement) {
-  const collaborator = agreement.parties[1] ?? agreement.parties[0] ?? "Collaborator";
-
-  if (agreement.status === "Disputed") return `${collaborator} raised a dispute. Review the thread before a new split version is signed.`;
-  if (agreement.status === "Revision Requested" || agreement.status === "Amended") return `${collaborator} requested changes. Open the negotiation to compare versions.`;
-  if (agreement.status === "Ready to Sign" || agreement.status === "Pending Signatures") return "All approvals are in. Finish signatures to lock the record.";
-  if (agreement.status === "Pending Collaborator Acceptance") return `${collaborator} still needs to accept the invite before the split can move forward.`;
-  if (agreement.status === "Pending Split Approval") return `${collaborator} has a split proposal waiting for review in Messages.`;
-  if (agreement.status === "Draft") return "Draft saved. Add collaborators when you are ready to send the split sheet.";
-  if (VERIFIED_SPLIT_STATUSES.includes(agreement.status)) return "Signed and stored in your split archive.";
-
-  return "Open this split sheet to review the latest status.";
-}
-
-function agreementTimeValue(agreement: Agreement) {
-  const timestamp = Date.parse(agreement.updated || agreement.created);
-  return Number.isFinite(timestamp) ? timestamp : 0;
-}
-
-function formatAgreementActivityTime(agreement: Agreement) {
-  const timestamp = agreementTimeValue(agreement);
-  if (!timestamp) return "Recently updated";
-
-  const diffMs = Date.now() - timestamp;
-  const minute = 60 * 1000;
-  const hour = 60 * minute;
-  const day = 24 * hour;
-
-  if (diffMs >= 0 && diffMs < minute) return "Just now";
-  if (diffMs >= 0 && diffMs < hour) return `${Math.max(1, Math.floor(diffMs / minute))} min ago`;
-  if (diffMs >= 0 && diffMs < day) return `${Math.floor(diffMs / hour)}h ago`;
-  if (diffMs >= 0 && diffMs < 7 * day) return `${Math.floor(diffMs / day)}d ago`;
-
-  return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(new Date(timestamp));
 }
 
 function initialsForName(name: string) {
