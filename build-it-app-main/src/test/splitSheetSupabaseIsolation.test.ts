@@ -141,19 +141,16 @@ describe("split sheet Supabase isolation", () => {
       data: { user: { id: "current-auth-user" } },
       error: null,
     }));
-    const single = vi.fn(async () => ({
+    const rpc = vi.fn(async () => ({
       data: null,
       error: { message: "violates row-level security policy" },
     }));
-    const select = vi.fn(() => ({ single }));
-    const upsert = vi.fn(() => ({ select }));
-    const from = vi.fn(() => ({ upsert }));
 
     vi.doMock("@/integrations/supabase/client", () => ({
       isSupabaseConfigured: true,
       supabase: {
         auth: { getUser },
-        from,
+        rpc,
       },
     }));
 
@@ -162,10 +159,54 @@ describe("split sheet Supabase isolation", () => {
       ...createEmptyProfile(),
       username: "chori",
       emailAddress: "chori@example.com",
+      displayName: "Chori",
     };
 
     await expect(saveSplitSheetDocument(makeDocument(), "send", profile)).rejects.toThrow(
       /Could not send this split sheet through Supabase/,
     );
+    expect(rpc).toHaveBeenCalledWith("upsert_split_sheet_document", {
+      p_document_payload: expect.objectContaining({ id: "11111111-1111-4111-8111-111111111111" }),
+      p_mode: "send",
+      p_actor_label: "Chori",
+    });
+  });
+
+  it("saves creator-owned split sheets through the server-owned RPC", async () => {
+    const document = makeDocument();
+    const getUser = vi.fn(async () => ({
+      data: { user: { id: "current-auth-user" } },
+      error: null,
+    }));
+    const rpc = vi.fn(async () => ({
+      data: document,
+      error: null,
+    }));
+
+    vi.doMock("@/integrations/supabase/client", () => ({
+      isSupabaseConfigured: true,
+      supabase: {
+        auth: { getUser },
+        rpc,
+      },
+    }));
+
+    const { saveSplitSheetDocument } = await import("@/lib/splitSheetStorage");
+    const profile = {
+      ...createEmptyProfile(),
+      username: "chori",
+      emailAddress: "chori@example.com",
+      displayName: "Chori",
+    };
+
+    await expect(saveSplitSheetDocument(document, "send", profile)).resolves.toMatchObject({
+      document: expect.objectContaining({ id: document.id }),
+      persisted: true,
+    });
+    expect(rpc).toHaveBeenCalledWith("upsert_split_sheet_document", {
+      p_document_payload: expect.objectContaining({ id: document.id }),
+      p_mode: "send",
+      p_actor_label: "Chori",
+    });
   });
 });

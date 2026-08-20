@@ -526,27 +526,20 @@ export async function saveSplitSheetDocument(
     const userId = await getActiveUserId();
     const ownerKey = splitSheetLocalStorageOwnerForAuthUser(userId);
     upsertLocalDocument(document, ownerKey);
-    const row = documentToSplitSheetRow(document, userId);
 
-    const { data, error } = await supabase
-      .from("split_sheets")
-      .upsert(row, { onConflict: "id" })
-      .select("*")
-      .single();
+    const { data, error } = await supabase.rpc("upsert_split_sheet_document", {
+      p_document_payload: document as unknown as Json,
+      p_mode: mode,
+      p_actor_label: actor,
+    });
 
     if (error) throw new Error(error.message);
 
-    await replaceCollaborators(document, userId);
-    await replaceProposalVersions(document, userId);
-    await replaceAuditRecords(document);
-
-    if (mode === "send" || mode === "contract_delivery") {
-      await resolveCollaborators(document.id);
-      await createContractDeliveryRequest(document, actor);
-    }
+    const persistedDocument = isStoredSplitSheetDocument(data) ? data : document;
+    upsertLocalDocument(persistedDocument, ownerKey);
 
     return {
-      document: rowToDocument(data) ?? document,
+      document: persistedDocument,
       persisted: true,
     };
   } catch (error) {

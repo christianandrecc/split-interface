@@ -22,6 +22,10 @@ const notificationSql = readFileSync(
   resolve(process.cwd(), "supabase/migrations/20260814183000_split_notifications.sql"),
   "utf8",
 );
+const serverOwnedSaveSql = readFileSync(
+  resolve(process.cwd(), "supabase/migrations/20260820143000_server_owned_split_sheet_saves.sql"),
+  "utf8",
+);
 
 describe("split sheet Supabase migration", () => {
   it("creates the core workflow tables", () => {
@@ -154,5 +158,28 @@ describe("split sheet Supabase migration", () => {
     expect(notificationSql).toContain("when p_action = 'sign' and next_status in ('Fully Signed', 'Verified and Stored', 'Executed') then 'Split sheet fully signed'");
     expect(notificationSql).toContain("perform public.notify_split_sheet_participants");
     expect(notificationSql).toContain("alter publication supabase_realtime add table public.split_notifications");
+  });
+
+  it("routes creator save and send operations through one authenticated server RPC", () => {
+    expect(serverOwnedSaveSql).toContain("create or replace function public.upsert_split_sheet_document");
+    expect(serverOwnedSaveSql).toContain("current_user_id uuid := (select auth.uid())");
+    expect(serverOwnedSaveSql).toContain("Ownership percentages must total exactly 100");
+    expect(serverOwnedSaveSql).toContain("Only the split-sheet creator can save or send this split sheet");
+    expect(serverOwnedSaveSql).toContain("perform public.sync_split_sheet_proposals_from_payload");
+    expect(serverOwnedSaveSql).toContain("perform public.replace_split_sheet_collaborators_from_payload");
+    expect(serverOwnedSaveSql).toContain("perform public.sync_split_sheet_audit_from_payload");
+    expect(serverOwnedSaveSql).toContain("perform public.resolve_split_sheet_collaborators");
+    expect(serverOwnedSaveSql).toContain("perform public.notify_split_sheet_participants");
+    expect(serverOwnedSaveSql).toContain("grant execute on function public.upsert_split_sheet_document");
+  });
+
+  it("keeps creator saves from duplicating collaborator, audit, and delivery records", () => {
+    expect(serverOwnedSaveSql).toContain("delete from public.split_sheet_contract_deliveries delivery");
+    expect(serverOwnedSaveSql).toContain("create unique index if not exists split_sheet_contract_deliveries_sheet_unique_idx");
+    expect(serverOwnedSaveSql).toContain("on conflict (split_sheet_id, party_id) do update");
+    expect(serverOwnedSaveSql).toContain("delete from public.split_sheet_collaborators collaborator");
+    expect(serverOwnedSaveSql).toContain("delete from public.split_sheet_audit_records");
+    expect(serverOwnedSaveSql).toContain("Sent a message in Messages");
+    expect(serverOwnedSaveSql).toContain("splitChatMessages");
   });
 });

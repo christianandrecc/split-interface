@@ -531,6 +531,14 @@ export type Database = {
         }
         Returns: Json
       }
+      upsert_split_sheet_document: {
+        Args: {
+          p_actor_label?: string | null
+          p_document_payload: Json
+          p_mode?: string | null
+        }
+        Returns: Json
+      }
       load_my_split_notifications: {
         Args: {
           p_limit?: number
