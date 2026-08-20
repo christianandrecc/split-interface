@@ -33,6 +33,11 @@ import {
   getSplitSheetRequiredParticipantIds,
   normalizeSplitSheetParticipantId,
 } from "@/lib/splitSheetParticipantState";
+import {
+  appendSplitSheetChatMessage,
+  readSplitSheetChatMessages,
+  type StoredSplitSheetChatMessage,
+} from "@/lib/splitSheetMessages";
 import type { UserProfile } from "@/lib/userProfile";
 import { toast } from "sonner";
 
@@ -100,14 +105,6 @@ type PersistContext = SplitSheetUpdateContext & {
   successMessage?: string;
 };
 
-type StoredChatMessage = {
-  id: string;
-  senderId: string;
-  senderName: string;
-  body: string;
-  createdAt: string;
-};
-
 type CollaborationViewProps = {
   documents: StoredSplitSheetDocument[];
   userProfile: UserProfile;
@@ -118,7 +115,6 @@ type CollaborationViewProps = {
   ) => StoredSplitSheetDocument | void | Promise<StoredSplitSheetDocument | void>;
 };
 
-const CHAT_MESSAGES_KEY = "__splitChatMessages";
 const FINAL_STATUSES = new Set(["Fully Signed", "Verified and Stored", "Executed", "Archived"]);
 
 export default function CollaborationView({ documents, userProfile, initialDealId, onUpdateDocument }: CollaborationViewProps) {
@@ -184,7 +180,7 @@ export default function CollaborationView({ documents, userProfile, initialDealI
     if (!body) return;
 
     const now = new Date().toISOString();
-    const message: StoredChatMessage = {
+    const message: StoredSplitSheetChatMessage = {
       id: makeId("chat"),
       senderId: viewerParticipantId || "viewer",
       senderName: viewerName,
@@ -192,17 +188,7 @@ export default function CollaborationView({ documents, userProfile, initialDealI
       createdAt: now,
     };
     const updatedDocument = addDocumentAuditTrail(
-      {
-        ...selectedDeal.document,
-        auditTrail: [
-          ...selectedDeal.document.auditTrail,
-          {
-            timestamp: now,
-            actor: viewerName,
-            action: `${CHAT_MESSAGES_KEY}:${JSON.stringify(message)}`,
-          },
-        ],
-      },
+      appendSplitSheetChatMessage(selectedDeal.document, message),
       viewerName,
       "Sent a negotiation message",
     );
@@ -1290,7 +1276,7 @@ function buildMessages(document: StoredSplitSheetDocument, currentProposalId: st
     });
   });
 
-  readStoredChatMessages(document).forEach((message) => {
+  readSplitSheetChatMessages(document).forEach((message) => {
     messages.push({
       id: message.id,
       type: "text",
@@ -1302,20 +1288,6 @@ function buildMessages(document: StoredSplitSheetDocument, currentProposalId: st
 
   return messages.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
 }
-
-function readStoredChatMessages(document: StoredSplitSheetDocument): StoredChatMessage[] {
-  return document.auditTrail.flatMap((entry) => {
-    if (!entry.action.startsWith(`${CHAT_MESSAGES_KEY}:`)) return [];
-
-    try {
-      const parsed = JSON.parse(entry.action.slice(CHAT_MESSAGES_KEY.length + 1));
-      return parsed && typeof parsed === "object" && typeof parsed.body === "string" ? [parsed as StoredChatMessage] : [];
-    } catch {
-      return [];
-    }
-  });
-}
-
 function dealReadyToSign(deal: NegotiationDeal) {
   if (FINAL_STATUSES.has(deal.document.status)) return false;
   if (deal.document.collaboratorInvites.some((invite) => invite.status === "Pending")) return false;

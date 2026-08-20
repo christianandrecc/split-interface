@@ -1,8 +1,7 @@
 import type { StoredSplitSheetDocument } from "@/components/contract-builder/document";
 import type { Party } from "@/components/contract-builder/types";
+import { isSplitSheetChatAuditAction } from "@/lib/splitSheetMessages";
 
-const CHAT_MESSAGES_AUDIT_PREFIX = "__splitChatMessages:";
-const CHAT_AUDIT_ACTIONS = new Set(["Sent a negotiation message", "Sent a message in Messages"]);
 const PLACEHOLDER_LABELS = new Set([
   "collaborator",
   "contributor",
@@ -156,5 +155,5 @@ export function formatSplitSheetAuditTrail(document: StoredSplitSheetDocument): 
 }
 
 export function isInternalSplitSheetAuditAction(action: string) {
-  return action.startsWith(CHAT_MESSAGES_AUDIT_PREFIX) || CHAT_AUDIT_ACTIONS.has(action);
+  return isSplitSheetChatAuditAction(action);
 }
