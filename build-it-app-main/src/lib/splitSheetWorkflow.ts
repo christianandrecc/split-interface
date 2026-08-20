@@ -1,4 +1,5 @@
 import { addDocumentAuditTrail, type StoredSplitSheetDocument } from "@/components/contract-builder/document";
+import { normalizeSplitSheetParticipantId } from "@/lib/splitSheetParticipantState";
 
 export const SPLIT_PERCENT_EPSILON = 0.01;
 
@@ -52,12 +53,12 @@ export function getCollaboratorStatusSummary(document: StoredSplitSheetDocument)
     const approval = document.splitApprovals.find(
       (item) =>
         item.proposalVersionId === currentProposalId &&
-        (item.collaboratorId === invite?.id || (party.isCurrentUser && item.collaboratorId === "creator")),
+        normalizeSplitSheetParticipantId(document, item.collaboratorId) === (party.isCurrentUser ? "creator" : invite?.id),
     );
     const signature = document.splitSignatures.find(
       (item) =>
         item.proposalVersionId === currentProposalId &&
-        (item.collaboratorId === invite?.id || (party.isCurrentUser && item.collaboratorId === "creator")),
+        normalizeSplitSheetParticipantId(document, item.collaboratorId) === (party.isCurrentUser ? "creator" : invite?.id),
     );
 
     return {

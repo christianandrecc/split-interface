@@ -43,6 +43,10 @@ import {
   splitSheetParticipantDisplayName,
   splitSheetPartyDisplayName,
 } from "@/lib/splitSheetDisplay";
+import {
+  buildSplitSheetSignatureRecords,
+  ensureSplitSheetCreatorApproval,
+} from "@/lib/splitSheetParticipantState";
 import { toast } from "sonner";
 import {
   FileText,
@@ -168,8 +172,10 @@ function documentSplitProposals(document: StoredSplitSheetDocument) {
 }
 
 function documentSplitApprovals(document: StoredSplitSheetDocument, proposalId: string, invites: ReturnType<typeof documentCollaboratorInvites>) {
+  const currentProposal = document.splitProposalVersions.find((proposal) => proposal.id === proposalId);
+
   if (Array.isArray(document.splitApprovals) && document.splitApprovals.length > 0) {
-    return document.splitApprovals.map((approval) => ({
+    return ensureSplitSheetCreatorApproval(document, document.splitApprovals, currentProposal, currentProposal?.createdAt || document.createdAt).map((approval) => ({
       ...approval,
       collaboratorName: splitSheetParticipantDisplayName(document, approval.collaboratorId, approval.collaboratorName),
     }));
@@ -198,14 +204,18 @@ function documentSplitApprovals(document: StoredSplitSheetDocument, proposalId: 
 }
 
 function documentSplitSignatures(document: StoredSplitSheetDocument, proposalId: string, invites: ReturnType<typeof documentCollaboratorInvites>) {
+  const documentWithInvites = {
+    ...document,
+    collaboratorInvites: invites,
+  };
+
   if (Array.isArray(document.splitSignatures) && document.splitSignatures.length > 0) {
-    return document.splitSignatures.map((signature) => ({
+    return buildSplitSheetSignatureRecords(documentWithInvites, proposalId).map((signature) => ({
       ...signature,
       collaboratorName: splitSheetParticipantDisplayName(document, signature.collaboratorId, signature.collaboratorName),
     }));
   }
 
-  const creatorName = document.creatorProfile.displayName || document.creatorProfile.legalName || document.creatorProfile.emailAddress || "SPLIT user";
   const signatureStatuses = ["Pending Signatures", "Fully Signed", "Verified and Stored", "Executed"];
   const isSignedRecord = ["Fully Signed", "Verified and Stored", "Executed"].includes(document.status);
   const signedAt = isSignedRecord ? document.verifiedAt || document.updatedAt || document.createdAt : undefined;
@@ -214,28 +224,11 @@ function documentSplitSignatures(document: StoredSplitSheetDocument, proposalId:
     return [];
   }
 
-  return [
-    {
-      id: `${document.id}-creator-signature`,
-      proposalVersionId: proposalId,
-      collaboratorId: "creator",
-      collaboratorName: creatorName,
-      status: isSignedRecord ? "Signed" as const : "Pending" as const,
-      signedAt,
-      signatureMethod: isSignedRecord ? "SPLIT beta acknowledgement" : undefined,
-    },
-    ...invites
-      .filter((invite) => invite.status === "Accepted")
-      .map((invite) => ({
-        id: `${document.id}-${invite.id}-signature`,
-        proposalVersionId: proposalId,
-        collaboratorId: invite.id,
-        collaboratorName: splitSheetParticipantDisplayName(document, invite.id, invite.name),
-        status: isSignedRecord ? "Signed" as const : "Pending" as const,
-        signedAt,
-        signatureMethod: isSignedRecord ? "SPLIT beta acknowledgement" : undefined,
-      })),
-  ];
+  return buildSplitSheetSignatureRecords(documentWithInvites, proposalId, {
+    signed: isSignedRecord,
+    signedAt,
+    signatureMethod: isSignedRecord ? "SPLIT beta acknowledgement" : undefined,
+  }).filter((signature) => signature.proposalVersionId === proposalId);
 }
 
 function documentToAgreement(document: StoredSplitSheetDocument): Agreement {
@@ -518,6 +511,7 @@ export default function Dashboard({
         description: "Supabase did not confirm this split-sheet update yet.",
       });
     }
+    return persisted.document;
   };
 
   const executed = agreements.filter((a) => VERIFIED_SPLIT_STATUSES.includes(a.status)).length;

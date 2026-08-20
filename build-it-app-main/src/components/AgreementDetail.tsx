@@ -1,12 +1,12 @@
 import React, { useState } from "react";
 import { Agreement, StatusBadge, AgreementIcon } from "@/components/Dashboard";
 import { SplitSheetDocumentPage } from "@/components/contract-builder/SplitSheetDocumentPreview";
-import type { StoredSplitSheetDocument } from "@/components/contract-builder/document";
 import {
   formatSplitSheetAuditTrail,
   splitSheetDisplayInitials,
   splitSheetParticipantDisplayName,
 } from "@/lib/splitSheetDisplay";
+import { buildSplitSheetSignatureRecords } from "@/lib/splitSheetParticipantState";
 import { downloadSplitSheetRecord } from "@/lib/splitSheetDownload";
 import { getSplitWorkflowLabel, VERIFIED_SPLIT_STATUSES } from "@/lib/splitWorkflow";
 import type { UserProfile } from "@/lib/userProfile";
@@ -28,42 +28,11 @@ import {
 
 const FINAL_STATUSES = [...VERIFIED_SPLIT_STATUSES, "Archived"] as Agreement["status"][];
 
-function documentActorName(document: StoredSplitSheetDocument) {
-  return document.creatorProfile.displayName || document.creatorProfile.legalName || document.creatorProfile.emailAddress || "SPLIT user";
-}
-
 function formatDisplayDateTime(value: string | undefined) {
   if (!value) return "Pending";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return date.toLocaleString(undefined, { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
-}
-
-function buildSignatureRecords(document: StoredSplitSheetDocument, proposalId: string) {
-  const existingSignatures = Array.isArray(document.splitSignatures) ? document.splitSignatures : [];
-  const currentSignatures = existingSignatures.filter((signature) => signature.proposalVersionId === proposalId);
-  const creatorPartyId = document.data.parties.find((party) => party.isCurrentUser)?.id;
-  const signers = [
-    { id: "creator", aliases: ["creator", creatorPartyId].filter(Boolean), name: documentActorName(document) },
-    ...document.collaboratorInvites
-      .filter((invite) => invite.status === "Accepted")
-      .map((invite) => ({
-        id: invite.id,
-        aliases: [invite.id, invite.partyId].filter(Boolean),
-        name: splitSheetParticipantDisplayName(document, invite.id, invite.name),
-      })),
-  ];
-  const missingSignatures = signers
-    .filter((signer) => !currentSignatures.some((signature) => signer.aliases.includes(signature.collaboratorId)))
-    .map((signer) => ({
-      id: `${document.id}-${proposalId}-${signer.id}-signature`,
-      proposalVersionId: proposalId,
-      collaboratorId: signer.id,
-      collaboratorName: signer.name,
-      status: "Pending" as const,
-    }));
-
-  return [...existingSignatures, ...missingSignatures];
 }
 
 export default function AgreementDetail({
@@ -88,7 +57,7 @@ export default function AgreementDetail({
   const visibleSignatures = currentSignatures.length > 0
     ? currentSignatures
     : agreement.document && currentProposal && ["Ready to Sign", "Pending Signatures"].includes(agreement.status)
-      ? buildSignatureRecords(agreement.document, currentProposal.id).filter((signature) => signature.proposalVersionId === currentProposal.id)
+      ? buildSplitSheetSignatureRecords(agreement.document, currentProposal.id).filter((signature) => signature.proposalVersionId === currentProposal.id)
       : [];
   const canOpenMessages = Boolean(agreement.document?.sentAt && agreement.status !== "Draft" && onOpenMessages);
   const versionItems = agreement.document?.splitProposalVersions.map((proposal) => ({

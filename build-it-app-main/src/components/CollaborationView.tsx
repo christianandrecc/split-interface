@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   Check,
@@ -25,6 +25,14 @@ import {
   splitSheetParticipantDisplayName,
   splitSheetPartyDisplayName,
 } from "@/lib/splitSheetDisplay";
+import {
+  allSplitSheetRequiredParticipantsAccepted,
+  buildSplitSheetSignatureRecords,
+  ensureSplitSheetCreatorApproval,
+  getSplitSheetAcceptedParticipantIds,
+  getSplitSheetRequiredParticipantIds,
+  normalizeSplitSheetParticipantId,
+} from "@/lib/splitSheetParticipantState";
 import type { UserProfile } from "@/lib/userProfile";
 import { toast } from "sonner";
 
@@ -100,14 +108,14 @@ type StoredChatMessage = {
   createdAt: string;
 };
 
-type ProposalVersionRecord = StoredSplitSheetDocument["splitProposalVersions"][number];
-type ApprovalRecord = StoredSplitSheetDocument["splitApprovals"][number];
-
 type CollaborationViewProps = {
   documents: StoredSplitSheetDocument[];
   userProfile: UserProfile;
   initialDealId?: string;
-  onUpdateDocument: (document: StoredSplitSheetDocument, context?: SplitSheetUpdateContext) => void | Promise<void>;
+  onUpdateDocument: (
+    document: StoredSplitSheetDocument,
+    context?: SplitSheetUpdateContext,
+  ) => StoredSplitSheetDocument | void | Promise<StoredSplitSheetDocument | void>;
 };
 
 const CHAT_MESSAGES_KEY = "__splitChatMessages";
@@ -125,8 +133,11 @@ export default function CollaborationView({ documents, userProfile, initialDealI
   const [counterOpen, setCounterOpen] = useState(false);
   const [contextOpen, setContextOpen] = useState(true);
   const [mobileChatOpen, setMobileChatOpen] = useState(false);
+  const lastInitialDealIdRef = useRef<string | undefined>();
 
-  const selectedDeal = deals.find((deal) => deal.id === selectedDealId) ?? deals[0] ?? null;
+  const selectedDeal = selectedDealId
+    ? deals.find((deal) => deal.id === selectedDealId) ?? null
+    : deals[0] ?? null;
   const currentVersion = selectedDeal?.splitVersions.find((version) => version.id === selectedDeal.currentVersionId) ?? selectedDeal?.splitVersions.at(-1);
   const readyToSign = Boolean(selectedDeal && dealReadyToSign(selectedDeal));
   const viewerIdentity = selectedDeal ? participantIdentityForProfile(selectedDeal.document, userProfile) : null;
@@ -134,15 +145,28 @@ export default function CollaborationView({ documents, userProfile, initialDealI
   const viewerParticipantId = selectedDeal ? viewerIdentity?.id || firstViewerParticipantId(selectedDeal) : "";
 
   useEffect(() => {
-    if (!initialDealId || !deals.some((deal) => deal.id === initialDealId)) return;
+    const initialDealExists = Boolean(initialDealId && deals.some((deal) => deal.id === initialDealId));
+    if (initialDealId && initialDealExists && lastInitialDealIdRef.current !== initialDealId) {
+      lastInitialDealIdRef.current = initialDealId;
+      setSelectedDealId(initialDealId);
+      setMobileChatOpen(true);
+      return;
+    }
 
-    setSelectedDealId(initialDealId);
-    setMobileChatOpen(true);
-  }, [deals, initialDealId]);
+    if (selectedDealId && deals.some((deal) => deal.id === selectedDealId)) return;
+
+    const fallbackDealId = deals[0]?.id ?? "";
+    if (selectedDealId !== fallbackDealId) {
+      setSelectedDealId(fallbackDealId);
+    }
+  }, [deals, initialDealId, selectedDealId]);
 
   const updateDocument = async (document: StoredSplitSheetDocument, context: PersistContext) => {
     try {
-      await onUpdateDocument(document, context);
+      const persistedDocument = await onUpdateDocument(document, context);
+      if (persistedDocument?.id) {
+        setSelectedDealId(persistedDocument.id);
+      }
       if (context.successMessage) {
         toast.success(context.successMessage);
       }
@@ -218,7 +242,7 @@ export default function CollaborationView({ documents, userProfile, initialDealI
     );
     const currentProposalId = selectedDeal.document.currentProposalId || selectedDeal.document.splitProposalVersions.at(-1)?.id || "";
     const currentProposal = selectedDeal.document.splitProposalVersions.find((proposal) => proposal.id === currentProposalId);
-    const approvalsWithCreator = ensureCreatorApprovalForProposal(
+    const approvalsWithCreator = ensureSplitSheetCreatorApproval(
       selectedDeal.document,
       selectedDeal.document.splitApprovals,
       currentProposal,
@@ -315,12 +339,12 @@ export default function CollaborationView({ documents, userProfile, initialDealI
           }
         : approval,
     );
-    const splitApprovals = ensureCreatorApprovalForProposal(selectedDeal.document, approvedByViewer, currentProposal, now);
+    const splitApprovals = ensureSplitSheetCreatorApproval(selectedDeal.document, approvedByViewer, currentProposal, now);
     const documentWithApprovals = {
       ...selectedDeal.document,
       splitApprovals,
     };
-    const allApproved = currentProposal ? allRequiredParticipantsAccepted(documentWithApprovals, currentProposal.id) : false;
+    const allApproved = currentProposal ? allSplitSheetRequiredParticipantsAccepted(documentWithApprovals, currentProposal.id) : false;
     const baseDocument = {
       ...selectedDeal.document,
       status: allApproved ? "Ready to Sign" as const : selectedDeal.document.status,
@@ -330,7 +354,7 @@ export default function CollaborationView({ documents, userProfile, initialDealI
       allApproved
         ? {
             ...baseDocument,
-            splitSignatures: buildSignatureRecords(baseDocument, currentProposal?.id ?? currentVersion.id),
+            splitSignatures: buildSplitSheetSignatureRecords(baseDocument, currentProposal?.id ?? currentVersion.id),
           }
         : baseDocument,
       viewerName,
@@ -437,7 +461,7 @@ export default function CollaborationView({ documents, userProfile, initialDealI
   const signDeal = async () => {
     if (!selectedDeal || !currentVersion || !readyToSign) return;
 
-    const preparedSignatures = buildSignatureRecords(selectedDeal.document, currentVersion.id);
+    const preparedSignatures = buildSplitSheetSignatureRecords(selectedDeal.document, currentVersion.id);
     const viewerSignature = preparedSignatures.find((signature) => signature.status === "Pending" && participantMatchesViewer(selectedDeal, signature.collaboratorId));
     if (!viewerSignature) {
       toast.error("No pending signature for this account");
@@ -1159,12 +1183,12 @@ function documentToNegotiationDeal(document: StoredSplitSheetDocument, userProfi
       { id: "audit", label: "Agreement version", status: `v${proposal.versionNumber}` },
     ],
   }));
-  const acceptedBy = acceptedParticipantIdsForProposal(document, currentProposalId);
-  const signatures = buildSignatureRecords(document, currentProposalId);
+  const acceptedBy = getSplitSheetAcceptedParticipantIds(document, currentProposalId);
+  const signatures = buildSplitSheetSignatureRecords(document, currentProposalId);
   const signedBy = signatures
     .filter((signature) => signature.status === "Signed")
-    .map((signature) => canonicalParticipantId(document, signature.collaboratorId) ?? signature.collaboratorId);
-  const requiredSignerIds = requiredSignerIdsForDocument(document);
+    .map((signature) => normalizeSplitSheetParticipantId(document, signature.collaboratorId) ?? signature.collaboratorId);
+  const requiredSignerIds = getSplitSheetRequiredParticipantIds(document);
   const everyRequiredSignerAccepted = requiredSignerIds.length > 0 && requiredSignerIds.every((participantId) => acceptedBy.includes(participantId));
   const hasPendingInvites = document.collaboratorInvites.some((invite) => invite.status === "Pending");
   const status: NegotiationStatus = FINAL_STATUSES.has(document.status)
@@ -1292,33 +1316,6 @@ function readStoredChatMessages(document: StoredSplitSheetDocument): StoredChatM
   });
 }
 
-function buildSignatureRecords(document: StoredSplitSheetDocument, proposalId: string) {
-  const existingSignatures = Array.isArray(document.splitSignatures) ? document.splitSignatures : [];
-  const currentSignatures = existingSignatures.filter((signature) => signature.proposalVersionId === proposalId);
-  const creatorPartyId = document.data.parties.find((party) => party.isCurrentUser)?.id;
-  const signers = [
-    { id: "creator", aliases: ["creator", creatorPartyId].filter(Boolean), name: getProfileDisplayName(document.creatorProfile) },
-    ...document.collaboratorInvites
-      .filter((invite) => invite.status === "Accepted")
-      .map((invite) => ({
-        id: invite.id,
-        aliases: [invite.id, invite.partyId].filter(Boolean),
-        name: splitSheetParticipantDisplayName(document, invite.id, invite.name),
-      })),
-  ];
-  const missingSignatures = signers
-    .filter((signer) => !currentSignatures.some((signature) => signer.aliases.includes(signature.collaboratorId)))
-    .map((signer) => ({
-      id: `${document.id}-${proposalId}-${signer.id}-signature`,
-      proposalVersionId: proposalId,
-      collaboratorId: signer.id,
-      collaboratorName: signer.name,
-      status: "Pending" as const,
-    }));
-
-  return [...existingSignatures, ...missingSignatures];
-}
-
 function dealReadyToSign(deal: NegotiationDeal) {
   if (FINAL_STATUSES.has(deal.document.status)) return false;
   if (deal.document.collaboratorInvites.some((invite) => invite.status === "Pending")) return false;
@@ -1328,113 +1325,8 @@ function dealReadyToSign(deal: NegotiationDeal) {
   return deal.requiredSignerIds.length > 0 && deal.requiredSignerIds.every((participantId) => acceptedParticipants.has(participantId));
 }
 
-function requiredSignerIdsForDocument(document: StoredSplitSheetDocument) {
-  return uniqueParticipantIds([
-    "creator",
-    ...document.collaboratorInvites.filter((invite) => invite.status === "Accepted").map((invite) => invite.id),
-  ]);
-}
-
-function acceptedParticipantIdsForProposal(document: StoredSplitSheetDocument, proposalId: string) {
-  if (!proposalId) return [];
-
-  const proposal = document.splitProposalVersions.find((item) => item.id === proposalId);
-  const approvals = ensureCreatorApprovalForProposal(
-    document,
-    document.splitApprovals,
-    proposal,
-    proposal?.createdAt || document.createdAt,
-  );
-  const acceptedIds = approvals
-    .filter((approval) => approval.proposalVersionId === proposalId && approval.status === "Approved")
-    .map((approval) => canonicalParticipantId(document, approval.collaboratorId))
-    .filter(Boolean) as string[];
-
-  return uniqueParticipantIds(acceptedIds);
-}
-
-function allRequiredParticipantsAccepted(document: StoredSplitSheetDocument, proposalId: string) {
-  const acceptedParticipants = new Set(acceptedParticipantIdsForProposal(document, proposalId));
-  const requiredSigners = requiredSignerIdsForDocument(document);
-
-  return requiredSigners.length > 0 && requiredSigners.every((participantId) => acceptedParticipants.has(participantId));
-}
-
-function ensureCreatorApprovalForProposal(
-  document: StoredSplitSheetDocument,
-  approvals: ApprovalRecord[],
-  proposal?: ProposalVersionRecord,
-  approvedAt?: string,
-) {
-  if (!proposal || !proposalWasCreatedByCreator(document, proposal)) return approvals;
-
-  let hasCreatorApproval = false;
-  const nextApprovals = approvals.map((approval) => {
-    if (approval.proposalVersionId !== proposal.id || canonicalParticipantId(document, approval.collaboratorId) !== "creator") {
-      return approval;
-    }
-
-    hasCreatorApproval = true;
-    return {
-      ...approval,
-      collaboratorId: "creator",
-      collaboratorName: splitSheetParticipantDisplayName(document, approval.collaboratorId, approval.collaboratorName || getProfileDisplayName(document.creatorProfile)),
-      status: "Approved" as const,
-      respondedAt: approval.respondedAt || approvedAt || proposal.createdAt,
-    };
-  });
-
-  if (hasCreatorApproval) return nextApprovals;
-
-  return [
-    ...nextApprovals,
-    {
-      id: `${proposal.id}-creator-approval`,
-      proposalVersionId: proposal.id,
-      collaboratorId: "creator",
-      collaboratorName: getProfileDisplayName(document.creatorProfile),
-      status: "Approved" as const,
-      respondedAt: approvedAt || proposal.createdAt,
-    },
-  ];
-}
-
-function proposalWasCreatedByCreator(document: StoredSplitSheetDocument, proposal: ProposalVersionRecord) {
-  if (proposal.id === document.splitProposalVersions[0]?.id) return true;
-
-  const creatorProfile = document.creatorProfile;
-  const creatorNames = [
-    getProfileDisplayName(creatorProfile),
-    creatorProfile.displayName,
-    creatorProfile.pkaNames,
-    creatorProfile.legalName,
-    creatorProfile.emailAddress,
-    creatorProfile.username,
-  ].map(normalizeParticipantLabel);
-
-  return creatorNames.includes(normalizeParticipantLabel(proposal.proposedBy));
-}
-
-function canonicalParticipantId(document: StoredSplitSheetDocument, participantId?: string) {
-  if (!participantId) return undefined;
-
-  const creatorPartyId = document.data.parties.find((party) => party.isCurrentUser)?.id;
-  if (participantId === "creator" || participantId === creatorPartyId) return "creator";
-
-  const invite = document.collaboratorInvites.find((item) => item.id === participantId || item.partyId === participantId);
-  return invite?.id || participantId;
-}
-
-function uniqueParticipantIds(participantIds: string[]) {
-  return Array.from(new Set(participantIds));
-}
-
-function normalizeParticipantLabel(value?: string) {
-  return (value ?? "").trim().replace(/^@+/, "").toLowerCase();
-}
-
 function participantMatchesViewer(deal: NegotiationDeal, participantId?: string) {
-  const canonicalId = canonicalParticipantId(deal.document, participantId);
+  const canonicalId = normalizeSplitSheetParticipantId(deal.document, participantId);
   return Boolean(participantId && deal.viewerParticipantIds.has(canonicalId ?? participantId));
 }
 
@@ -1485,6 +1377,10 @@ function cleanParticipantLabel(value?: string) {
   return label;
 }
 
+function normalizeParticipantLabel(value?: string) {
+  return (value ?? "").trim().replace(/^@+/, "").toLowerCase();
+}
+
 function participantIdForActor(document: StoredSplitSheetDocument, actor: string) {
   const normalizedActor = normalizeParticipantLabel(actor);
   if (normalizedActor === getProfileDisplayName(document.creatorProfile).trim().toLowerCase()) return "creator";
@@ -1508,14 +1404,14 @@ function actionableCount(document: StoredSplitSheetDocument, viewerParticipantId
     (approval) =>
       approval.proposalVersionId === currentProposalId &&
       approval.status === "Pending" &&
-      viewerParticipantIds.has(canonicalParticipantId(document, approval.collaboratorId) ?? approval.collaboratorId),
+      viewerParticipantIds.has(normalizeSplitSheetParticipantId(document, approval.collaboratorId) ?? approval.collaboratorId),
   );
   const pendingInvite = document.collaboratorInvites.some((invite) => invite.status === "Pending" && viewerParticipantIds.has(invite.id));
   const pendingSignature = document.splitSignatures.some(
     (signature) =>
       signature.proposalVersionId === currentProposalId &&
       signature.status === "Pending" &&
-      viewerParticipantIds.has(canonicalParticipantId(document, signature.collaboratorId) ?? signature.collaboratorId),
+      viewerParticipantIds.has(normalizeSplitSheetParticipantId(document, signature.collaboratorId) ?? signature.collaboratorId),
   );
 
   return [pendingInvite, pendingApproval, pendingSignature].filter(Boolean).length;

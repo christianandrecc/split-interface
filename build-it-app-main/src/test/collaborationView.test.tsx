@@ -22,6 +22,17 @@ function makeCreatorProfile(): UserProfile {
   };
 }
 
+function makeSecondDocument() {
+  const document = makeDocument();
+  document.id = "22222222-2222-4222-8222-222222222222";
+  document.title = "Glasshouse SPLIT Sheet";
+  document.data.songTitle = "Glasshouse";
+  document.data.artistProjectName = "Arlo Parks";
+  document.documentNumber = "SPLIT-20260812-GLASS";
+  document.updatedAt = "2026-08-12T12:05:00.000Z";
+  return document;
+}
+
 describe("CollaborationView document-backed negotiation", () => {
   it("lets an invited collaborator accept the invite from Messages before reviewing", async () => {
     const document = makeDocument();
@@ -231,5 +242,72 @@ describe("CollaborationView document-backed negotiation", () => {
 
     expect(screen.getAllByRole("heading", { name: "Night Swim" }).length).toBeGreaterThan(0);
     expect(screen.queryByText("No deal chats yet")).not.toBeInTheDocument();
+  });
+
+  it("keeps the manually selected deal open when parent data refreshes", () => {
+    const initialDocument = makeDocument();
+    initialDocument.sentAt = initialDocument.createdAt;
+    const secondDocument = makeSecondDocument();
+    secondDocument.sentAt = secondDocument.createdAt;
+    const onUpdateDocument = vi.fn().mockResolvedValue(undefined);
+
+    const { rerender } = render(
+      <CollaborationView
+        documents={[initialDocument, secondDocument]}
+        userProfile={makeCreatorProfile()}
+        initialDealId={initialDocument.id}
+        onUpdateDocument={onUpdateDocument}
+      />,
+    );
+
+    fireEvent.click(screen.getByText("Glasshouse"));
+    expect(screen.getAllByRole("heading", { name: "Glasshouse" }).length).toBeGreaterThan(0);
+
+    rerender(
+      <CollaborationView
+        documents={[
+          { ...initialDocument, updatedAt: "2026-08-12T12:10:00.000Z" },
+          { ...secondDocument, updatedAt: "2026-08-12T12:11:00.000Z" },
+        ]}
+        userProfile={makeCreatorProfile()}
+        initialDealId={initialDocument.id}
+        onUpdateDocument={onUpdateDocument}
+      />,
+    );
+
+    expect(screen.getAllByRole("heading", { name: "Glasshouse" }).length).toBeGreaterThan(0);
+  });
+
+  it("renders a counter-offer message when a split has multiple proposal versions", () => {
+    const document = makeDocument();
+    document.sentAt = document.createdAt;
+    document.currentProposalId = "proposal-2";
+    document.version = 2;
+    document.splitProposalVersions = [
+      ...document.splitProposalVersions,
+      {
+        id: "proposal-2",
+        versionNumber: 2,
+        proposedBy: "Maya Rios",
+        notes: "Counter-offer from Messages",
+        createdAt: "2026-08-12T12:10:00.000Z",
+        allocations: [
+          { partyId: "creator-party", name: "Chori", role: "Songwriter", percentage: 50 },
+          { partyId: "maya-party", name: "Maya Rios", role: "Producer", percentage: 50 },
+        ],
+      },
+    ];
+    const onUpdateDocument = vi.fn().mockResolvedValue(undefined);
+
+    render(
+      <CollaborationView
+        documents={[document]}
+        userProfile={makeCreatorProfile()}
+        onUpdateDocument={onUpdateDocument}
+      />,
+    );
+
+    expect(screen.getAllByText("Maya Rios proposed split version 2.").length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("heading", { name: "Night Swim" }).length).toBeGreaterThan(0);
   });
 });
