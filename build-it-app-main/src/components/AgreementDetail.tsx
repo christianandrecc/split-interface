@@ -1,5 +1,6 @@
 import React, { useState } from "react";
-import { Agreement, StatusBadge, AgreementIcon } from "@/components/Dashboard";
+import { StatusBadge, AgreementIcon } from "@/components/Dashboard";
+import type { Agreement } from "@/lib/splitSheetAgreement";
 import { SplitSheetDocumentPage } from "@/components/contract-builder/SplitSheetDocumentPreview";
 import {
   formatSplitSheetAuditTrail,

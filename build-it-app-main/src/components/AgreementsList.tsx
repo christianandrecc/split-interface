@@ -1,5 +1,6 @@
 import React, { useState } from "react";
-import { Agreement, StatusBadge, AgreementIcon } from "@/components/Dashboard";
+import { StatusBadge, AgreementIcon } from "@/components/Dashboard";
+import type { Agreement } from "@/lib/splitSheetAgreement";
 import { PENDING_SPLIT_STATUSES, VERIFIED_SPLIT_STATUSES } from "@/lib/splitWorkflow";
 import { Plus } from "lucide-react";
 
