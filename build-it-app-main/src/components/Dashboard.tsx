@@ -26,6 +26,12 @@ import {
   type DashboardQuickAccessMoment,
 } from "@/lib/dashboardSplitSummary";
 import {
+  buildDashboardNotificationGroups,
+  getDashboardNotificationPresentation,
+  type DashboardNotificationIconKey,
+  type DashboardNotificationToneKey,
+} from "@/lib/dashboardNotifications";
+import {
   loadSplitSheetDocuments,
   saveLocalSplitSheetDocuments,
   saveSplitSheetDocument,
@@ -1135,29 +1141,27 @@ function notificationPresentation(notification: SplitNotification): {
   tone: string;
   actionLabel: string;
 } {
-  const actionLabel = notification.actionTarget === "agreement"
-    ? "View split"
-    : notification.actionTarget === "activity"
-      ? "View activity"
-      : "Open messages";
+  const iconByKey: Record<DashboardNotificationIconKey, LucideIcon> = {
+    alert: AlertTriangle,
+    check: CheckCircle2,
+    counter: GitBranch,
+    file: FileText,
+    message: MessageCircle,
+  };
+  const toneByKey: Record<DashboardNotificationToneKey, string> = {
+    amended: "bg-[hsl(var(--split-amended)/0.12)] text-[hsl(var(--split-amended))]",
+    danger: "bg-destructive/10 text-destructive",
+    default: "bg-secondary text-primary",
+    primary: "bg-primary/10 text-primary",
+    verified: "bg-[hsl(var(--split-verified)/0.12)] text-[hsl(var(--split-verified))]",
+  };
+  const presentation = getDashboardNotificationPresentation(notification);
 
-  if (notification.eventType === "chat_message") {
-    return { icon: MessageCircle, tone: "bg-primary/10 text-primary", actionLabel };
-  }
-
-  if (notification.eventType === "counter_offer") {
-    return { icon: GitBranch, tone: "bg-[hsl(var(--split-amended)/0.12)] text-[hsl(var(--split-amended))]", actionLabel };
-  }
-
-  if (notification.eventType === "split_reject" || notification.eventType === "invite_decline") {
-    return { icon: AlertTriangle, tone: "bg-destructive/10 text-destructive", actionLabel };
-  }
-
-  if (notification.eventType === "signature" || notification.eventType === "split_verified" || notification.eventType === "split_accept" || notification.eventType === "invite_accept") {
-    return { icon: CheckCircle2, tone: "bg-[hsl(var(--split-verified)/0.12)] text-[hsl(var(--split-verified))]", actionLabel };
-  }
-
-  return { icon: FileText, tone: "bg-secondary text-primary", actionLabel };
+  return {
+    icon: iconByKey[presentation.iconKey],
+    tone: toneByKey[presentation.toneKey],
+    actionLabel: presentation.actionLabel,
+  };
 }
 
 function notificationTime(value: string) {
@@ -1297,10 +1301,7 @@ function AgreementActivityPage({
   notifications: SplitNotification[];
   onOpenNotification: (notification: SplitNotification) => void;
 }) {
-  const priorityItems = notifications.filter((notification) => !notification.readAt);
-  const executedItems = notifications.filter((notification) => ["signature", "split_verified"].includes(notification.eventType));
-  const needsAction = priorityItems.length;
-  const executed = executedItems.length;
+  const { priorityItems, executedItems, needsAction, executed } = buildDashboardNotificationGroups(notifications);
 
   return (
     <div className="h-full overflow-y-auto">
