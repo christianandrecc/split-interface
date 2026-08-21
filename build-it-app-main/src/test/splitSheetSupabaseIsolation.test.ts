@@ -270,4 +270,46 @@ describe("split sheet Supabase isolation", () => {
     });
     expect(rpc).not.toHaveBeenCalledWith("apply_split_sheet_participant_update", expect.anything());
   });
+
+  it("routes generic sent split-sheet updates through the server-owned document RPC", async () => {
+    const document = makeDocument();
+    document.sentAt = document.createdAt;
+    document.status = "Pending Split Approval";
+
+    const getUser = vi.fn(async () => ({
+      data: { user: { id: "current-auth-user" } },
+      error: null,
+    }));
+    const rpc = vi.fn(async () => ({
+      data: document,
+      error: null,
+    }));
+
+    vi.doMock("@/integrations/supabase/client", () => ({
+      isSupabaseConfigured: true,
+      supabase: {
+        auth: { getUser },
+        rpc,
+      },
+    }));
+
+    const { saveSplitSheetParticipantAction } = await import("@/lib/splitSheetStorage");
+    const profile = {
+      ...createEmptyProfile(),
+      username: "chori",
+      emailAddress: "chori@example.com",
+      displayName: "Chori",
+    };
+
+    await expect(saveSplitSheetParticipantAction(document, {}, profile)).resolves.toMatchObject({
+      document: expect.objectContaining({ id: document.id }),
+      persisted: true,
+    });
+    expect(rpc).toHaveBeenCalledWith("upsert_split_sheet_document", {
+      p_document_payload: expect.objectContaining({ id: document.id }),
+      p_mode: "update",
+      p_actor_label: "Chori",
+    });
+    expect(rpc).not.toHaveBeenCalledWith("apply_split_sheet_participant_update", expect.anything());
+  });
 });

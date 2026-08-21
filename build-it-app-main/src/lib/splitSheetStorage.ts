@@ -399,12 +399,12 @@ export async function saveSplitSheetParticipantAction(
     throw new Error(splitValidation.errors.join(" "));
   }
 
-  if (!isSupabaseConfigured || !context.action) {
+  if (!isSupabaseConfigured) {
     upsertLocalDocument(document);
     return { document, persisted: false };
   }
 
-  if (context.action === "creator_update") {
+  if (!context.action || context.action === "creator_update") {
     return saveSplitSheetDocument(document, "update", profile);
   }
 
