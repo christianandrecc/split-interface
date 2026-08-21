@@ -396,7 +396,12 @@ export default function CollaborationView({ documents, userProfile, initialDealI
     if (!selectedDeal || !currentVersion || !readyToSign) return;
 
     const preparedSignatures = buildSplitSheetSignatureRecords(selectedDeal.document, currentVersion.id);
-    const viewerSignature = preparedSignatures.find((signature) => signature.status === "Pending" && participantMatchesViewer(selectedDeal, signature.collaboratorId));
+    const viewerSignature = preparedSignatures.find(
+      (signature) =>
+        signature.proposalVersionId === currentVersion.id &&
+        signature.status === "Pending" &&
+        participantMatchesViewer(selectedDeal, signature.collaboratorId),
+    );
     if (!viewerSignature) {
       toast.error("No pending signature for this account");
       return;

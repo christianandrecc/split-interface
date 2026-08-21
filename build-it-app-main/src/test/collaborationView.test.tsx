@@ -227,6 +227,85 @@ describe("CollaborationView document-backed negotiation", () => {
     expect(updatedDocument.splitSignatures.find((signature) => signature.id === "maya-signature")?.status).toBe("Signed");
   });
 
+  it("signs the current proposal version when older signature records still exist", async () => {
+    const document = makeDocument();
+    document.sentAt = document.createdAt;
+    document.status = "Ready to Sign";
+    document.currentProposalId = "proposal-2";
+    document.version = 2;
+    document.splitProposalVersions = [
+      ...document.splitProposalVersions,
+      {
+        id: "proposal-2",
+        versionNumber: 2,
+        proposedBy: "Maya Rios",
+        notes: "Counter-offer from Messages",
+        createdAt: "2026-08-12T12:10:00.000Z",
+        allocations: [
+          { partyId: "creator-party", name: "Chori", role: "Songwriter", percentage: 50 },
+          { partyId: "maya-party", name: "Maya Rios", role: "Producer", percentage: 50 },
+        ],
+      },
+    ];
+    document.splitApprovals = [
+      {
+        id: "proposal-2-creator",
+        proposalVersionId: "proposal-2",
+        collaboratorId: "creator",
+        collaboratorName: "Chori",
+        status: "Approved",
+        respondedAt: "2026-08-12T12:11:00.000Z",
+      },
+      {
+        id: "proposal-2-maya",
+        proposalVersionId: "proposal-2",
+        collaboratorId: "maya-invite",
+        collaboratorName: "Maya Rios",
+        status: "Approved",
+        respondedAt: "2026-08-12T12:11:00.000Z",
+      },
+    ];
+    document.splitSignatures = [
+      {
+        id: "stale-maya-signature",
+        proposalVersionId: "proposal-1",
+        collaboratorId: "maya-invite",
+        collaboratorName: "Maya Rios",
+        status: "Pending",
+      },
+      {
+        id: "current-creator-signature",
+        proposalVersionId: "proposal-2",
+        collaboratorId: "creator",
+        collaboratorName: "Chori",
+        status: "Signed",
+        signedAt: "2026-08-12T12:12:00.000Z",
+      },
+    ];
+    const onUpdateDocument = vi.fn().mockResolvedValue(undefined);
+
+    render(
+      <CollaborationView
+        documents={[document]}
+        userProfile={makeCollaboratorProfile()}
+        onUpdateDocument={onUpdateDocument}
+      />,
+    );
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Sign" })[0]);
+
+    await waitFor(() => expect(onUpdateDocument).toHaveBeenCalledTimes(1));
+    const [updatedDocument] = onUpdateDocument.mock.calls[0];
+    const staleSignature = updatedDocument.splitSignatures.find((signature) => signature.id === "stale-maya-signature");
+    const currentMayaSignature = updatedDocument.splitSignatures.find(
+      (signature) => signature.proposalVersionId === "proposal-2" && signature.collaboratorId === "maya-invite",
+    );
+
+    expect(staleSignature?.status).toBe("Pending");
+    expect(currentMayaSignature?.status).toBe("Signed");
+    expect(updatedDocument.status).toBe("Verified and Stored");
+  });
+
   it("shows only split sheets visible to the signed-in account", () => {
     const document = makeDocument();
     document.sentAt = document.createdAt;

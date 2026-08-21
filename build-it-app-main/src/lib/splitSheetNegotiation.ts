@@ -127,7 +127,7 @@ export function documentToNegotiationDeal(document: StoredSplitSheetDocument, us
   const acceptedBy = getSplitSheetAcceptedParticipantIds(document, currentProposalId);
   const signatures = buildSplitSheetSignatureRecords(document, currentProposalId);
   const signedBy = signatures
-    .filter((signature) => signature.status === "Signed")
+    .filter((signature) => signature.proposalVersionId === currentProposalId && signature.status === "Signed")
     .map((signature) => normalizeSplitSheetParticipantId(document, signature.collaboratorId) ?? signature.collaboratorId);
   const requiredSignerIds = getSplitSheetRequiredParticipantIds(document);
   const everyRequiredSignerAccepted = requiredSignerIds.length > 0 && requiredSignerIds.every((participantId) => acceptedBy.includes(participantId));

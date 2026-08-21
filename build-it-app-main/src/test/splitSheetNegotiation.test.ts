@@ -100,6 +100,61 @@ describe("split sheet negotiation mapping", () => {
     expect(deal && dealReadyToSign(deal)).toBe(true);
   });
 
+  it("only counts signatures from the current proposal version", () => {
+    const document = makeDocument();
+    document.sentAt = document.createdAt;
+    document.status = "Ready to Sign";
+    document.currentProposalId = "proposal-2";
+    document.version = 2;
+    document.splitProposalVersions = [
+      ...document.splitProposalVersions,
+      {
+        id: "proposal-2",
+        versionNumber: 2,
+        proposedBy: "Maya Rios",
+        notes: "Counter-offer from Messages",
+        createdAt: "2026-08-12T12:10:00.000Z",
+        allocations: [
+          { partyId: "creator-party", name: "Chori", role: "Songwriter", percentage: 50 },
+          { partyId: "maya-party", name: "Maya Rios", role: "Producer", percentage: 50 },
+        ],
+      },
+    ];
+    document.splitApprovals = [
+      {
+        id: "proposal-2-creator",
+        proposalVersionId: "proposal-2",
+        collaboratorId: "creator",
+        collaboratorName: "Chori",
+        status: "Approved",
+        respondedAt: "2026-08-12T12:11:00.000Z",
+      },
+      {
+        id: "proposal-2-maya",
+        proposalVersionId: "proposal-2",
+        collaboratorId: "maya-invite",
+        collaboratorName: "Maya Rios",
+        status: "Approved",
+        respondedAt: "2026-08-12T12:11:00.000Z",
+      },
+    ];
+    document.splitSignatures = [
+      {
+        id: "old-maya-signature",
+        proposalVersionId: "proposal-1",
+        collaboratorId: "maya-invite",
+        collaboratorName: "Maya Rios",
+        status: "Signed",
+        signedAt: "2026-08-12T12:06:00.000Z",
+      },
+    ];
+
+    const deal = documentToNegotiationDeal(document, profile());
+
+    expect(deal?.signedBy).toEqual([]);
+    expect(deal && dealReadyToSign(deal)).toBe(true);
+  });
+
   it("builds ordered structured and plain chat messages from the stored document", () => {
     const document = appendSplitSheetChatMessage(makeDocument(), {
       id: "chat-1",
