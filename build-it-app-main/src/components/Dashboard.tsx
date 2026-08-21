@@ -165,7 +165,7 @@ export default function Dashboard({
 
       const documents = results.map((result) => result.document);
       setGeneratedDocuments(documents);
-      saveLocalSplitSheetDocuments(documents, localStorageOwner);
+      saveLocalSplitSheetDocuments(documents.filter(splitSheetCanUseLocalDraftFallback), localStorageOwner);
       setSplitSheetsPersisted(results.length > 0 && results.every((result) => result.persisted));
       setLoadingSplitSheets(false);
     }
@@ -275,7 +275,7 @@ export default function Dashboard({
         ? current.map((item) => (item.id === document.id ? document : item))
         : [document, ...current];
 
-      saveLocalSplitSheetDocuments(next, localStorageOwner);
+      saveLocalSplitSheetDocuments(next.filter(splitSheetCanUseLocalDraftFallback), localStorageOwner);
       return next;
     });
   };

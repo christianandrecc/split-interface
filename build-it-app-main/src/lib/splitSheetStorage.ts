@@ -131,6 +131,11 @@ function upsertLocalDocument(document: StoredSplitSheetDocument, ownerKey?: stri
   saveLocalSplitSheetDocuments(next, ownerKey);
 }
 
+function removeLocalDocument(documentId: string, ownerKey?: string) {
+  const next = loadLocalSplitSheetDocuments(undefined, ownerKey).filter((document) => document.id !== documentId);
+  saveLocalSplitSheetDocuments(next, ownerKey);
+}
+
 export function splitSheetCanUseLocalDraftFallback(document: StoredSplitSheetDocument) {
   return document.status === "Draft" || !document.sentAt;
 }
@@ -320,7 +325,7 @@ export async function loadSplitSheetDocuments(profile?: UserProfile): Promise<Sp
       .filter((document) => !remoteDocumentIds.has(document.id));
     const mergedDocuments = dedupeDocuments([...remoteDocuments, ...scopedLocalOnlyDocuments]);
 
-    saveLocalSplitSheetDocuments(mergedDocuments, ownerKey);
+    saveLocalSplitSheetDocuments(scopedLocalOnlyDocuments, ownerKey);
     saveLocalSplitSheetDocuments([]);
 
     return mergedDocuments.map((document) => ({
@@ -366,7 +371,7 @@ export async function saveSplitSheetDocument(
     if (error) throw new Error(error.message);
 
     const persistedDocument = isStoredSplitSheetDocument(data) ? data : document;
-    upsertLocalDocument(persistedDocument, ownerKey);
+    removeLocalDocument(persistedDocument.id, ownerKey);
 
     return {
       document: persistedDocument,
@@ -424,7 +429,7 @@ export async function saveSplitSheetParticipantAction(
     if (error) throw new Error(error.message);
 
     const persistedDocument = isStoredSplitSheetDocument(data) ? data : document;
-    upsertLocalDocument(persistedDocument, ownerKey);
+    removeLocalDocument(persistedDocument.id, ownerKey);
 
     return {
       document: persistedDocument,
