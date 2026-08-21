@@ -26,6 +26,10 @@ const serverOwnedSaveSql = readFileSync(
   resolve(process.cwd(), "supabase/migrations/20260820143000_server_owned_split_sheet_saves.sql"),
   "utf8",
 );
+const deliveryRequeueGuardSql = readFileSync(
+  resolve(process.cwd(), "supabase/migrations/20260821022000_prevent_split_delivery_requeue.sql"),
+  "utf8",
+);
 
 describe("split sheet Supabase migration", () => {
   it("creates the core workflow tables", () => {
@@ -181,5 +185,15 @@ describe("split sheet Supabase migration", () => {
     expect(serverOwnedSaveSql).toContain("delete from public.split_sheet_audit_records");
     expect(serverOwnedSaveSql).toContain("Sent a message in Messages");
     expect(serverOwnedSaveSql).toContain("splitChatMessages");
+  });
+
+  it("does not requeue contract delivery during regular sent split-sheet updates", () => {
+    expect(deliveryRequeueGuardSql).toContain("when send_requested then 'queued'");
+    expect(deliveryRequeueGuardSql).toContain("else public.split_sheets.contract_delivery_status");
+    expect(deliveryRequeueGuardSql).toContain("else public.split_sheets.contract_delivery_requested_at");
+    expect(deliveryRequeueGuardSql).toContain("else public.split_sheets.contract_delivery_error");
+    expect(deliveryRequeueGuardSql).toContain("if send_requested then");
+    expect(deliveryRequeueGuardSql).not.toContain("if send_requested or next_sent_at is not null then");
+    expect(deliveryRequeueGuardSql).not.toContain("when send_requested or excluded.sent_at is not null then");
   });
 });
