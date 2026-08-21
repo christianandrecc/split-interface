@@ -131,6 +131,16 @@ function upsertLocalDocument(document: StoredSplitSheetDocument, ownerKey?: stri
   saveLocalSplitSheetDocuments(next, ownerKey);
 }
 
+export function splitSheetCanUseLocalDraftFallback(document: StoredSplitSheetDocument) {
+  return document.status === "Draft" || !document.sentAt;
+}
+
+function localDraftResults(documents: StoredSplitSheetDocument[]): SplitSheetSaveResult[] {
+  return documents
+    .filter(splitSheetCanUseLocalDraftFallback)
+    .map((document) => ({ document, persisted: false }));
+}
+
 function dedupeDocuments(documents: StoredSplitSheetDocument[]) {
   const byId = new Map<string, StoredSplitSheetDocument>();
 
@@ -289,14 +299,15 @@ export async function loadSplitSheetDocuments(profile?: UserProfile): Promise<Sp
 
   if (!isSupabaseConfigured) return localDocuments;
 
-  let scopedLocalDocuments: SplitSheetSaveResult[] = [];
+  const legacyLocalDrafts = localDraftResults(loadLocalSplitSheetDocuments(profile));
+  let scopedLocalDrafts: SplitSheetSaveResult[] = [];
   let authenticatedUserLoaded = false;
 
   try {
     const userId = await getActiveUserId();
     authenticatedUserLoaded = true;
     const ownerKey = splitSheetLocalStorageOwnerForAuthUser(userId);
-    scopedLocalDocuments = loadLocalSplitSheetDocuments(profile, ownerKey).map((document) => ({ document, persisted: false }));
+    scopedLocalDrafts = localDraftResults(loadLocalSplitSheetDocuments(profile, ownerKey));
     const { data, error } = await supabase.rpc("load_my_split_sheets");
     if (error) throw new Error(error.message);
 
@@ -304,7 +315,7 @@ export async function loadSplitSheetDocuments(profile?: UserProfile): Promise<Sp
       .map(rpcRowToDocument)
       .filter((document): document is StoredSplitSheetDocument => Boolean(document));
     const remoteDocumentIds = new Set(remoteDocuments.map((document) => document.id));
-    const scopedLocalOnlyDocuments = scopedLocalDocuments
+    const scopedLocalOnlyDocuments = scopedLocalDrafts
       .map((result) => result.document)
       .filter((document) => !remoteDocumentIds.has(document.id));
     const mergedDocuments = dedupeDocuments([...remoteDocuments, ...scopedLocalOnlyDocuments]);
@@ -318,7 +329,7 @@ export async function loadSplitSheetDocuments(profile?: UserProfile): Promise<Sp
     }));
   } catch (error) {
     console.warn("SPLIT could not load split sheets from Supabase.", error);
-    return authenticatedUserLoaded ? scopedLocalDocuments : localDocuments;
+    return authenticatedUserLoaded ? scopedLocalDrafts : legacyLocalDrafts;
   }
 }
 
@@ -341,7 +352,10 @@ export async function saveSplitSheetDocument(
   try {
     const userId = await getActiveUserId();
     const ownerKey = splitSheetLocalStorageOwnerForAuthUser(userId);
-    upsertLocalDocument(document, ownerKey);
+    const canUseLocalDraftFallback = splitSheetCanUseLocalDraftFallback(document);
+    if (canUseLocalDraftFallback && mode !== "send" && mode !== "contract_delivery") {
+      upsertLocalDocument(document, ownerKey);
+    }
 
     const { data, error } = await supabase.rpc("upsert_split_sheet_document", {
       p_document_payload: document as unknown as Json,
@@ -362,6 +376,9 @@ export async function saveSplitSheetDocument(
     console.warn("SPLIT could not save this split sheet to Supabase.", error);
     if (mode === "send" || mode === "contract_delivery") {
       throw new Error(`Could not send this split sheet through Supabase. ${explainPersistenceError(error)}`);
+    }
+    if (!splitSheetCanUseLocalDraftFallback(document)) {
+      throw new Error(`Could not save this split sheet through Supabase. ${explainPersistenceError(error)}`);
     }
 
     return {
@@ -390,7 +407,6 @@ export async function saveSplitSheetParticipantAction(
   try {
     const userId = await getActiveUserId();
     const ownerKey = splitSheetLocalStorageOwnerForAuthUser(userId);
-    upsertLocalDocument(document, ownerKey);
 
     const { data, error } = await supabase.rpc("apply_split_sheet_participant_update", {
       p_split_sheet_id: document.id,

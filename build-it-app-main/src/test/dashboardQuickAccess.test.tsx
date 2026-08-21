@@ -5,6 +5,11 @@ import { saveLocalSplitSheetDocuments } from "@/lib/splitSheetStorage";
 import { createEmptyProfile, type UserProfile } from "@/lib/userProfile";
 import { makeDocument } from "@/test/fixtures/splitSheet";
 
+vi.mock("@/integrations/supabase/client", () => ({
+  isSupabaseConfigured: false,
+  supabase: {},
+}));
+
 function makeProfile(): UserProfile {
   return {
     ...createEmptyProfile(),

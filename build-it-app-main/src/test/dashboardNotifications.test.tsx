@@ -1,7 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import Dashboard from "@/components/Dashboard";
-import { saveLocalSplitSheetDocuments } from "@/lib/splitSheetStorage";
 import { createEmptyProfile, type UserProfile } from "@/lib/userProfile";
 import { makeDocument } from "@/test/fixtures/splitSheet";
 
@@ -11,10 +10,23 @@ const notificationMocks = vi.hoisted(() => ({
   subscribeToSplitNotifications: vi.fn(),
 }));
 
+const supabaseMocks = vi.hoisted(() => ({
+  getUser: vi.fn(),
+  rpc: vi.fn(),
+}));
+
 vi.mock("@/lib/notificationStorage", () => ({
   loadSplitNotifications: notificationMocks.loadSplitNotifications,
   markSplitNotificationsRead: notificationMocks.markSplitNotificationsRead,
   subscribeToSplitNotifications: notificationMocks.subscribeToSplitNotifications,
+}));
+
+vi.mock("@/integrations/supabase/client", () => ({
+  isSupabaseConfigured: true,
+  supabase: {
+    auth: { getUser: supabaseMocks.getUser },
+    rpc: supabaseMocks.rpc,
+  },
 }));
 
 function makeProfile(): UserProfile {
@@ -35,12 +47,31 @@ describe("dashboard notifications", () => {
     notificationMocks.loadSplitNotifications.mockResolvedValue([]);
     notificationMocks.markSplitNotificationsRead.mockResolvedValue(1);
     notificationMocks.subscribeToSplitNotifications.mockResolvedValue(() => undefined);
+    supabaseMocks.getUser.mockReset();
+    supabaseMocks.rpc.mockReset();
+    supabaseMocks.getUser.mockResolvedValue({
+      data: { user: { id: "maya-user" } },
+      error: null,
+    });
+    supabaseMocks.rpc.mockResolvedValue({
+      data: [],
+      error: null,
+    });
   });
 
   it("loads real notifications into the bell and opens the related Messages room", async () => {
     const document = makeDocument();
     document.sentAt = document.createdAt;
-    saveLocalSplitSheetDocuments([document]);
+    supabaseMocks.rpc.mockImplementation(async (fn: string) => {
+      if (fn === "load_my_split_sheets") {
+        return {
+          data: [{ id: document.id, updated_at: document.updatedAt, document_payload: document }],
+          error: null,
+        };
+      }
+
+      return { data: null, error: null };
+    });
 
     notificationMocks.loadSplitNotifications.mockResolvedValue([
       {

@@ -49,7 +49,7 @@ describe("split sheet Supabase isolation", () => {
     expect(rpc).toHaveBeenCalledWith("load_my_split_sheets");
   });
 
-  it("keeps local fallback only when Supabase cannot load split sheets", async () => {
+  it("keeps only unsent local drafts when Supabase cannot load split sheets", async () => {
     const getUser = vi.fn(async () => ({
       data: { user: { id: "offline-auth-user" } },
       error: null,
@@ -73,9 +73,16 @@ describe("split sheet Supabase isolation", () => {
       splitSheetLocalStorageOwnerForAuthUser,
     } = await import("@/lib/splitSheetStorage");
 
-    const localDocument = makeDocument();
-    localDocument.sentAt = localDocument.createdAt;
-    saveLocalSplitSheetDocuments([localDocument], splitSheetLocalStorageOwnerForAuthUser("offline-auth-user"));
+    const sentLocalDocument = makeDocument();
+    sentLocalDocument.sentAt = sentLocalDocument.createdAt;
+    const draftLocalDocument = makeDocument();
+    draftLocalDocument.id = "22222222-2222-4222-8222-222222222222";
+    draftLocalDocument.status = "Draft";
+    draftLocalDocument.sentAt = undefined;
+    saveLocalSplitSheetDocuments(
+      [sentLocalDocument, draftLocalDocument],
+      splitSheetLocalStorageOwnerForAuthUser("offline-auth-user"),
+    );
 
     const profile = {
       ...createEmptyProfile(),
@@ -87,12 +94,12 @@ describe("split sheet Supabase isolation", () => {
 
     expect(results).toHaveLength(1);
     expect(results[0]).toMatchObject({
-      document: expect.objectContaining({ id: localDocument.id }),
+      document: expect.objectContaining({ id: draftLocalDocument.id }),
       persisted: false,
     });
   });
 
-  it("keeps current account local split sheets during an empty Supabase refresh", async () => {
+  it("keeps only current account local drafts during an empty Supabase refresh", async () => {
     const getUser = vi.fn(async () => ({
       data: { user: { id: "current-auth-user" } },
       error: null,
@@ -116,9 +123,16 @@ describe("split sheet Supabase isolation", () => {
       splitSheetLocalStorageOwnerForAuthUser,
     } = await import("@/lib/splitSheetStorage");
 
-    const localDocument = makeDocument();
-    localDocument.sentAt = localDocument.createdAt;
-    saveLocalSplitSheetDocuments([localDocument], splitSheetLocalStorageOwnerForAuthUser("current-auth-user"));
+    const sentLocalDocument = makeDocument();
+    sentLocalDocument.sentAt = sentLocalDocument.createdAt;
+    const draftLocalDocument = makeDocument();
+    draftLocalDocument.id = "33333333-3333-4333-8333-333333333333";
+    draftLocalDocument.status = "Draft";
+    draftLocalDocument.sentAt = undefined;
+    saveLocalSplitSheetDocuments(
+      [sentLocalDocument, draftLocalDocument],
+      splitSheetLocalStorageOwnerForAuthUser("current-auth-user"),
+    );
 
     const profile = {
       ...createEmptyProfile(),
@@ -130,7 +144,7 @@ describe("split sheet Supabase isolation", () => {
 
     expect(results).toHaveLength(1);
     expect(results[0]).toMatchObject({
-      document: expect.objectContaining({ id: localDocument.id }),
+      document: expect.objectContaining({ id: draftLocalDocument.id }),
       persisted: false,
     });
     expect(rpc).toHaveBeenCalledWith("load_my_split_sheets");
@@ -154,7 +168,11 @@ describe("split sheet Supabase isolation", () => {
       },
     }));
 
-    const { saveSplitSheetDocument } = await import("@/lib/splitSheetStorage");
+    const {
+      loadLocalSplitSheetDocuments,
+      saveSplitSheetDocument,
+      splitSheetLocalStorageOwnerForAuthUser,
+    } = await import("@/lib/splitSheetStorage");
     const profile = {
       ...createEmptyProfile(),
       username: "chori",
@@ -165,6 +183,7 @@ describe("split sheet Supabase isolation", () => {
     await expect(saveSplitSheetDocument(makeDocument(), "send", profile)).rejects.toThrow(
       /Could not send this split sheet through Supabase/,
     );
+    expect(loadLocalSplitSheetDocuments(profile, splitSheetLocalStorageOwnerForAuthUser("current-auth-user"))).toEqual([]);
     expect(rpc).toHaveBeenCalledWith("upsert_split_sheet_document", {
       p_document_payload: expect.objectContaining({ id: "11111111-1111-4111-8111-111111111111" }),
       p_mode: "send",

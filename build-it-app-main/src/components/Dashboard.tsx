@@ -30,6 +30,7 @@ import {
   saveLocalSplitSheetDocuments,
   saveSplitSheetDocument,
   saveSplitSheetParticipantAction,
+  splitSheetCanUseLocalDraftFallback,
   splitSheetLocalStorageOwnerForAuthUser,
   type SplitSheetSaveMode,
   type SplitSheetUpdateContext,
@@ -280,7 +281,10 @@ export default function Dashboard({
   };
 
   const persistGeneratedDocument = async (document: StoredSplitSheetDocument, mode: SplitSheetSaveMode) => {
-    const requiresRemoteConfirmation = mode === "send" || mode === "contract_delivery";
+    const requiresRemoteConfirmation =
+      mode === "send" ||
+      mode === "contract_delivery" ||
+      !splitSheetCanUseLocalDraftFallback(document);
     if (!requiresRemoteConfirmation) {
       applyGeneratedDocument(document);
     }
@@ -293,7 +297,8 @@ export default function Dashboard({
   };
 
   const updateGeneratedDocument = async (document: StoredSplitSheetDocument, context: SplitSheetUpdateContext = {}) => {
-    const requiresRemoteConfirmation = Boolean(context.action && context.action !== "creator_update");
+    const requiresRemoteConfirmation = Boolean(context.action && context.action !== "creator_update") ||
+      !splitSheetCanUseLocalDraftFallback(document);
     if (!requiresRemoteConfirmation) {
       applyGeneratedDocument(document);
       setSelectedAgreement(documentToAgreement(document));
