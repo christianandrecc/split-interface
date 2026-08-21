@@ -3,6 +3,7 @@ import {
   findInviteForProfile,
   documentBelongsToProfile,
   documentParticipantIdsForProfile,
+  explainSplitSheetPersistenceError,
   loadLocalSplitSheetDocuments,
   saveLocalSplitSheetDocuments,
 } from "@/lib/splitSheetStorage";
@@ -56,6 +57,18 @@ describe("split sheet profile matching", () => {
       "creator",
       "creator-party",
     ]);
+  });
+
+  it("explains backend persistence failures without exposing raw database language", () => {
+    expect(explainSplitSheetPersistenceError(new Error("violates row-level security policy"))).toContain(
+      "not allowed to update this split",
+    );
+    expect(explainSplitSheetPersistenceError(new Error("Network unavailable"))).toContain(
+      "could not reach the backend",
+    );
+    expect(explainSplitSheetPersistenceError(new Error("function public.upsert_split_sheet_document does not exist"))).toContain(
+      "missing the latest split-sheet migration",
+    );
   });
 
   it("matches collaborator invites by username and email", () => {

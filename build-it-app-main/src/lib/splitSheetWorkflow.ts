@@ -78,6 +78,6 @@ export function queueContractDelivery(document: StoredSplitSheetDocument, actor:
       sentAt: document.sentAt || new Date().toISOString(),
     },
     actor,
-    "Queued contract delivery through Supabase server-side services",
+    "Queued contract delivery through SPLIT server-side services",
   );
 }

@@ -162,8 +162,58 @@ function dedupeDocuments(documents: StoredSplitSheetDocument[]) {
   );
 }
 
-function explainPersistenceError(error: unknown) {
-  return error instanceof Error ? error.message : "Supabase did not save this split sheet.";
+function rawPersistenceMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error || "");
+}
+
+export function explainSplitSheetPersistenceError(error: unknown) {
+  const message = rawPersistenceMessage(error);
+  const normalizedMessage = message.toLowerCase();
+
+  if (
+    normalizedMessage.includes("sign in before") ||
+    normalizedMessage.includes("jwt") ||
+    normalizedMessage.includes("session")
+  ) {
+    return "Your session is not active. Sign in again, reopen the split from Messages, and retry.";
+  }
+
+  if (
+    normalizedMessage.includes("row-level security") ||
+    normalizedMessage.includes("permission denied") ||
+    normalizedMessage.includes("not authorized") ||
+    normalizedMessage.includes("not a participant") ||
+    normalizedMessage.includes("blocked")
+  ) {
+    return "Your account is not allowed to update this split yet. Use the invited account, accept the invite if needed, then retry.";
+  }
+
+  if (
+    (normalizedMessage.includes("function") && normalizedMessage.includes("does not exist")) ||
+    normalizedMessage.includes("schema cache") ||
+    normalizedMessage.includes("load_my_split_sheets") ||
+    normalizedMessage.includes("upsert_split_sheet_document") ||
+    normalizedMessage.includes("apply_split_sheet_participant_update")
+  ) {
+    return "SPLIT's database is missing the latest split-sheet migration. Apply the newest Supabase migration, then retry.";
+  }
+
+  if (
+    normalizedMessage.includes("network") ||
+    normalizedMessage.includes("failed to fetch") ||
+    normalizedMessage.includes("timeout") ||
+    normalizedMessage.includes("unavailable")
+  ) {
+    return "SPLIT could not reach the backend. Check your connection, refresh, and try again.";
+  }
+
+  if (normalizedMessage.includes("duplicate key")) {
+    return "This split already has a matching backend record. Refresh to load the latest version, then retry.";
+  }
+
+  return message
+    ? `SPLIT could not confirm the backend update. ${message}`
+    : "SPLIT could not confirm the backend update. Refresh and try again.";
 }
 
 function requireSupabaseConfig() {
@@ -407,10 +457,10 @@ export async function saveSplitSheetDocument(
   } catch (error) {
     console.warn("SPLIT could not save this split sheet to Supabase.", error);
     if (mode === "send" || mode === "contract_delivery") {
-      throw new Error(`Could not send this split sheet through Supabase. ${explainPersistenceError(error)}`);
+      throw new Error(`Could not send this split sheet. ${explainSplitSheetPersistenceError(error)}`);
     }
     if (!splitSheetCanUseLocalDraftFallback(document)) {
-      throw new Error(`Could not save this split sheet through Supabase. ${explainPersistenceError(error)}`);
+      throw new Error(`Could not save this split sheet. ${explainSplitSheetPersistenceError(error)}`);
     }
 
     return {
@@ -464,6 +514,6 @@ export async function saveSplitSheetParticipantAction(
     };
   } catch (error) {
     console.warn("SPLIT could not save this participant action to Supabase.", error);
-    throw new Error(`Could not save this Messages update through Supabase. ${explainPersistenceError(error)}`);
+    throw new Error(`Could not save this Messages update. ${explainSplitSheetPersistenceError(error)}`);
   }
 }

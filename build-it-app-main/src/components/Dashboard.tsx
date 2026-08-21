@@ -319,7 +319,7 @@ export default function Dashboard({
     void refreshNotifications(false);
     if (!persisted.persisted) {
       toast.warning("Saved locally", {
-        description: "Supabase did not confirm this split-sheet update yet.",
+        description: "The backend did not confirm this split-sheet update yet.",
       });
     }
     return persisted.document;
@@ -804,7 +804,7 @@ function DashboardHome({
                   ? "border-[hsl(var(--split-verified)/0.25)] bg-[hsl(var(--split-verified)/0.08)] text-[hsl(var(--split-verified))]"
                   : "border-border bg-secondary/50 text-muted-foreground"
               }`}>
-                {loading ? "Loading split sheets..." : persisted ? "Supabase synced" : "Local preview fallback"}
+                {loading ? "Loading split sheets..." : persisted ? "SPLIT synced" : "Local preview fallback"}
               </span>
               <span className="text-[11px] font-medium text-muted-foreground">
                 Contracts are queued for server-side delivery, never sent from the browser.

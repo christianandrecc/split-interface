@@ -223,7 +223,7 @@ describe("split sheet Supabase isolation", () => {
     };
 
     await expect(saveSplitSheetDocument(makeDocument(), "send", profile)).rejects.toThrow(
-      /Could not send this split sheet through Supabase/,
+      /Could not send this split sheet\. Your account is not allowed to update this split yet/,
     );
     expect(loadLocalSplitSheetDocuments(profile, splitSheetLocalStorageOwnerForAuthUser("current-auth-user"))).toEqual([]);
     expect(rpc).toHaveBeenCalledWith("upsert_split_sheet_document", {

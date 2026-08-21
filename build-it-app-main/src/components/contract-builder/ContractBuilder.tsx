@@ -94,7 +94,7 @@ export default function ContractBuilder({
       toast.success(result.persisted ? "SPLIT Sheet draft saved" : "SPLIT Sheet draft saved locally", {
         description: result.persisted
           ? "The draft is now visible in your account."
-          : "Supabase was unavailable, so this preview used local storage.",
+          : "The backend was unavailable, so this preview used local storage.",
       });
     } catch (error) {
       toast.error("Could not save this SPLIT Sheet draft", {
@@ -123,8 +123,8 @@ export default function ContractBuilder({
       const result = await onStoreDocument(storedDocument);
       setGeneratedDocument(result.document);
       setDocumentStored(true);
-      toast.success(result.persisted ? "SPLIT Sheet stored in Supabase" : "SPLIT Sheet stored locally", {
-        description: result.persisted ? "The backend record is ready." : "Supabase was unavailable, so this preview used local storage.",
+      toast.success(result.persisted ? "SPLIT Sheet stored" : "SPLIT Sheet stored locally", {
+        description: result.persisted ? "The backend record is ready." : "The backend was unavailable, so this preview used local storage.",
       });
     } catch (error) {
       toast.error("Could not store this SPLIT Sheet", {
@@ -162,7 +162,7 @@ export default function ContractBuilder({
           : "Solo SPLIT Sheet stored",
         {
           description: result.persisted
-            ? "Supabase has the split sheet and delivery request."
+            ? "The backend has the split sheet and delivery request."
             : "Saved locally with a server-side delivery placeholder.",
         },
       );
