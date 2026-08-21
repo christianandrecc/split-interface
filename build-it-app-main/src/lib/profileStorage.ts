@@ -222,6 +222,7 @@ function rowToProfile(row: ProfileRow): UserProfile {
 
   return normalizeUserProfile({
     ...payload,
+    authUserId: row.user_id,
     username: row.username ?? payload.username,
     displayName: row.display_name ?? payload.displayName,
     profileImageUrl: row.profile_image_url ?? payload.profileImageUrl,
@@ -381,6 +382,7 @@ function profileFromAuthUserMetadata(user: AuthUserLike) {
   const payload = recordFromUnknown(metadata.profile_data) as Partial<UserProfile>;
   const profile = normalizeUserProfile({
     ...payload,
+    authUserId: user.id,
     username: firstMetaText(metadata, "username") ?? payload.username,
     displayName: firstMetaText(metadata, "display_name", "displayName", "name", "full_name") ?? payload.displayName,
     profileImageUrl: firstMetaText(metadata, "profile_image_url", "profileImageUrl", "avatar_url") ?? payload.profileImageUrl,

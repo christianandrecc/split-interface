@@ -13,6 +13,7 @@ const LOCAL_DOCUMENTS_BY_OWNER_KEY = "split.generatedDocuments.byOwner.v1";
 type SplitSheetRpcRow = {
   id: string;
   updated_at: string | null;
+  creator_user_id?: string | null;
   document_payload: Json;
 };
 
@@ -221,6 +222,12 @@ function partyMatchesProfile(
 
 export function documentBelongsToProfile(document: StoredSplitSheetDocument, profile: UserProfile) {
   const creator = document.creatorProfile;
+  const documentCreatorUserId = normalizeIdentifier(document.creatorUserId || creator.authUserId);
+  const profileAuthUserId = normalizeIdentifier(profile.authUserId);
+
+  if (documentCreatorUserId) {
+    return Boolean(profileAuthUserId && documentCreatorUserId === profileAuthUserId);
+  }
 
   return Boolean(
     (creator.username && normalizeIdentifier(creator.username) === normalizeIdentifier(profile.username)) ||
@@ -268,8 +275,10 @@ export function documentParticipantIdsForProfile(document: StoredSplitSheetDocum
     ? document.data.parties.find((party) => party.id === viewerInvite.partyId)
     : undefined;
   const hasCollaboratorIdentity = Boolean(viewerInvite && !viewerInviteParty?.isCurrentUser);
+  const documentCreatorUserId = normalizeIdentifier(document.creatorUserId || document.creatorProfile.authUserId);
+  const isAuthenticatedCreator = documentBelongsToProfile(document, profile);
 
-  if (documentBelongsToProfile(document, profile) && !hasCollaboratorIdentity) {
+  if (isAuthenticatedCreator && !hasCollaboratorIdentity) {
     ids.add("creator");
     const creatorParty = document.data.parties.find((party) => party.isCurrentUser);
     if (creatorParty?.id) ids.add(creatorParty.id);
@@ -282,6 +291,7 @@ export function documentParticipantIdsForProfile(document: StoredSplitSheetDocum
 
   document.data.parties.forEach((party) => {
     if (hasCollaboratorIdentity && party.isCurrentUser) return;
+    if (documentCreatorUserId && party.isCurrentUser && !isAuthenticatedCreator) return;
     if (!partyMatchesProfile(party, profile)) return;
 
     ids.add(party.id);
@@ -295,8 +305,24 @@ export function documentParticipantIdsForProfile(document: StoredSplitSheetDocum
   return ids;
 }
 
+function documentWithServerIdentity(document: StoredSplitSheetDocument, creatorUserId?: string | null) {
+  const normalizedCreatorUserId = normalizeIdentifier(creatorUserId || document.creatorUserId || document.creatorProfile.authUserId);
+  if (!normalizedCreatorUserId) return document;
+
+  return {
+    ...document,
+    creatorUserId: normalizedCreatorUserId,
+    creatorProfile: {
+      ...document.creatorProfile,
+      authUserId: normalizedCreatorUserId,
+    },
+  };
+}
+
 function rpcRowToDocument(row: SplitSheetRpcRow): StoredSplitSheetDocument | null {
-  return isStoredSplitSheetDocument(row.document_payload) ? row.document_payload : null;
+  return isStoredSplitSheetDocument(row.document_payload)
+    ? documentWithServerIdentity(row.document_payload, row.creator_user_id)
+    : null;
 }
 
 export async function loadSplitSheetDocuments(profile?: UserProfile): Promise<SplitSheetSaveResult[]> {
@@ -358,19 +384,20 @@ export async function saveSplitSheetDocument(
     const userId = await getActiveUserId();
     const ownerKey = splitSheetLocalStorageOwnerForAuthUser(userId);
     const canUseLocalDraftFallback = splitSheetCanUseLocalDraftFallback(document);
+    const documentForSave = documentWithServerIdentity(document, userId);
     if (canUseLocalDraftFallback && mode !== "send" && mode !== "contract_delivery") {
-      upsertLocalDocument(document, ownerKey);
+      upsertLocalDocument(documentForSave, ownerKey);
     }
 
     const { data, error } = await supabase.rpc("upsert_split_sheet_document", {
-      p_document_payload: document as unknown as Json,
+      p_document_payload: documentForSave as unknown as Json,
       p_mode: mode,
       p_actor_label: actor,
     });
 
     if (error) throw new Error(error.message);
 
-    const persistedDocument = isStoredSplitSheetDocument(data) ? data : document;
+    const persistedDocument = isStoredSplitSheetDocument(data) ? documentWithServerIdentity(data, userId) : documentForSave;
     removeLocalDocument(persistedDocument.id, ownerKey);
 
     return {

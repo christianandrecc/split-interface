@@ -561,6 +561,7 @@ export type Database = {
       load_my_split_sheets: {
         Args: Record<PropertyKey, never>
         Returns: {
+          creator_user_id: string
           document_payload: Json
           id: string
           updated_at: string | null

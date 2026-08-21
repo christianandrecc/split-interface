@@ -21,6 +21,43 @@ describe("split sheet profile matching", () => {
     expect(documentBelongsToProfile(document, profile)).toBe(true);
   });
 
+  it("prefers Supabase auth ids over reused creator usernames and emails", () => {
+    const document = makeDocument();
+    document.creatorUserId = "old-auth-user";
+    document.creatorProfile.authUserId = "old-auth-user";
+
+    const freshProfileWithSameHandle = {
+      ...createEmptyProfile(),
+      authUserId: "fresh-auth-user",
+      username: "chori",
+      emailAddress: "chori@example.com",
+    };
+
+    expect(documentBelongsToProfile(document, freshProfileWithSameHandle)).toBe(false);
+    expect([...documentParticipantIdsForProfile(document, freshProfileWithSameHandle)]).toEqual([]);
+  });
+
+  it("keeps creator ownership when the Supabase auth id matches even if the username changes", () => {
+    const document = makeDocument();
+    document.creatorUserId = "creator-auth-user";
+    document.creatorProfile.authUserId = "creator-auth-user";
+    document.creatorProfile.username = "old-chori";
+    document.creatorProfile.emailAddress = "old@example.com";
+
+    const renamedCreatorProfile = {
+      ...createEmptyProfile(),
+      authUserId: "creator-auth-user",
+      username: "new-chori",
+      emailAddress: "new@example.com",
+    };
+
+    expect(documentBelongsToProfile(document, renamedCreatorProfile)).toBe(true);
+    expect([...documentParticipantIdsForProfile(document, renamedCreatorProfile)].sort()).toEqual([
+      "creator",
+      "creator-party",
+    ]);
+  });
+
   it("matches collaborator invites by username and email", () => {
     const usernameDocument = makeDocument();
     const usernameProfile = {
@@ -79,6 +116,8 @@ describe("split sheet profile matching", () => {
 
   it("prefers a collaborator invite over a stale creator profile match", () => {
     const document = makeDocument();
+    document.creatorUserId = "creator-auth-user";
+    document.creatorProfile.authUserId = "creator-auth-user";
     document.creatorProfile.username = "chori";
     document.creatorProfile.emailAddress = "chori@example.com";
     document.collaboratorInvites[0].inviteValue = "@chori";
@@ -91,6 +130,7 @@ describe("split sheet profile matching", () => {
 
     const profile = {
       ...createEmptyProfile(),
+      authUserId: "collaborator-auth-user",
       username: "chori",
       displayName: "Chori",
       emailAddress: "chori@example.com",

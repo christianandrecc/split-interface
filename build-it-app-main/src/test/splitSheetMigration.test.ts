@@ -30,6 +30,10 @@ const deliveryRequeueGuardSql = readFileSync(
   resolve(process.cwd(), "supabase/migrations/20260821022000_prevent_split_delivery_requeue.sql"),
   "utf8",
 );
+const serverIdentityPayloadSql = readFileSync(
+  resolve(process.cwd(), "supabase/migrations/20260821025000_split_sheet_server_identity_payload.sql"),
+  "utf8",
+);
 
 describe("split sheet Supabase migration", () => {
   it("creates the core workflow tables", () => {
@@ -195,5 +199,14 @@ describe("split sheet Supabase migration", () => {
     expect(deliveryRequeueGuardSql).toContain("if send_requested then");
     expect(deliveryRequeueGuardSql).not.toContain("if send_requested or next_sent_at is not null then");
     expect(deliveryRequeueGuardSql).not.toContain("when send_requested or excluded.sent_at is not null then");
+  });
+
+  it("returns server creator identity with split-sheet payloads", () => {
+    expect(serverIdentityPayloadSql).toContain("drop function if exists public.load_my_split_sheets");
+    expect(serverIdentityPayloadSql).toContain("creator_user_id uuid");
+    expect(serverIdentityPayloadSql).toContain("jsonb_set");
+    expect(serverIdentityPayloadSql).toContain("'{creatorUserId}'");
+    expect(serverIdentityPayloadSql).toContain("sheet.creator_user_id::text");
+    expect(serverIdentityPayloadSql).toContain("grant execute on function public.load_my_split_sheets() to authenticated");
   });
 });

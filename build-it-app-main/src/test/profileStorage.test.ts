@@ -75,6 +75,7 @@ describe("profile phone storage", () => {
     } as Parameters<typeof profileFromStoredRowForTest>[0]);
 
     expect(profile.emailAddress).toBe("chori@example.com");
+    expect(profile.authUserId).toBe("00000000-0000-0000-0000-000000000000");
     expect(profile.username).toBe("chori");
     expect(profile.legalFirstName).toBe("");
     expect(profile.phoneCountryCode).toBe("+1");

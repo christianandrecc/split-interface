@@ -1,6 +1,7 @@
 import { formatNationalPhoneNumber } from "@/lib/phone";
 
 export type UserProfile = {
+  authUserId: string;
   splitId: string;
   username: string;
   displayName: string;
@@ -60,6 +61,7 @@ export function normalizeUsername(value?: string) {
 
 export function createEmptyProfile(): UserProfile {
   return {
+    authUserId: "",
     splitId: createSplitId(),
     username: "",
     displayName: "",
@@ -139,6 +141,7 @@ export function normalizeUserProfile(profile: Partial<UserProfile>): UserProfile
 
   return {
     ...normalized,
+    authUserId: text(normalized.authUserId),
     splitId: text(normalized.splitId) || base.splitId,
     username: normalizeUsername(normalized.username),
     displayName: text(normalized.displayName),

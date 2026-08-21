@@ -18,6 +18,7 @@ export type StoredSplitSheetStatus =
 
 export type StoredSplitSheetDocument = {
   id: string;
+  creatorUserId?: string;
   title: string;
   status: StoredSplitSheetStatus;
   version: number;
@@ -145,6 +146,7 @@ export function createSplitSheetDocument(data: ContractData, creatorProfile: Use
 
   return {
     id,
+    creatorUserId: creatorProfile.authUserId || undefined,
     title,
     status: "Draft",
     version: 1,

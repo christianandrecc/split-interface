@@ -88,6 +88,7 @@ describe("App profile session loading", () => {
 
     const cachedSession = JSON.parse(window.localStorage.getItem("split.userProfileSession.v1") ?? "{}");
     expect(cachedSession.userId).toBe("maya-user-id");
+    expect(cachedSession.profile.authUserId).toBe("maya-user-id");
     expect(cachedSession.profile.emailAddress).toBe("maya@example.com");
   });
 
@@ -168,6 +169,7 @@ describe("App profile session loading", () => {
 
     const cachedSession = JSON.parse(window.localStorage.getItem("split.userProfileSession.v1") ?? "{}");
     expect(cachedSession.userId).toBe("same-auth-user");
+    expect(cachedSession.profile.authUserId).toBe("same-auth-user");
     expect(cachedSession.profile.displayName).toBe("Fresh Chori");
   });
 });

@@ -90,7 +90,10 @@ const App = () => {
           if (!active) return;
 
           if (session) {
-            const normalizedProfile = normalizeUserProfile(session.profile);
+            const normalizedProfile = normalizeUserProfile({
+              ...session.profile,
+              authUserId: session.userId,
+            });
             setActiveAuthUserId(session.userId);
             writeProfileSession(session.userId, normalizedProfile);
             setUserProfile(normalizedProfile);
@@ -131,7 +134,10 @@ const App = () => {
   }, []);
 
   const persistProfile = (profile: UserProfile, authUserId = activeAuthUserId) => {
-    const normalizedProfile = normalizeUserProfile(profile);
+    const normalizedProfile = normalizeUserProfile({
+      ...profile,
+      authUserId: authUserId ?? profile.authUserId,
+    });
     if (authUserId) {
       writeProfileSession(authUserId, normalizedProfile);
     } else {
