@@ -15,7 +15,7 @@ import {
   signInAndLoadSupabaseProfile,
 } from "@/lib/profileStorage";
 import { isSupabaseConfigured } from "@/integrations/supabase/client";
-import { profileSessionMatchesSignIn, type CachedProfileSession } from "@/lib/profileSessionCache";
+import type { CachedProfileSession } from "@/lib/profileSessionCache";
 import { toast } from "sonner";
 
 const queryClient = new QueryClient();
@@ -48,28 +48,6 @@ function writeLocalProfile(profile: UserProfile) {
   }
 }
 
-function readProfileSession() {
-  try {
-    const savedSession = window.localStorage.getItem(PROFILE_SESSION_STORAGE_KEY);
-    if (!savedSession) return null;
-
-    const parsed = JSON.parse(savedSession) as Partial<CachedProfileSession>;
-    if (!parsed.userId || !parsed.profile) return null;
-
-    return {
-      userId: parsed.userId,
-      profile: normalizeUserProfile(parsed.profile),
-    };
-  } catch {
-    try {
-      window.localStorage.removeItem(PROFILE_SESSION_STORAGE_KEY);
-    } catch {
-      // Ignore disabled storage.
-    }
-    return null;
-  }
-}
-
 function writeProfileSession(userId: string, profile: UserProfile) {
   const cachedSession: CachedProfileSession = { userId, profile };
   try {
@@ -87,24 +65,6 @@ function clearProfileCache() {
   } catch {
     // Ignore disabled storage.
   }
-}
-
-function hasRicherProfileData(profile: UserProfile | null) {
-  if (!profile) return false;
-
-  return Boolean(
-    profile.legalName ||
-      profile.legalFirstName ||
-      profile.legalLastName ||
-      profile.phoneNumber ||
-      profile.roleTags ||
-      profile.proAffiliation ||
-      profile.ipiNumber ||
-      profile.addressLine ||
-      profile.city ||
-      profile.publisherName ||
-      profile.publishingStatus,
-  );
 }
 
 function hasPasswordRecoveryUrl() {
@@ -220,31 +180,14 @@ const App = () => {
   };
 
   const handleSignIn = async (emailAddress: string, password: string) => {
-    const cachedSession = readProfileSession();
     const result = await signInAndLoadSupabaseProfile(emailAddress, password);
-    const pendingProfile = profileSessionMatchesSignIn(cachedSession, result.userId, emailAddress)
-      ? cachedSession.profile
-      : null;
-    const profile =
-      hasRicherProfileData(pendingProfile)
-        ? await saveSupabaseProfile({
-            ...result.profile,
-            ...pendingProfile,
-            splitId: result.profile.splitId || pendingProfile.splitId,
-            username: pendingProfile.username || result.profile.username,
-            emailAddress: result.profile.emailAddress || pendingProfile.emailAddress,
-          })
-        : result.profile;
-
-    if (cachedSession?.userId && cachedSession.userId !== result.userId) {
-      clearProfileCache();
-    }
+    clearProfileCache();
     setActiveAuthUserId(result.userId ?? null);
-    persistProfile(profile, result.userId ?? null);
+    persistProfile(result.profile, result.userId ?? null);
     setShowAccountCreation(false);
     setPasswordRecoveryActive(false);
     toast.success("Signed in to SPLIT", {
-      description: profile.username ? `@${profile.username}` : profile.emailAddress,
+      description: result.profile.username ? `@${result.profile.username}` : result.profile.emailAddress,
     });
   };
 

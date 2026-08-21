@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import App from "@/App";
 import { profileSessionMatchesSignIn } from "@/lib/profileSessionCache";
@@ -106,7 +106,7 @@ describe("App profile session loading", () => {
     expect(window.localStorage.getItem("split.userProfileSession.v1")).toBeNull();
   });
 
-  it("only reuses cached sign-in profile data for the same Supabase user id", () => {
+  it("can recognize whether cached sign-in data belongs to the same Supabase user id", () => {
     const cachedSession = {
       userId: "old-auth-user",
       profile: makeProfile({
@@ -119,5 +119,55 @@ describe("App profile session loading", () => {
     expect(profileSessionMatchesSignIn(cachedSession, "old-auth-user", "chori@example.com")).toBe(true);
     expect(profileSessionMatchesSignIn(cachedSession, "new-auth-user", "chori@example.com")).toBe(false);
     expect(profileSessionMatchesSignIn(cachedSession, "old-auth-user", "other@example.com")).toBe(false);
+  });
+
+  it("does not overwrite the Supabase profile with stale cached data during sign-in", async () => {
+    const staleProfile = makeProfile({
+      username: "old-chori",
+      displayName: "Old Chori",
+      emailAddress: "chori@example.com",
+      legalName: "Old Legal Name",
+      phoneNumber: "216-555-1212",
+      roleTags: "Producer",
+    });
+    const supabaseProfile = makeProfile({
+      username: "fresh-chori",
+      displayName: "Fresh Chori",
+      emailAddress: "chori@example.com",
+      legalName: "Fresh Legal Name",
+      roleTags: "Writer",
+    });
+
+    window.localStorage.setItem(
+      "split.userProfileSession.v1",
+      JSON.stringify({ userId: "same-auth-user", profile: staleProfile }),
+    );
+    mocks.loadProfileSessionForActiveSession.mockResolvedValue(null);
+    mocks.signInAndLoadSupabaseProfile.mockResolvedValue({
+      profile: supabaseProfile,
+      saved: true,
+      userId: "same-auth-user",
+    });
+
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Personal information" })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Sign In" }));
+    fireEvent.change(screen.getByRole("textbox", { name: /email address/i }), {
+      target: { value: "chori@example.com" },
+    });
+    fireEvent.change(screen.getByLabelText(/password/i), {
+      target: { value: "password123" },
+    });
+    fireEvent.click(screen.getAllByRole("button", { name: "Sign In" }).at(-1)!);
+
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Your Profile" })).toBeInTheDocument());
+    expect(screen.getByText("Fresh Chori")).toBeInTheDocument();
+    expect(screen.queryByText("Old Chori")).not.toBeInTheDocument();
+    expect(mocks.saveSupabaseProfile).not.toHaveBeenCalled();
+
+    const cachedSession = JSON.parse(window.localStorage.getItem("split.userProfileSession.v1") ?? "{}");
+    expect(cachedSession.userId).toBe("same-auth-user");
+    expect(cachedSession.profile.displayName).toBe("Fresh Chori");
   });
 });
