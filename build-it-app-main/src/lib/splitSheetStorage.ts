@@ -399,9 +399,13 @@ export async function saveSplitSheetParticipantAction(
     throw new Error(splitValidation.errors.join(" "));
   }
 
-  if (!isSupabaseConfigured || !context.action || context.action === "creator_update") {
+  if (!isSupabaseConfigured || !context.action) {
     upsertLocalDocument(document);
     return { document, persisted: false };
+  }
+
+  if (context.action === "creator_update") {
+    return saveSplitSheetDocument(document, "update", profile);
   }
 
   try {
