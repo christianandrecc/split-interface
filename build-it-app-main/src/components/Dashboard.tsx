@@ -807,7 +807,7 @@ function DashboardHome({
                 {loading ? "Loading split sheets..." : persisted ? "SPLIT synced" : "Local preview fallback"}
               </span>
               <span className="text-[11px] font-medium text-muted-foreground">
-                Contracts are queued for server-side delivery, never sent from the browser.
+                Collaborators review in Messages; final contract delivery stays server-side.
               </span>
             </div>
           </div>

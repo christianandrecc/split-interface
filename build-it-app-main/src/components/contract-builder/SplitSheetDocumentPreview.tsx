@@ -279,7 +279,7 @@ export default function SplitSheetDocumentPreview({
           <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
             {isVerifiedRecord
               ? "Review or download the final signed split record stored in your archive."
-              : "Save this draft or send invitations so collaborators can confirm they were part of the work."}
+              : "Save this draft or start a Messages review so collaborators can negotiate and sign inside SPLIT. External contract delivery stays server-side for beta."}
           </p>
         </div>
 
@@ -300,7 +300,7 @@ export default function SplitSheetDocumentPreview({
             className={(!hasCollaborators || sent || isVerifiedRecord ? "border-slate-200 bg-slate-100 text-slate-400" : "border-[#31598f] bg-[#31598f] text-white hover:bg-[#264772]") + " inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold shadow-sm transition disabled:cursor-default"}
           >
             {sent ? <CheckCircle2 className="h-4 w-4" /> : <Send className="h-4 w-4" />}
-            {isVerifiedRecord ? "Finalized" : hasCollaborators ? (sent ? "Invites sent" : "Send invites") : "No collaborators"}
+            {isVerifiedRecord ? "Finalized" : hasCollaborators ? (sent ? "Messages started" : "Start Messages review") : "No collaborators"}
           </button>
           <button
             type="button"

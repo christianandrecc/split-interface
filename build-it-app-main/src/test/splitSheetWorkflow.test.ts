@@ -50,6 +50,7 @@ describe("split sheet workflow validation", () => {
     const queued = queueContractDelivery(makeDocument(), "Chori");
 
     expect(queued.sentAt).toBeTruthy();
-    expect(queued.auditTrail.at(-1)?.action).toContain("server-side services");
+    expect(queued.auditTrail.at(-1)?.action).toContain("Started Messages review");
+    expect(queued.auditTrail.at(-1)?.action).toContain("server contract delivery pending");
   });
 });

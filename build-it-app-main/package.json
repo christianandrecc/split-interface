@@ -10,7 +10,7 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:beta": "vitest run src/test/accountAccess.test.tsx src/test/appProfileSession.test.tsx src/test/profileStorage.test.ts src/test/splitSheetSupabaseIsolation.test.ts src/test/splitSheetStorage.test.ts src/test/collaborationView.test.tsx src/test/dashboardSearch.test.tsx src/test/dashboardNotifications.test.tsx src/test/dashboardQuickAccess.test.tsx src/test/splitSheetMigration.test.ts src/test/supabaseRlsHardening.test.ts",
+    "test:beta": "vitest run src/test/accountAccess.test.tsx src/test/appProfileSession.test.tsx src/test/profileStorage.test.ts src/test/splitSheetSupabaseIsolation.test.ts src/test/splitSheetStorage.test.ts src/test/splitSheetWorkflow.test.ts src/test/collaborationView.test.tsx src/test/dashboardSearch.test.tsx src/test/dashboardNotifications.test.tsx src/test/dashboardQuickAccess.test.tsx src/test/splitSheetMigration.test.ts src/test/supabaseRlsHardening.test.ts",
     "verify:beta": "npm run test:beta && npm run build",
     "test:watch": "vitest"
   },

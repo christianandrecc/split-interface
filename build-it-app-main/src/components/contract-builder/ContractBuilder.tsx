@@ -158,11 +158,11 @@ export default function ContractBuilder({
       setDocumentSent(true);
       toast.success(
         generatedDocument.collaborators.length
-          ? "Contract delivery queued"
+          ? "Messages review started"
           : "Solo SPLIT Sheet stored",
         {
           description: result.persisted
-            ? "The backend has the split sheet and delivery request."
+            ? "Collaborators can now review, chat, counter, and sign in Messages."
             : "Saved locally with a server-side delivery placeholder.",
         },
       );
