@@ -54,6 +54,10 @@ function makeProfile(overrides: Partial<UserProfile>) {
   };
 }
 
+function markOnboardingComplete(identity: string) {
+  window.localStorage.setItem(`split.newUserOnboarding.v1:${identity}`, "complete");
+}
+
 describe("App profile session loading", () => {
   afterEach(() => {
     window.localStorage.clear();
@@ -72,6 +76,7 @@ describe("App profile session loading", () => {
       emailAddress: "maya@example.com",
     });
 
+    markOnboardingComplete("maya-user-id");
     window.localStorage.setItem("split.userProfile.v6", JSON.stringify(staleProfile));
     mocks.loadProfileSessionForActiveSession.mockResolvedValue({
       userId: "maya-user-id",
@@ -150,6 +155,7 @@ describe("App profile session loading", () => {
       userId: "same-auth-user",
     });
 
+    markOnboardingComplete("same-auth-user");
     render(<App />);
 
     await waitFor(() => expect(screen.getByRole("heading", { name: "Personal information" })).toBeInTheDocument());

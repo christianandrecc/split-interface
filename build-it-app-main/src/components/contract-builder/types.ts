@@ -258,7 +258,7 @@ export function hasWriterIdentity(party: Party) {
 }
 
 export function isWriterReady(party: Party) {
-  return hasWriterIdentity(party) && party.contributionCategories.length > 0 && Number(party.percent) > 0;
+  return hasWriterIdentity(party) && Number(party.percent) > 0;
 }
 
 export function makeParty(overrides: Partial<Party> = {}): Party {

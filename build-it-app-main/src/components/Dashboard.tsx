@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import splitLogo from "@/assets/split-logo.png";
-import UserProfileSheet from "@/components/UserProfileSheet";
+import splitLightLockup from "@/assets/split-light-lockup.png";
+import WorkspaceOverview from "@/components/WorkspaceOverview";
+import { workspaceInitials } from "@/lib/workspaceOverview";
 import ProfilePage from "@/components/ProfilePage";
 import CreatorProfileView from "@/components/CreatorProfileView";
 import { createEmptyProfile, type UserProfile } from "@/lib/userProfile";
@@ -11,6 +12,7 @@ import ContractBuilder from "@/components/contract-builder/ContractBuilder";
 import CollaborationView from "@/components/CollaborationView";
 import SettingsPage from "@/components/SettingsPage";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useIsMobile } from "@/hooks/use-mobile";
 import {
   searchPublicProfiles,
@@ -20,11 +22,6 @@ import {
 } from "@/lib/globalSearch";
 import { documentToAgreement, type Agreement } from "@/lib/splitSheetAgreement";
 import { getSplitWorkflowLabel, VERIFIED_SPLIT_STATUSES } from "@/lib/splitWorkflow";
-import {
-  buildDashboardSplitSummary,
-  type DashboardQuickAccessKind,
-  type DashboardQuickAccessMoment,
-} from "@/lib/dashboardSplitSummary";
 import {
   buildDashboardNotificationGroups,
   getDashboardNotificationPresentation,
@@ -47,6 +44,7 @@ import {
   subscribeToSplitNotifications,
   type SplitNotification,
 } from "@/lib/notificationStorage";
+import { buildRecentCollaboratorSuggestions } from "@/lib/collaboratorSuggestions";
 import { toast } from "sonner";
 import {
   FileText,
@@ -56,16 +54,11 @@ import {
   Search,
   ChevronRight,
   Plus,
-  Shield,
-  Menu,
-  X,
   ArrowLeft,
   AlertTriangle,
   CheckCircle2,
-  FilePenLine,
   MessageCircle,
   Loader2,
-  PenLine,
   UserRound,
   GitBranch,
   type LucideIcon,
@@ -85,7 +78,7 @@ type View =
 const NAV_ITEMS = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
   { id: "agreements", label: "Split Sheets", icon: FileText },
-  { id: "collaboration", label: "Messages", icon: FilePenLine },
+  { id: "collaboration", label: "Messages", icon: MessageCircle },
   { id: "settings", label: "Settings", icon: Settings },
 ] as const;
 
@@ -105,10 +98,10 @@ export default function Dashboard({
   const [selectedMessageDealId, setSelectedMessageDealId] = useState<string | undefined>();
   const [agreementFilter, setAgreementFilter] = useState<FilterStatus>("All");
   const [isNewAgreement, setIsNewAgreement] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [generatedDocuments, setGeneratedDocuments] = useState<StoredSplitSheetDocument[]>([]);
   const [loadingSplitSheets, setLoadingSplitSheets] = useState(true);
-  const [splitSheetsPersisted, setSplitSheetsPersisted] = useState(false);
+  const [splitSheetLoadError, setSplitSheetLoadError] = useState(false);
+  const [reloadSplitSheets, setReloadSplitSheets] = useState(0);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchFocused, setSearchFocused] = useState(false);
   const [profileSearchResults, setProfileSearchResults] = useState<PublicProfileSearchResult[]>([]);
@@ -116,6 +109,7 @@ export default function Dashboard({
   const [selectedPublicProfile, setSelectedPublicProfile] = useState<UserProfile | null>(null);
   const [notifications, setNotifications] = useState<SplitNotification[]>([]);
   const [loadingNotifications, setLoadingNotifications] = useState(true);
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const isMobile = useIsMobile();
   const localStorageOwner = splitSheetLocalStorageOwnerForAuthUser(activeAuthUserId);
   const activeAccountKey = localStorageOwner
@@ -125,7 +119,10 @@ export default function Dashboard({
   const lastNotificationAccountKeyRef = useRef(notificationAccountKey);
 
   const agreements = useMemo(() => generatedDocuments.map(documentToAgreement), [generatedDocuments]);
-  const dashboardSummary = useMemo(() => buildDashboardSplitSummary(agreements), [agreements]);
+  const recentCollaborators = useMemo(
+    () => buildRecentCollaboratorSuggestions(generatedDocuments, userProfile),
+    [generatedDocuments, userProfile],
+  );
   const splitSheetSearchResults = useMemo(
     () => searchSplitSheets(agreements, searchQuery, 5),
     [agreements, searchQuery],
@@ -160,19 +157,20 @@ export default function Dashboard({
       setGeneratedDocuments([]);
       setSelectedAgreement(null);
       setSelectedMessageDealId(undefined);
-      setSplitSheetsPersisted(false);
+      setSplitSheetLoadError(false);
       setLoadingSplitSheets(true);
     }
 
     async function loadDocuments(showLoading = true) {
       if (showLoading) setLoadingSplitSheets(true);
-      const results = await loadSplitSheetDocuments(userProfile);
+      let loadFailed = false;
+      const results = await loadSplitSheetDocuments(userProfile, () => { loadFailed = true; });
       if (!active) return;
 
       const documents = results.map((result) => result.document);
-      setGeneratedDocuments(documents);
+      setSplitSheetLoadError(loadFailed);
+      setGeneratedDocuments((current) => loadFailed && current.length ? current : documents);
       saveLocalSplitSheetDocuments(documents.filter(splitSheetCanUseLocalDraftFallback), localStorageOwner);
-      setSplitSheetsPersisted(results.length > 0 && results.every((result) => result.persisted));
       setLoadingSplitSheets(false);
     }
 
@@ -196,7 +194,7 @@ export default function Dashboard({
       window.removeEventListener("focus", refreshOnFocus);
       document.removeEventListener("visibilitychange", refreshOnVisible);
     };
-  }, [activeAccountKey, userProfile, localStorageOwner]);
+  }, [activeAccountKey, userProfile, localStorageOwner, reloadSplitSheets]);
 
   useEffect(() => {
     let active = true;
@@ -297,13 +295,12 @@ export default function Dashboard({
 
     const result = await saveSplitSheetDocument(document, mode, userProfile);
     applyGeneratedDocument(result.document);
-    setSplitSheetsPersisted(result.persisted);
     void refreshNotifications(false);
     return result;
   };
 
   const updateGeneratedDocument = async (document: StoredSplitSheetDocument, context: SplitSheetUpdateContext = {}) => {
-    const requiresRemoteConfirmation = Boolean(context.action && context.action !== "creator_update") ||
+    const requiresRemoteConfirmation = Boolean(context.action) ||
       !splitSheetCanUseLocalDraftFallback(document);
     if (!requiresRemoteConfirmation) {
       applyGeneratedDocument(document);
@@ -331,14 +328,12 @@ export default function Dashboard({
     if (agreement) {
       setSelectedAgreement(agreement);
       setActiveView("agreements");
-      if (isMobile) setSidebarOpen(false);
     }
   };
 
   const openDealMessages = (agreementId: string) => {
     setSelectedMessageDealId(agreementId);
     setActiveView("collaboration");
-    if (isMobile) setSidebarOpen(false);
   };
 
   const markNotificationLocallyRead = (notificationIds?: string[] | null, splitSheetId?: string | null) => {
@@ -400,7 +395,15 @@ export default function Dashboard({
     });
     setSelectedAgreement(null);
     setActiveView("public-profile");
-    if (isMobile) setSidebarOpen(false);
+    clearSearch();
+  };
+
+  const goToDashboard = () => {
+    setIsNewAgreement(false);
+    setActiveView("dashboard");
+    setSelectedAgreement(null);
+    setSelectedMessageDealId(undefined);
+    setAgreementFilter("All");
     clearSearch();
   };
 
@@ -409,8 +412,10 @@ export default function Dashboard({
       <ContractBuilder
         userProfile={userProfile}
         onBack={() => setIsNewAgreement(false)}
+        onHome={goToDashboard}
         onStoreDocument={(document) => persistGeneratedDocument(document, "draft")}
         onSendDocument={(document) => persistGeneratedDocument(document, "send")}
+        recentCollaborators={recentCollaborators}
       />
     );
   }
@@ -433,93 +438,44 @@ export default function Dashboard({
   }
 
   return (
-    <div className="flex h-screen bg-background text-foreground overflow-hidden">
-      {/* Mobile sidebar overlay */}
-      {isMobile && sidebarOpen && (
-        <div className="fixed inset-0 z-40 bg-foreground/30" onClick={() => setSidebarOpen(false)} />
-      )}
-
-      {/* Sidebar */}
-      <aside className={`${
-        isMobile
-          ? `fixed inset-y-0 left-0 z-50 w-[260px] transform transition-transform duration-200 ease-out safe-top safe-bottom ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}`
-          : "w-[220px] flex-shrink-0"
-      } border-r border-border flex flex-col bg-card`}>
-        {/* Logo */}
-        <div className="h-[60px] flex items-center px-5 border-b border-border gap-2.5 flex-shrink-0">
-          <img src={splitLogo} alt="SPLIT" className="h-7 w-7" />
-          <span className="text-sm font-bold tracking-tight text-foreground">SPLIT</span>
-          <span className="ml-auto flex items-center gap-2">
-            <Shield className="h-3.5 w-3.5 text-primary opacity-70" />
-            {isMobile && (
-              <button onClick={() => setSidebarOpen(false)} className="p-1 rounded hover:bg-accent">
-                <X className="h-4 w-4 text-muted-foreground" />
-              </button>
-            )}
-          </span>
-        </div>
-
-        {/* Nav */}
-        <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
-          {NAV_ITEMS.map(({ id, label, icon: Icon }) => {
-            const active = activeView === id;
-            return (
-              <button
-                key={id}
-                onClick={() => {
-                  setActiveView(id as View);
-                  setSelectedAgreement(null);
-                  if (id === "agreements") setAgreementFilter("All");
-                  if (isMobile) setSidebarOpen(false);
-                }}
-                className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                  active
-                    ? "bg-primary/10 text-primary"
-                    : "text-muted-foreground hover:text-foreground hover:bg-accent"
-                }`}
-              >
-                <Icon className="h-4 w-4 flex-shrink-0" />
-                {label}
-              </button>
-            );
-          })}
-        </nav>
-
-        {/* Footer */}
-        <div className="px-3 py-4 border-t border-border">
-          <UserProfileSheet
-            onOpenProfile={() => {
-              setActiveView("profile");
-              setSelectedAgreement(null);
-              if (isMobile) setSidebarOpen(false);
-            }}
-            onOpenAccountCreation={() => {
-              onOpenAccountCreation();
-              if (isMobile) setSidebarOpen(false);
-            }}
-          />
-        </div>
-      </aside>
-
-      {/* Main area */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        {/* Top bar */}
-        <header className="h-[56px] md:h-[60px] flex items-center px-4 md:px-6 border-b border-border bg-background flex-shrink-0 gap-3 md:gap-4 safe-top">
-          {isMobile && (
-            <button onClick={() => setSidebarOpen(true)} className="p-1.5 -ml-1 rounded-lg hover:bg-accent">
-              <Menu className="h-5 w-5 text-muted-foreground" />
-            </button>
-          )}
-          <div className="flex-1 flex items-center gap-3">
-            <div className={`relative ${isMobile ? "w-full" : "max-w-sm w-full"}`}>
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+    <div className="workspace-shell">
+        <header className="workspace-header safe-top">
+          <button type="button" aria-label="Go to Dashboard" onClick={goToDashboard} className="workspace-brand">
+            <img src={splitLightLockup} alt="SPLIT" width="166" height="48" />
+          </button>
+          <nav className="workspace-navigation" aria-label="Main navigation">
+            <TooltipProvider delayDuration={300}>
+              {NAV_ITEMS.map(({ id, label, icon: Icon }) => (
+                <Tooltip key={id}>
+                  <TooltipTrigger asChild>
+                    <button aria-label={label} aria-current={activeView === id ? "page" : undefined} className={activeView === id ? "active" : ""}
+                      onClick={() => {
+                        setActiveView(id);
+                        setSelectedAgreement(null);
+                        setSelectedMessageDealId(undefined);
+                        if (id === "agreements") setAgreementFilter("All");
+                        clearSearch();
+                      }}>
+                      <Icon size={20} aria-hidden="true" /><span>{label}</span>
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">{label}</TooltipContent>
+                </Tooltip>
+              ))}
+            </TooltipProvider>
+          </nav>
+          <div className="workspace-header-search">
+            <div className="workspace-global-search" onFocus={() => setSearchFocused(true)} onBlur={(event) => {
+              if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setSearchFocused(false);
+            }}>
+              <Search size={18} aria-hidden="true" />
               <input
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}
                 onFocus={() => setSearchFocused(true)}
-                onBlur={() => window.setTimeout(() => setSearchFocused(false), 120)}
-                placeholder="Search split sheets or users..."
-                className="w-full rounded-lg border border-border bg-secondary/60 pl-9 pr-3 py-2 text-sm placeholder:text-muted-foreground/70 focus:outline-none focus:ring-2 focus:ring-ring/30"
+                onKeyDown={(event) => { if (event.key === "Escape") clearSearch(); }}
+                placeholder="Search SPLIT"
+                aria-label="Search split sheets or users"
               />
               <GlobalSearchResults
                 open={searchResultsOpen}
@@ -531,43 +487,50 @@ export default function Dashboard({
               />
             </div>
           </div>
-          <NotificationsPopover
-            notifications={notifications}
-            loading={loadingNotifications}
-            onViewAll={() => setActiveView("activity")}
-            onOpenNotification={openNotification}
-            onMarkAllRead={markAllNotificationsRead}
-          />
-          {!isMobile && (
-            <button
-              onClick={() => setIsNewAgreement(true)}
-              className="flex items-center gap-1.5 bg-primary text-primary-foreground rounded-lg px-3.5 py-2 text-sm font-semibold hover:bg-primary/90 transition-colors"
-            >
-              <Plus className="h-3.5 w-3.5" />
-              New SPLIT Sheet
+          <div className="workspace-header-tools">
+            <NotificationsPopover
+              notifications={notifications}
+              loading={loadingNotifications}
+              onViewAll={() => setActiveView("activity")}
+              onOpenNotification={openNotification}
+              onMarkAllRead={markAllNotificationsRead}
+            />
+            <Popover open={accountMenuOpen} onOpenChange={setAccountMenuOpen}>
+              <PopoverTrigger asChild>
+                <button className="workspace-profile-button" aria-label="Open account menu" title="Your account">
+                  {userProfile.profileImageUrl
+                    ? <img src={userProfile.profileImageUrl} alt="" />
+                    : workspaceInitials(userProfile.displayName || userProfile.username || "SPLIT")}
+                </button>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-56 p-2">
+                <div className="border-b border-border px-3 py-3 mb-1 text-sm font-bold break-words">{userProfile.displayName || userProfile.username || "Your account"}</div>
+                <button onClick={() => { setAccountMenuOpen(false); setActiveView("profile"); }} className="flex w-full items-center gap-2 rounded-md px-3 py-2.5 text-sm hover:bg-secondary"><UserRound size={16} />Your Profile</button>
+                <button onClick={() => { setAccountMenuOpen(false); onOpenAccountCreation(); }} className="flex w-full items-center gap-2 rounded-md px-3 py-2.5 text-sm hover:bg-secondary"><Settings size={16} />Account Setup</button>
+              </PopoverContent>
+            </Popover>
+            <button onClick={() => setIsNewAgreement(true)} className="workspace-action primary workspace-header-new" aria-label="New SPLIT" title="New SPLIT">
+              <Plus size={20} /><span>New SPLIT</span>
             </button>
-          )}
+          </div>
         </header>
 
         {/* Content */}
-        <main className="flex-1 overflow-hidden safe-bottom">
+        <main className="workspace-content safe-bottom">
           {activeView === "dashboard" && (
-            <DashboardHome
-              executed={dashboardSummary.executed}
-              pending={dashboardSummary.pending}
-              drafts={dashboardSummary.drafts}
-              quickAccess={dashboardSummary.quickAccess}
+            <WorkspaceOverview
+              key={activeAccountKey}
+              agreements={agreements}
+              userProfile={userProfile}
+              notifications={notifications}
               loading={loadingSplitSheets}
-              persisted={splitSheetsPersisted}
-              onOpenBucket={(filter) => {
-                setAgreementFilter(filter);
-                setSelectedAgreement(null);
-                setActiveView("agreements");
-              }}
+              loadError={splitSheetLoadError}
+              onRetry={() => setReloadSplitSheets((current) => current + 1)}
               onNew={() => setIsNewAgreement(true)}
               onOpenAgreement={openAgreement}
               onOpenMessages={openDealMessages}
-              isMobile={isMobile}
+              onOpenNotification={openNotification}
+              onViewActivity={() => setActiveView("activity")}
             />
           )}
           {activeView === "agreements" && (
@@ -640,17 +603,6 @@ export default function Dashboard({
           )}
         </main>
 
-        {/* Mobile FAB */}
-        {isMobile && (
-          <button
-            onClick={() => setIsNewAgreement(true)}
-            className="fixed bottom-6 right-4 z-30 h-14 w-14 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center hover:bg-primary/90 transition-colors"
-            style={{ marginBottom: "env(safe-area-inset-bottom)" }}
-          >
-            <Plus className="h-6 w-6" />
-          </button>
-        )}
-      </div>
     </div>
   );
 }
@@ -687,7 +639,7 @@ function GlobalSearchResults({
             <button
               key={result.id}
               type="button"
-              onMouseDown={() => onOpenAgreement(result.id)}
+              onClick={() => onOpenAgreement(result.id)}
               className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-accent focus:outline-none focus:ring-2 focus:ring-ring/30"
             >
               <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
@@ -711,7 +663,7 @@ function GlobalSearchResults({
             <button
               key={profile.userId || profile.username}
               type="button"
-              onMouseDown={() => onOpenProfile(profile)}
+              onClick={() => onOpenProfile(profile)}
               className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-accent focus:outline-none focus:ring-2 focus:ring-ring/30"
             >
               {profile.profileImageUrl ? (
@@ -761,378 +713,6 @@ function SearchSection({ title, children }: { title: string; children: React.Rea
       </p>
       <div className="space-y-1">{children}</div>
     </section>
-  );
-}
-
-function DashboardHome({
-  executed,
-  pending,
-  drafts,
-  quickAccess,
-  loading,
-  persisted,
-  onOpenBucket,
-  onNew,
-  onOpenAgreement,
-  onOpenMessages,
-  isMobile,
-}: {
-  executed: number;
-  pending: number;
-  drafts: number;
-  quickAccess: ReturnType<typeof buildDashboardSplitSummary>["quickAccess"];
-  loading: boolean;
-  persisted: boolean;
-  onOpenBucket: (filter: FilterStatus) => void;
-  onNew: () => void;
-  onOpenAgreement: (agreementId: string) => void;
-  onOpenMessages: (agreementId: string) => void;
-  isMobile: boolean;
-}) {
-  return (
-    <div className="h-full overflow-y-auto">
-      <div className={`max-w-5xl mx-auto ${isMobile ? "px-4 py-5" : "px-8 py-8"}`}>
-        <div className="mb-6 flex flex-col gap-4 md:mb-8 md:flex-row md:items-start md:justify-between">
-          <div>
-            <h1 className="text-xl md:text-2xl font-bold tracking-tight">Dashboard</h1>
-            <p className="mt-0.5 max-w-2xl text-xs leading-5 text-muted-foreground md:text-sm">
-              See the split sheets that need attention, then finish drafts, approvals, signatures, and verified records.
-            </p>
-            <div className="mt-2 flex flex-wrap items-center gap-2">
-              <span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold ${
-                persisted
-                  ? "border-[hsl(var(--split-verified)/0.25)] bg-[hsl(var(--split-verified)/0.08)] text-[hsl(var(--split-verified))]"
-                  : "border-border bg-secondary/50 text-muted-foreground"
-              }`}>
-                {loading ? "Loading split sheets..." : persisted ? "SPLIT synced" : "Local preview fallback"}
-              </span>
-              <span className="text-[11px] font-medium text-muted-foreground">
-                Collaborators review in Messages; final contract delivery stays server-side.
-              </span>
-            </div>
-          </div>
-          <button
-            onClick={onNew}
-            className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg bg-primary px-3.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 md:hidden"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            New SPLIT Sheet
-          </button>
-        </div>
-
-        <div className={`mb-6 grid ${isMobile ? "grid-cols-3 gap-2" : "grid-cols-3 gap-4"} md:mb-8`}>
-          <StatCard
-            label="Needs Action"
-            value={pending}
-            accent="pending"
-            compact={isMobile}
-            onClick={() => onOpenBucket("Pending")}
-          />
-          <StatCard
-            label="Drafts"
-            value={drafts}
-            accent="draft"
-            compact={isMobile}
-            onClick={() => onOpenBucket("Draft")}
-          />
-          <StatCard
-            label="Verified"
-            value={executed}
-            accent="verified"
-            compact={isMobile}
-            onClick={() => onOpenBucket("Verified")}
-          />
-        </div>
-
-        <QuickAccessSection
-          moments={quickAccess}
-          onNew={onNew}
-          onOpenAgreement={onOpenAgreement}
-          onOpenMessages={onOpenMessages}
-        />
-      </div>
-    </div>
-  );
-}
-
-function QuickAccessSection({
-  moments,
-  onNew,
-  onOpenAgreement,
-  onOpenMessages,
-}: {
-  moments: ReturnType<typeof buildDashboardSplitSummary>["quickAccess"];
-  onNew: () => void;
-  onOpenAgreement: (agreementId: string) => void;
-  onOpenMessages: (agreementId: string) => void;
-}) {
-  const primary = moments.primary;
-
-  return (
-    <section className="mt-6 md:mt-7">
-      <div className="mb-3 flex items-end justify-between gap-3">
-        <div>
-          <h2 className="text-base font-bold tracking-tight md:text-lg">Quick access</h2>
-          <p className="mt-0.5 text-xs leading-5 text-muted-foreground md:text-sm">Jump back into active split moments.</p>
-        </div>
-        <button
-          type="button"
-          onClick={onNew}
-          className="hidden rounded-lg border border-border bg-card px-3 py-2 text-xs font-semibold text-primary transition-colors hover:bg-secondary md:inline-flex"
-        >
-          New SPLIT Sheet
-        </button>
-      </div>
-
-      {!primary ? (
-        <div className="rounded-lg border border-dashed border-border bg-card px-4 py-7 text-center shadow-sm">
-          <MessageCircle className="mx-auto h-5 w-5 text-muted-foreground" />
-          <h3 className="mt-3 text-sm font-bold">No active split moments yet</h3>
-          <p className="mx-auto mt-1 max-w-md text-xs leading-5 text-muted-foreground">
-            Once you create, send, sign, or dispute a split sheet, SPLIT will keep the next useful action here.
-          </p>
-          <button
-            type="button"
-            onClick={onNew}
-            className="mt-4 inline-flex h-9 items-center justify-center rounded-lg bg-primary px-3 text-xs font-semibold text-primary-foreground hover:bg-primary/90"
-          >
-            Create a split sheet
-          </button>
-        </div>
-      ) : (
-        <div className="grid gap-4 lg:grid-cols-[1.45fr_0.95fr]">
-          <PrimaryQuickAccessCard
-            moment={primary}
-            onOpenAgreement={onOpenAgreement}
-            onOpenMessages={onOpenMessages}
-          />
-
-          <div className="grid gap-4">
-            {moments.secondary.map((moment) => (
-              <SecondaryQuickAccessCard
-                key={moment.id}
-                moment={moment}
-                onOpenAgreement={onOpenAgreement}
-                onOpenMessages={onOpenMessages}
-              />
-            ))}
-          </div>
-        </div>
-      )}
-    </section>
-  );
-}
-
-function quickAccessPresentation(kind: DashboardQuickAccessKind): {
-  icon: LucideIcon;
-  tone: string;
-} {
-  if (kind === "dispute") {
-    return { icon: AlertTriangle, tone: "bg-destructive/10 text-destructive" };
-  }
-
-  if (kind === "signature") {
-    return { icon: PenLine, tone: "bg-primary/10 text-primary" };
-  }
-
-  if (kind === "verified") {
-    return { icon: CheckCircle2, tone: "bg-[hsl(var(--split-verified)/0.12)] text-[hsl(var(--split-verified))]" };
-  }
-
-  if (kind === "draft") {
-    return { icon: FileText, tone: "bg-secondary text-muted-foreground" };
-  }
-
-  if (kind === "latest") {
-    return { icon: FileText, tone: "bg-primary/10 text-primary" };
-  }
-
-  return { icon: MessageCircle, tone: "bg-primary/10 text-primary" };
-}
-
-function PrimaryQuickAccessCard({
-  moment,
-  onOpenAgreement,
-  onOpenMessages,
-}: {
-  moment: DashboardQuickAccessMoment;
-  onOpenAgreement: (agreementId: string) => void;
-  onOpenMessages: (agreementId: string) => void;
-}) {
-  const { icon: Icon, tone } = quickAccessPresentation(moment.kind);
-
-  return (
-    <div className="rounded-lg border border-border bg-card p-4 shadow-sm md:p-5">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <span className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg ${tone}`}>
-            <Icon className="h-4 w-4" />
-          </span>
-          <div>
-            <div className="text-sm font-bold text-foreground">{moment.label}</div>
-            <div className="mt-0.5 text-xs font-medium text-muted-foreground">{moment.meta}</div>
-          </div>
-        </div>
-        <button
-          type="button"
-          onClick={() => onOpenMessages(moment.agreement.id)}
-          className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-          aria-label={`Open messages for ${moment.title}`}
-        >
-          <ChevronRight className="h-4 w-4" />
-        </button>
-      </div>
-
-      <div className="mt-5 flex items-start gap-3">
-        <AgreementIcon type={moment.agreement.type} />
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <h3 className="truncate text-lg font-bold tracking-tight text-foreground">{moment.title}</h3>
-            <StatusBadge status={moment.agreement.status} />
-          </div>
-          <div className="mt-2 flex flex-wrap items-center gap-2">
-            <QuickPartyPills parties={moment.agreement.parties} />
-          </div>
-        </div>
-      </div>
-
-      <div className="mt-5 border-t border-border pt-4">
-        <p className="text-sm leading-6 text-muted-foreground">{moment.detail}</p>
-      </div>
-
-      <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:justify-end">
-        <button
-          type="button"
-          onClick={() => onOpenMessages(moment.agreement.id)}
-          className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-border bg-background px-3 text-sm font-semibold text-foreground transition-colors hover:bg-secondary"
-        >
-          <MessageCircle className="h-4 w-4 text-primary" />
-          Open messages
-        </button>
-        <button
-          type="button"
-          onClick={() => onOpenAgreement(moment.agreement.id)}
-          className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-border bg-background px-3 text-sm font-semibold text-primary transition-colors hover:bg-secondary"
-        >
-          <FileText className="h-4 w-4" />
-          View split
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function SecondaryQuickAccessCard({
-  moment,
-  onOpenAgreement,
-  onOpenMessages,
-}: {
-  moment: DashboardQuickAccessMoment;
-  onOpenAgreement: (agreementId: string) => void;
-  onOpenMessages: (agreementId: string) => void;
-}) {
-  const { icon: Icon, tone } = quickAccessPresentation(moment.kind);
-  const openMoment = () => {
-    if (moment.action === "messages") {
-      onOpenMessages(moment.agreement.id);
-      return;
-    }
-
-    onOpenAgreement(moment.agreement.id);
-  };
-
-  return (
-    <button
-      type="button"
-      onClick={openMoment}
-      className="rounded-lg border border-border bg-card p-4 text-left shadow-sm transition-colors hover:border-primary/20 hover:bg-secondary/30"
-    >
-      <div className="flex items-start justify-between gap-3">
-        <span className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg ${tone}`}>
-          <Icon className="h-4 w-4" />
-        </span>
-        <ChevronRight className="mt-1 h-4 w-4 flex-shrink-0 text-muted-foreground" />
-      </div>
-      <div className="mt-4">
-        <div className="text-sm font-bold text-foreground">{moment.label}</div>
-        <div className="mt-2 flex flex-wrap items-center gap-2">
-          <span className="truncate text-base font-bold text-foreground">{moment.title}</span>
-          <StatusBadge status={moment.agreement.status} />
-        </div>
-        <p className="mt-2 text-xs leading-5 text-muted-foreground">{moment.detail}</p>
-        <div className="mt-3 text-[11px] font-medium text-muted-foreground">{moment.meta}</div>
-      </div>
-    </button>
-  );
-}
-
-function QuickPartyPills({ parties }: { parties: string[] }) {
-  const visibleParties = parties.filter(Boolean).slice(0, 3);
-  const hiddenCount = Math.max(0, parties.length - visibleParties.length);
-
-  return (
-    <>
-      {visibleParties.map((party) => (
-        <span key={party} className="inline-flex items-center gap-1.5 rounded-full bg-secondary px-2.5 py-1 text-[11px] font-semibold text-muted-foreground">
-          <span className="flex h-4 w-4 items-center justify-center rounded-full bg-background text-[9px] font-bold text-primary">
-            {initialsForName(party)}
-          </span>
-          {party}
-        </span>
-      ))}
-      {hiddenCount > 0 && (
-        <span className="inline-flex rounded-full border border-border bg-background px-2.5 py-1 text-[11px] font-semibold text-muted-foreground">
-          +{hiddenCount}
-        </span>
-      )}
-    </>
-  );
-}
-
-function initialsForName(name: string) {
-  const initials = name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0])
-    .join("")
-    .toUpperCase();
-
-  return initials || "SS";
-}
-
-function StatCard({
-  label,
-  value,
-  accent,
-  compact,
-  onClick,
-}: {
-  label: string;
-  value: number;
-  accent: "verified" | "pending" | "draft";
-  compact?: boolean;
-  onClick?: () => void;
-}) {
-  const accents = {
-    verified: "text-[hsl(var(--split-verified))]",
-    pending: "text-[hsl(var(--split-pending))]",
-    draft: "text-muted-foreground",
-  };
-  const bgs = {
-    verified: "bg-[hsl(var(--split-verified)/0.08)]",
-    pending: "bg-[hsl(var(--split-pending)/0.08)]",
-    draft: "bg-secondary/60",
-  };
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`rounded-xl border border-border text-left transition-colors hover:border-primary/30 hover:bg-primary/5 focus:outline-none focus:ring-2 focus:ring-ring/30 ${compact ? "p-3" : "p-5"} ${bgs[accent]}`}
-    >
-      <div className={`${compact ? "text-2xl" : "text-3xl"} font-bold tabular-nums ${accents[accent]}`}>{value}</div>
-      <div className={`${compact ? "text-[10px]" : "text-xs"} text-muted-foreground mt-1 font-medium`}>{label}</div>
-    </button>
   );
 }
 
@@ -1514,7 +1094,7 @@ function EmptyDetail({ onNew }: { onNew: () => void }) {
         className="mt-5 flex items-center gap-1.5 bg-primary text-primary-foreground rounded-lg px-4 py-2 text-sm font-semibold hover:bg-primary/90 transition-colors"
       >
         <Plus className="h-3.5 w-3.5" />
-        New SPLIT Sheet
+        New SPLIT
       </button>
     </div>
   );

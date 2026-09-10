@@ -1,5 +1,4 @@
 import {
-  CONTRIBUTION_OPTIONS,
   ROLE_OPTIONS,
   SPLIT_TYPE_OPTIONS,
   hasWriterIdentity,
@@ -9,17 +8,29 @@ import {
   type ContractData,
   type Party,
 } from "./types";
-import { AtSign, AlertCircle, CheckCircle2, ChevronDown, Mail, Phone, Plus, User, X } from "lucide-react";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { useMemo, useState, type ReactNode } from "react";
+import type { UserProfile } from "@/lib/userProfile";
+import { searchPublicProfiles, type PublicProfileSearchResult } from "@/lib/globalSearch";
+import { filterCollaboratorSuggestions, type CollaboratorSuggestion } from "@/lib/collaboratorSuggestions";
+import { AtSign, AlertCircle, CheckCircle2, Loader2, Mail, Phone, Plus, Search, User, X } from "lucide-react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 
 interface Props {
   data: ContractData;
   onChange: (d: Partial<ContractData>) => void;
+  recentCollaborators?: CollaboratorSuggestion[];
+  currentProfile?: UserProfile;
 }
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_PATTERN = /^[+()\d\s.-]+$/;
+const COLLABORATOR_SEARCH_DEBOUNCE_MS = 220;
+
+type InviteSearchResult = PublicProfileSearchResult & {
+  email?: string;
+  phoneNumber?: string;
+  source?: "recent" | "worked-with" | "ecosystem";
+  interactionCount?: number;
+};
 
 function applyEqualSplits(parties: Party[]) {
   if (!parties.length) return parties;
@@ -51,9 +62,15 @@ function normalizeInviteValue(value: string, method: string) {
   return trimmed;
 }
 
-export default function StepParties({ data, onChange }: Props) {
+function clampPercent(value: string) {
+  const next = Number(value);
+  if (!Number.isFinite(next)) return 0;
+  return Math.min(100, Math.max(0, next));
+}
+
+export default function StepParties({ data, onChange, recentCollaborators = [], currentProfile }: Props) {
   const { parties } = data;
-  const [openNotes, setOpenNotes] = useState<Record<string, boolean>>({});
+  const [percentDrafts, setPercentDrafts] = useState<Record<string, string>>({});
   const activeSplitType = data.splitType === "Equal" ? "Equal" : "Custom";
   const isEqualSplit = activeSplitType === "Equal";
   const total = useMemo(() => sumPercents(parties), [parties]);
@@ -71,6 +88,31 @@ export default function StepParties({ data, onChange }: Props) {
 
   const update = <Key extends keyof Party>(id: string, field: Key, val: Party[Key]) =>
     onChange({ parties: parties.map((p) => (p.id === id ? { ...p, [field]: val } : p)) });
+
+  const updatePercent = (id: string, rawValue: string) => {
+    if (rawValue.trim() === "") {
+      setPercentDrafts((current) => ({ ...current, [id]: "" }));
+      update(id, "percent", 0);
+      return;
+    }
+
+    const numericValue = Number(rawValue);
+    const displayValue = numericValue > 100 ? "100" : numericValue < 0 ? "0" : rawValue;
+
+    setPercentDrafts((current) => ({ ...current, [id]: displayValue }));
+    update(id, "percent", clampPercent(displayValue));
+  };
+
+  const commitPercent = (id: string) => {
+    const rawValue = percentDrafts[id];
+    if (rawValue === undefined) return;
+
+    update(id, "percent", rawValue.trim() === "" ? 0 : clampPercent(rawValue));
+    setPercentDrafts((current) => {
+      const { [id]: _discarded, ...rest } = current;
+      return rest;
+    });
+  };
 
   const updateInvite = (id: string, rawValue: string) => {
     const method = inferInviteMethod(rawValue);
@@ -93,20 +135,36 @@ export default function StepParties({ data, onChange }: Props) {
     });
   };
 
-  const toggleContribution = (id: string, contribution: string) => {
-    const party = parties.find((p) => p.id === id);
-    if (!party) return;
-    const current = party.contributionCategories;
-    update(
-      id,
-      "contributionCategories",
-      current.includes(contribution)
-        ? current.filter((item) => item !== contribution)
-        : [...current, contribution],
-    );
+  const selectInviteSuggestion = (id: string, suggestion: InviteSearchResult) => {
+    const username = cleanInviteToken(suggestion.username);
+    const email = cleanInviteToken(suggestion.email);
+    const phoneNumber = cleanInviteToken(suggestion.phoneNumber);
+    const method = username ? "username" : email ? "email" : phoneNumber ? "phone" : "username";
+    const inviteValue = username ? `@${username}` : email || phoneNumber || suggestion.displayName;
+    const suggestedRole = firstRoleTag(suggestion.roleTags);
+    const role = ROLE_OPTIONS.find((option) => option === suggestedRole);
+
+    onChange({
+      parties: parties.map((party) => {
+        if (party.id !== id) return party;
+
+        return {
+          ...party,
+          inviteMethod: method,
+          inviteValue,
+          accountLinked: true,
+          splitId: "",
+          email: method === "email" ? inviteValue : email,
+          phoneNumber: method === "phone" ? inviteValue : phoneNumber,
+          professionalName: suggestion.displayName || party.professionalName,
+          role: role || party.role,
+        };
+      }),
+    });
   };
 
   const chooseSplitType = (splitType: string) => {
+    setPercentDrafts({});
     onChange({
       splitType,
       parties: splitType === "Equal" ? applyEqualSplits(parties) : parties,
@@ -220,7 +278,13 @@ export default function StepParties({ data, onChange }: Props) {
               </div>
 
               {!p.isCurrentUser && (
-                <InviteWriter party={p} onInviteChange={(value) => updateInvite(p.id, value)} />
+                <InviteWriter
+                  party={p}
+                  recentCollaborators={recentCollaborators}
+                  blockedSuggestionKeys={getBlockedSuggestionKeys(parties, p.id, currentProfile)}
+                  onInviteChange={(value) => updateInvite(p.id, value)}
+                  onInviteSelect={(suggestion) => selectInviteSuggestion(p.id, suggestion)}
+                />
               )}
 
               <div className="mt-5 grid gap-3 md:grid-cols-2">
@@ -239,11 +303,15 @@ export default function StepParties({ data, onChange }: Props) {
                   <div className="flex items-center gap-1">
                     <input
                       type="number"
+                      aria-label={`Split Share for ${partyDisplayName(p)}`}
                       min={0}
                       max={100}
-                      value={p.percent}
+                      step="0.01"
+                      value={isEqualSplit ? p.percent : percentDrafts[p.id] ?? String(p.percent)}
                       disabled={isEqualSplit}
-                      onChange={(event) => update(p.id, "percent", Math.min(100, Math.max(0, Number(event.target.value))))}
+                      onFocus={(event) => event.currentTarget.select()}
+                      onChange={(event) => updatePercent(p.id, event.target.value)}
+                      onBlur={() => commitPercent(p.id)}
                       className={`field-input tabular-nums ${isEqualSplit ? "cursor-not-allowed bg-secondary/60 text-muted-foreground" : ""}`}
                     />
                     <span className="text-sm font-semibold text-muted-foreground">%</span>
@@ -254,55 +322,6 @@ export default function StepParties({ data, onChange }: Props) {
                 </InputCell>
               </div>
 
-              <div className="mt-5">
-                <div className="mb-2 text-[11px] font-semibold text-muted-foreground">Contribution *</div>
-                <div className="flex flex-wrap gap-2">
-                  {CONTRIBUTION_OPTIONS.map((option) => {
-                    const active = p.contributionCategories.includes(option);
-                    return (
-                      <button
-                        key={option}
-                        onClick={() => toggleContribution(p.id, option)}
-                        className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${
-                          active
-                            ? "border-primary bg-primary/10 text-primary"
-                            : "border-border bg-background text-muted-foreground hover:text-foreground"
-                        }`}
-                      >
-                        {option}
-                      </button>
-                    );
-                  })}
-                </div>
-                {p.contributionCategories.length === 0 && (
-                  <p className="mt-2 text-xs font-medium text-[hsl(var(--split-pending))]">
-                    Choose at least one contribution before continuing.
-                  </p>
-                )}
-              </div>
-
-              <Collapsible
-                open={Boolean(openNotes[p.id])}
-                onOpenChange={(open) => setOpenNotes((current) => ({ ...current, [p.id]: open }))}
-              >
-                <CollapsibleTrigger asChild>
-                  <button
-                    type="button"
-                    className="mt-5 flex w-full items-center justify-between rounded-lg border border-border bg-background px-3 py-2.5 text-left text-xs font-semibold text-muted-foreground transition-colors hover:text-foreground"
-                  >
-                    <span>Optional contribution note</span>
-                    <ChevronDown className={`h-3.5 w-3.5 transition-transform ${openNotes[p.id] ? "rotate-180" : ""}`} />
-                  </button>
-                </CollapsibleTrigger>
-                <CollapsibleContent>
-                  <textarea
-                    value={p.contributionDescription}
-                    onChange={(event) => update(p.id, "contributionDescription", event.target.value)}
-                    placeholder="Add a short note if the contribution needs context."
-                    className="mt-3 min-h-[72px] w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm outline-none placeholder:text-muted-foreground/50 focus:ring-2 focus:ring-ring/30"
-                  />
-                </CollapsibleContent>
-              </Collapsible>
             </div>
           );
         })}
@@ -336,16 +355,75 @@ export default function StepParties({ data, onChange }: Props) {
 
 function InviteWriter({
   party,
+  recentCollaborators,
+  blockedSuggestionKeys,
   onInviteChange,
+  onInviteSelect,
 }: {
   party: Party;
+  recentCollaborators: CollaboratorSuggestion[];
+  blockedSuggestionKeys: Set<string>;
   onInviteChange: (value: string) => void;
+  onInviteSelect: (suggestion: InviteSearchResult) => void;
 }) {
+  const [focused, setFocused] = useState(false);
+  const [ecosystemResults, setEcosystemResults] = useState<PublicProfileSearchResult[]>([]);
+  const [searchingEcosystem, setSearchingEcosystem] = useState(false);
   const methodMeta = getInviteMethodMeta(party.inviteMethod, party.inviteValue);
   const MethodIcon = methodMeta?.icon;
+  const query = party.inviteValue.trim();
+  const searchQuery = query.replace(/^@+/, "");
+  const recentMatches = useMemo(
+    () =>
+      filterCollaboratorSuggestions(recentCollaborators, query)
+        .filter((suggestion) => !suggestionIsBlocked(suggestion, blockedSuggestionKeys)),
+    [blockedSuggestionKeys, query, recentCollaborators],
+  );
+  const ecosystemMatches = useMemo(() => {
+    const recentKeys = new Set(recentMatches.flatMap(getSuggestionKeys));
+
+    return ecosystemResults
+      .map((result) => ({ ...result, source: "ecosystem" as const }))
+      .filter((result) => !suggestionIsBlocked(result, blockedSuggestionKeys))
+      .filter((result) => !getSuggestionKeys(result).some((key) => recentKeys.has(key)))
+      .slice(0, 5);
+  }, [blockedSuggestionKeys, ecosystemResults, recentMatches]);
+  const dropdownOpen = focused && (
+    recentMatches.length > 0 ||
+    ecosystemMatches.length > 0 ||
+    searchingEcosystem ||
+    searchQuery.trim().length >= 2
+  );
+
+  useEffect(() => {
+    let active = true;
+    const normalizedQuery = searchQuery.trim();
+
+    if (!focused || normalizedQuery.length < 2) {
+      setEcosystemResults([]);
+      setSearchingEcosystem(false);
+      return () => {
+        active = false;
+      };
+    }
+
+    setSearchingEcosystem(true);
+    const searchTimer = window.setTimeout(() => {
+      void searchPublicProfiles(normalizedQuery, 8).then((results) => {
+        if (!active) return;
+        setEcosystemResults(results);
+        setSearchingEcosystem(false);
+      });
+    }, COLLABORATOR_SEARCH_DEBOUNCE_MS);
+
+    return () => {
+      active = false;
+      window.clearTimeout(searchTimer);
+    };
+  }, [focused, searchQuery]);
 
   return (
-    <div className="rounded-lg border border-border bg-background p-4">
+    <div className="relative rounded-lg border border-border bg-background p-4">
       <div className="mb-2 flex items-center justify-between gap-3">
         <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Invite</span>
         {methodMeta && MethodIcon && (
@@ -355,16 +433,121 @@ function InviteWriter({
           </span>
         )}
       </div>
-      <input
-        value={party.inviteValue}
-        onChange={(event) => onInviteChange(event.target.value)}
-        placeholder="@username, email, or phone"
-        className="field-input"
-      />
+      <div className="relative">
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <input
+          value={party.inviteValue}
+          onChange={(event) => onInviteChange(event.target.value)}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
+          placeholder="Search @username, email, or phone"
+          className="field-input pl-9"
+          aria-autocomplete="list"
+          aria-expanded={dropdownOpen}
+        />
+      </div>
+      {dropdownOpen && (
+        <div
+          className="absolute left-4 right-4 top-[calc(100%-0.75rem)] z-30 max-h-80 overflow-y-auto rounded-xl border border-border bg-card/95 p-2 shadow-xl backdrop-blur-xl"
+          role="listbox"
+          aria-label="Collaborator search results"
+          onMouseDown={(event) => event.preventDefault()}
+        >
+          {recentMatches.length > 0 && (
+            <InviteSearchSection title="Recent collaborators">
+              {recentMatches.map((suggestion) => (
+                <InviteSearchRow
+                  key={`recent-${suggestionKey(suggestion)}`}
+                  suggestion={suggestion}
+                  label={suggestion.interactionCount > 1 ? "Worked with" : "Recent"}
+                  onSelect={() => onInviteSelect(suggestion)}
+                />
+              ))}
+            </InviteSearchSection>
+          )}
+
+          {(ecosystemMatches.length > 0 || searchingEcosystem) && (
+            <InviteSearchSection title="SPLIT users">
+              {ecosystemMatches.map((suggestion) => (
+                <InviteSearchRow
+                  key={`ecosystem-${suggestionKey(suggestion)}`}
+                  suggestion={suggestion}
+                  label="SPLIT user"
+                  onSelect={() => onInviteSelect(suggestion)}
+                />
+              ))}
+              {searchingEcosystem && (
+                <div className="flex items-center gap-2 px-3 py-2 text-xs font-medium text-muted-foreground">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  Searching SPLIT users
+                </div>
+              )}
+            </InviteSearchSection>
+          )}
+
+          {recentMatches.length === 0 && ecosystemMatches.length === 0 && !searchingEcosystem && searchQuery.trim().length >= 2 && (
+            <div className="px-3 py-5 text-center text-xs leading-5 text-muted-foreground">
+              No matching SPLIT users yet. You can still invite by email or phone.
+            </div>
+          )}
+        </div>
+      )}
       <p className="mt-2 text-xs leading-5 text-muted-foreground">
-        SPLIT will match this to an account when possible.
+        Recent collaborators appear first. Type at least two characters to search the full SPLIT ecosystem.
       </p>
     </div>
+  );
+}
+
+function InviteSearchSection({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section className="py-1">
+      <p className="px-3 pb-1.5 pt-1 text-[0.65rem] font-bold uppercase tracking-[0.18em] text-muted-foreground">
+        {title}
+      </p>
+      <div className="space-y-1">{children}</div>
+    </section>
+  );
+}
+
+function InviteSearchRow({
+  suggestion,
+  label,
+  onSelect,
+}: {
+  suggestion: InviteSearchResult;
+  label: string;
+  onSelect: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="option"
+      onMouseDown={onSelect}
+      className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-accent focus:outline-none focus:ring-2 focus:ring-ring/30"
+    >
+      {suggestion.profileImageUrl ? (
+        <img
+          src={suggestion.profileImageUrl}
+          alt=""
+          className="h-9 w-9 flex-shrink-0 rounded-lg object-cover"
+        />
+      ) : (
+        <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-secondary text-primary">
+          <User className="h-4 w-4" />
+        </span>
+      )}
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-sm font-semibold text-foreground">{suggestion.displayName}</span>
+        <span className="block truncate text-xs text-muted-foreground">
+          {suggestion.username ? `@${suggestion.username}` : suggestion.email || suggestion.phoneNumber || "SPLIT profile"}
+          {suggestion.roleTags ? ` · ${suggestion.roleTags}` : ""}
+        </span>
+      </span>
+      <span className="flex-shrink-0 rounded-full bg-secondary px-2 py-1 text-[10px] font-bold text-muted-foreground">
+        {label}
+      </span>
+    </button>
   );
 }
 
@@ -375,12 +558,68 @@ function getInviteMethodMeta(method: string, value: string) {
   return { label: "Username", icon: AtSign };
 }
 
+function cleanInviteToken(value?: string | null) {
+  return (value ?? "").trim().replace(/^@+/, "");
+}
+
+function firstRoleTag(value?: string | null) {
+  return (value ?? "").split(",")[0]?.trim() || "";
+}
+
+function normalizeSuggestionKey(value?: string | null) {
+  return cleanInviteToken(value).toLowerCase();
+}
+
+function getSuggestionKeys(suggestion: InviteSearchResult) {
+  return [
+    suggestion.userId,
+    suggestion.username,
+    suggestion.email,
+    suggestion.phoneNumber,
+  ]
+    .map(normalizeSuggestionKey)
+    .filter(Boolean);
+}
+
+function suggestionKey(suggestion: InviteSearchResult) {
+  return getSuggestionKeys(suggestion)[0] || normalizeSuggestionKey(suggestion.displayName) || "split-user";
+}
+
+function suggestionIsBlocked(suggestion: InviteSearchResult, blockedKeys: Set<string>) {
+  return getSuggestionKeys(suggestion).some((key) => blockedKeys.has(key));
+}
+
+function getBlockedSuggestionKeys(parties: Party[], currentPartyId: string, currentProfile?: UserProfile) {
+  const keys = new Set<string>();
+
+  if (currentProfile) {
+    [
+      currentProfile.authUserId,
+      currentProfile.username,
+      currentProfile.emailAddress,
+      [currentProfile.phoneCountryCode, currentProfile.phoneNumber].filter(Boolean).join(" "),
+    ].map(normalizeSuggestionKey).filter(Boolean).forEach((key) => keys.add(key));
+  }
+
+  parties
+    .filter((party) => party.id !== currentPartyId)
+    .forEach((party) => {
+      [
+        party.inviteValue,
+        party.email,
+        party.phoneNumber,
+        party.splitId,
+      ].map(normalizeSuggestionKey).filter(Boolean).forEach((key) => keys.add(key));
+    });
+
+  return keys;
+}
+
 function getMissingWriterItems(party: Party) {
   const missing: string[] = [];
 
   if (!hasWriterIdentity(party)) missing.push("username, email, or phone invite");
   if (Number(party.percent) <= 0) missing.push("split share");
-  if (party.contributionCategories.length === 0) missing.push("contribution selection");
 
   return missing;
 }

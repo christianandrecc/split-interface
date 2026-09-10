@@ -8,6 +8,15 @@ import {
 import { makeDocument } from "@/test/fixtures/splitSheet";
 
 describe("split sheet participant state", () => {
+  it("does not infer creator consent from matching names on server-managed records", () => {
+    const document = makeDocument();
+    document.serverRevision = 3;
+    document.splitApprovals = document.splitApprovals.map(approval => ({ ...approval, status: "Pending" }));
+    const proposal = document.splitProposalVersions[0];
+    expect(ensureSplitSheetCreatorApproval(document, document.splitApprovals, proposal)).toEqual(document.splitApprovals);
+    expect(getSplitSheetAcceptedParticipantIds(document, proposal.id)).toEqual([]);
+  });
+
   it("adds the creator approval back when an initial creator proposal is missing it", () => {
     const document = makeDocument();
     document.splitApprovals = document.splitApprovals.filter((approval) => approval.collaboratorId !== "creator");

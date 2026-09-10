@@ -12,7 +12,33 @@ const splitSheetStorageSource = readFileSync(
   "utf8",
 );
 
+const executionMigration = readFileSync(
+  resolve(process.cwd(), "supabase/migrations/20260910213449_restrict_client_function_execution.sql"),
+  "utf8",
+);
+
 describe("Supabase RLS hardening", () => {
+  it("removes anonymous RPC access while preserving authenticated UI and policy calls", () => {
+    for (const signature of [
+      "is_split_sheet_creator(uuid)",
+      "is_split_sheet_participant(uuid)",
+      "load_my_split_sheets()",
+      "load_my_split_notifications(integer)",
+      "mark_split_notifications_read(uuid[], uuid)",
+      "upsert_split_sheet_document(jsonb, text, text)",
+      "apply_split_sheet_participant_update(uuid, jsonb, text, text, text, text)",
+    ]) {
+      expect(executionMigration).toContain(`revoke execute on function public.${signature} from public, anon;`);
+      expect(executionMigration).toContain(`grant execute on function public.${signature} to authenticated;`);
+    }
+  });
+
+  it("removes direct client execution of trigger functions", () => {
+    for (const name of ["handle_new_user", "link_pending_split_invites_for_profile", "notify_split_collaborator_invite", "set_split_collaborator_user_id"]) {
+      expect(executionMigration).toContain(`revoke execute on function public.${name}() from public, anon, authenticated;`);
+    }
+  });
+
   it("keeps split-sheet writes behind RPCs instead of direct table writes", () => {
     expect(splitSheetStorageSource).toContain('supabase.rpc("upsert_split_sheet_document"');
     expect(splitSheetStorageSource).toContain('supabase.rpc("apply_split_sheet_participant_update"');

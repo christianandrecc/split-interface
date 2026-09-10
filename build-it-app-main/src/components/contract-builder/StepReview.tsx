@@ -71,9 +71,7 @@ export default function StepReview({ data }: Props) {
               <div key={party.id} className="flex items-center justify-between gap-4">
                 <div className="min-w-0">
                   <span className="block truncate text-sm font-medium">{partyDisplayName(party)}</span>
-                  <span className="text-xs text-muted-foreground">
-                    {party.role} · {party.contributionCategories.join(", ") || "Contribution pending"}
-                  </span>
+                  <span className="text-xs text-muted-foreground">{party.role}</span>
                 </div>
                 <span className="text-sm font-bold tabular-nums">{party.percent}%</span>
               </div>
@@ -94,7 +92,7 @@ export default function StepReview({ data }: Props) {
 }
 
 function SplitBar({ splits }: { splits: Array<{ name: string; percent: number }> }) {
-  const colors = ["bg-primary", "bg-[hsl(var(--split-pending))]", "bg-[hsl(var(--split-amended))]", "bg-muted-foreground"];
+  const colors = ["split-allocation-1", "split-allocation-2", "split-allocation-3", "split-allocation-4", "split-allocation-5"];
 
   return (
     <div>

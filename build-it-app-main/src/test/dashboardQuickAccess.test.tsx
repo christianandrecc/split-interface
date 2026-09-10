@@ -28,7 +28,7 @@ function makeOtherProfile(): UserProfile {
   };
 }
 
-describe("dashboard quick access", () => {
+describe("dashboard workspace", () => {
   beforeEach(() => {
     window.localStorage.clear();
   });
@@ -46,10 +46,9 @@ describe("dashboard quick access", () => {
       />,
     );
 
-    expect(screen.getByRole("heading", { name: "Quick access" })).toBeInTheDocument();
-    expect(await screen.findByText("Continue negotiation")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Hello" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Open messages" })).toBeInTheDocument();
     expect(screen.getAllByText("Night Swim").length).toBeGreaterThan(0);
-    expect(screen.getByText(/Maya Rios has a split proposal waiting/i)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /^Open messages$/i }));
 
@@ -69,10 +68,11 @@ describe("dashboard quick access", () => {
       />,
     );
 
-    fireEvent.click(await screen.findByRole("button", { name: /^View split$/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /^Night Swim$/i }));
 
     expect(screen.getAllByRole("heading", { name: "Night Swim" }).length).toBeGreaterThan(0);
-    expect(screen.getByText("Current proposal v1")).toBeInTheDocument();
+    expect(screen.getByText("SPLIT Total")).toBeInTheDocument();
+    expect(screen.getByText("Signatures")).toBeInTheDocument();
   });
 
   it("clears stale quick-access split sheets when the active account changes", async () => {
@@ -89,7 +89,7 @@ describe("dashboard quick access", () => {
       />,
     );
 
-    expect(await screen.findByText("Continue negotiation")).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Open messages" })).toBeInTheDocument();
 
     rerender(
       <Dashboard
@@ -100,7 +100,7 @@ describe("dashboard quick access", () => {
       />,
     );
 
-    expect(screen.queryByText("Continue negotiation")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Open messages" })).not.toBeInTheDocument();
     expect(screen.queryByText("Night Swim")).not.toBeInTheDocument();
   });
 });

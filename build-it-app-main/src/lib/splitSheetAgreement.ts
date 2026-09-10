@@ -20,6 +20,7 @@ export type Agreement = {
   updated: string;
   splits: { name: string; role: string; percent: number }[];
   document?: StoredSplitSheetDocument;
+  exportDocument?: StoredSplitSheetDocument;
 };
 
 function documentPartyName(document: StoredSplitSheetDocument, party: StoredSplitSheetDocument["data"]["parties"][number]) {
@@ -196,5 +197,6 @@ export function documentToAgreement(document: StoredSplitSheetDocument): Agreeme
       percent: Number(party.percent) || 0,
     })),
     document: normalizedDocument,
+    exportDocument: document,
   };
 }

@@ -52,7 +52,7 @@ export function buildQuickAccessMoments(agreements: Agreement[], now = Date.now(
     recent.find((agreement) => PENDING_SPLIT_STATUSES.includes(agreement.status)) ??
     recent[0];
 
-  const primary = continueAgreement
+  const primary: DashboardQuickAccessMoment | null = continueAgreement
     ? {
         id: `${continueAgreement.id}-continue`,
         kind: continueAgreement.status === "Disputed" ? "dispute" : "negotiation",

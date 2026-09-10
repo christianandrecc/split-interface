@@ -6,7 +6,7 @@ import { Plus } from "lucide-react";
 
 export type FilterStatus = "All" | "Pending" | "Verified" | Agreement["status"];
 
-const STATUS_FILTERS: FilterStatus[] = ["All", "Pending", "Draft", "Verified", "Archived"];
+const STATUS_FILTERS: FilterStatus[] = ["All", "Pending", "Draft", "Verified"];
 const FILTER_LABELS: Partial<Record<FilterStatus, string>> = {
   Verified: "Verified",
 };

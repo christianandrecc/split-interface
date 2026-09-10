@@ -1,5 +1,5 @@
 import { type FormEvent, type ReactNode, useEffect, useMemo, useState } from "react";
-import splitLogo from "@/assets/split-logo.png";
+import splitLockup from "@/assets/split-navy-amber-lockup.png";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -21,7 +21,7 @@ import {
 } from "@/lib/profileStorage";
 import { CREATOR_ROLE_OPTIONS } from "@/lib/creatorRoles";
 import { createEmptyProfile, normalizeUserProfile, normalizeUsername, type UserProfile } from "@/lib/userProfile";
-import { ArrowLeft, ArrowRight, HelpCircle, LogIn, MailCheck, ShieldCheck, UserPlus } from "lucide-react";
+import { ArrowLeft, ArrowRight, HelpCircle, LogIn, MailCheck, RotateCcw, ShieldCheck, UserPlus } from "lucide-react";
 
 const TERMS_VERSION = "split-terms-2026-08-12";
 const PRIVACY_VERSION = "split-privacy-2026-08-12";
@@ -108,6 +108,7 @@ type AccountAccessProps = {
   onCreateAccount: (profile: UserProfile, password: string) => Promise<AccountCreationResult | void>;
   onSignIn: (emailAddress: string, password: string) => Promise<void>;
   onPasswordResetComplete?: () => void;
+  onViewOnboardingAgain?: () => void;
 };
 
 type AccountCreationResult = {
@@ -121,6 +122,7 @@ export default function AccountAccess({
   onCreateAccount,
   onSignIn,
   onPasswordResetComplete,
+  onViewOnboardingAgain,
 }: AccountAccessProps) {
   const [mode, setMode] = useState<"create" | "signin" | "forgot" | "reset" | "confirm">(
     forcePasswordReset || hasRecoveryUrl() ? "reset" : "create",
@@ -190,7 +192,7 @@ export default function AccountAccess({
       const preparedProfile = prepareProfileForRegistration(profile);
       const result = await onCreateAccount(preparedProfile, accountPassword);
 
-      if (result?.needsEmailConfirmation) {
+      if (result && result.needsEmailConfirmation) {
         setPendingConfirmationEmail(result.emailAddress || preparedProfile.emailAddress);
         setAccountPassword("");
         setAccountPasswordConfirm("");
@@ -273,9 +275,10 @@ export default function AccountAccess({
       <div className="mx-auto grid min-h-screen w-full max-w-6xl grid-cols-1 lg:grid-cols-[0.86fr_1.14fr]">
         <section className="flex flex-col justify-between border-b border-border bg-card px-6 py-6 lg:border-b-0 lg:border-r lg:px-10 lg:py-10">
           <div className="flex items-center gap-3">
-            <img src={splitLogo} alt="SPLIT" className="h-9 w-9" />
+            <span className="rounded-xl bg-[hsl(var(--sidebar-background))] px-3 py-2 shadow-sm">
+              <img src={splitLockup} alt="SPLIT" className="h-8 w-auto object-contain" />
+            </span>
             <div>
-              <div className="text-sm font-bold tracking-tight">SPLIT</div>
               <div className="text-xs text-muted-foreground">Song ownership split sheets</div>
             </div>
           </div>
@@ -290,8 +293,28 @@ export default function AccountAccess({
             </p>
           </div>
 
-          <div className="hidden rounded-lg border border-border bg-secondary/50 p-4 text-xs leading-5 text-muted-foreground lg:block">
-            Passwords are handled only by Supabase Auth. SPLIT stores profile, role, consent, and split-sheet data in protected profile tables.
+          <div className="space-y-3">
+            <div className="hidden rounded-lg border border-border bg-secondary/50 p-4 text-xs leading-5 text-muted-foreground lg:block">
+              Passwords are handled only by Supabase Auth. SPLIT stores profile, role, consent, and split-sheet data in protected profile tables.
+            </div>
+            {initialProfile && onViewOnboardingAgain && (
+              <button
+                type="button"
+                onClick={onViewOnboardingAgain}
+                className="group flex w-full items-center gap-3 rounded-lg border border-primary/15 bg-background/80 p-3 text-left shadow-sm transition-colors hover:border-primary/30 hover:bg-primary/5"
+              >
+                <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                  <RotateCcw className="h-4 w-4" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-bold text-foreground">View onboarding again</span>
+                  <span className="mt-0.5 block text-xs leading-5 text-muted-foreground">
+                    Replay the six-step SPLIT walkthrough.
+                  </span>
+                </span>
+                <ArrowRight className="h-4 w-4 flex-shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />
+              </button>
+            )}
           </div>
         </section>
 
@@ -846,7 +869,7 @@ function ProfessionalInformationPage({
         </Field>
 
         {simplePublishingSetup && (
-          <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50/70 p-3 text-xs leading-5 text-emerald-900">
+          <div className="mt-4 rounded-lg border border-[hsl(var(--split-verified)/0.24)] bg-[hsl(var(--split-verified)/0.08)] p-3 text-xs leading-5 text-foreground">
             Self-published accounts default to 100% of their controlled publishing share.
           </div>
         )}

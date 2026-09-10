@@ -63,7 +63,6 @@ function SigningSummary() {
   const items = [
     "Split percentages and the 100% composition ownership total are correct.",
     "Legal/profile metadata can be used for this split sheet.",
-    "Contribution details become part of the signed record.",
     "PRO, IPI/CAE, and publisher/admin routing can be included in export or registration packets.",
     "Audit trail, version history, timestamps, and signatures are included automatically.",
   ];

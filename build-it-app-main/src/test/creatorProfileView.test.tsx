@@ -5,6 +5,7 @@ import type { UserProfile } from "@/lib/userProfile";
 
 function makeSupabaseProfile(): UserProfile {
   return {
+    authUserId: "",
     splitId: "",
     username: "chori",
     displayName: "Chori",
@@ -60,6 +61,7 @@ describe("CreatorProfileView", () => {
       />,
     );
 
+    fireEvent.click(screen.getByRole("button", { name: "Open account menu" }));
     fireEvent.click(screen.getByRole("button", { name: /your profile/i }));
 
     expect(screen.getByRole("heading", { name: "Chori" })).toBeInTheDocument();

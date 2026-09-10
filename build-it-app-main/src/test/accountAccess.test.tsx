@@ -1,12 +1,18 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { type ComponentProps } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import AccountAccess from "@/components/AccountAccess";
+import { createEmptyProfile } from "@/lib/userProfile";
 
-function renderAccountAccess(onCreateAccount = vi.fn(), onSignIn = vi.fn()) {
+function renderAccountAccess(
+  onCreateAccount = vi.fn(),
+  onSignIn = vi.fn(),
+  props: Partial<ComponentProps<typeof AccountAccess>> = {},
+) {
   render(
     <TooltipProvider>
-      <AccountAccess onCreateAccount={onCreateAccount} onSignIn={onSignIn} />
+      <AccountAccess onCreateAccount={onCreateAccount} onSignIn={onSignIn} {...props} />
     </TooltipProvider>,
   );
 }
@@ -20,6 +26,22 @@ function completePersonalPage() {
 }
 
 describe("AccountAccess registration flow", () => {
+  it("lets an existing account replay the new-user onboarding", () => {
+    const onViewOnboardingAgain = vi.fn();
+    renderAccountAccess(vi.fn(), vi.fn(), {
+      initialProfile: {
+        ...createEmptyProfile(),
+        username: "chori",
+        emailAddress: "chori@example.com",
+      },
+      onViewOnboardingAgain,
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /view onboarding again/i }));
+
+    expect(onViewOnboardingAgain).toHaveBeenCalledTimes(1);
+  });
+
   it("shows the required personal information fields in the requested order", () => {
     renderAccountAccess();
 

@@ -12,6 +12,11 @@ export function makeDocument(): StoredSplitSheetDocument {
     updatedAt: now,
     documentNumber: "SPLIT-20260812-ABC123",
     creatorProfile: {
+      authUserId: "",
+      termsAcceptedAt: "",
+      termsVersion: "",
+      privacyAcknowledgedAt: "",
+      privacyPolicyVersion: "",
       splitId: "",
       username: "chori",
       emailAddress: "chori@example.com",

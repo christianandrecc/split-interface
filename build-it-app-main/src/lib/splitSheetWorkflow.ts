@@ -16,7 +16,7 @@ export function roundSplitPercent(value: number) {
 }
 
 export function splitPercentTotal(percentages: Array<number | string>) {
-  return roundSplitPercent(percentages.reduce((sum, value) => sum + (Number(value) || 0), 0));
+  return roundSplitPercent(percentages.reduce<number>((sum, value) => sum + (Number(value) || 0), 0));
 }
 
 export function validateSplitPercentages(percentages: Array<number | string>): SplitSheetValidationResult {

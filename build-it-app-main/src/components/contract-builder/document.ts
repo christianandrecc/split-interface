@@ -19,6 +19,7 @@ export type StoredSplitSheetStatus =
 export type StoredSplitSheetDocument = {
   id: string;
   creatorUserId?: string;
+  serverRevision?: number;
   title: string;
   status: StoredSplitSheetStatus;
   version: number;
@@ -53,6 +54,7 @@ export type StoredSplitSheetDocument = {
     id: string;
     versionNumber: number;
     proposedBy: string;
+    proposedByUserId?: string;
     notes: string;
     createdAt: string;
     allocations: {
@@ -80,6 +82,9 @@ export type StoredSplitSheetDocument = {
     status: "Pending" | "Signed";
     signedAt?: string;
     signatureMethod?: string;
+    signerLegalName?: string;
+    signerArtistName?: string;
+    signerUserId?: string;
   }[];
   auditTrail: {
     timestamp: string;

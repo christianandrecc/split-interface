@@ -28,7 +28,7 @@ export type SplitSheetParticipantAction =
   | "local_chat";
 
 export type SplitSheetUpdateContext = {
-  action?: SplitSheetParticipantAction | "creator_update" | "local_chat";
+  action?: SplitSheetParticipantAction;
   responseType?: "invite_accept" | "invite_reject" | "split_accept" | "split_reject" | "signature";
   notes?: string;
 };
@@ -375,7 +375,7 @@ function rpcRowToDocument(row: SplitSheetRpcRow): StoredSplitSheetDocument | nul
     : null;
 }
 
-export async function loadSplitSheetDocuments(profile?: UserProfile): Promise<SplitSheetSaveResult[]> {
+export async function loadSplitSheetDocuments(profile?: UserProfile, onLoadError?: (error: unknown) => void): Promise<SplitSheetSaveResult[]> {
   const localDocuments = loadLocalSplitSheetDocuments(profile).map((document) => ({ document, persisted: false }));
 
   if (!isSupabaseConfigured) return localDocuments;
@@ -410,8 +410,21 @@ export async function loadSplitSheetDocuments(profile?: UserProfile): Promise<Sp
     }));
   } catch (error) {
     console.warn("SPLIT could not load split sheets from Supabase.", error);
+    onLoadError?.(error);
     return authenticatedUserLoaded ? scopedLocalDrafts : legacyLocalDrafts;
   }
+}
+
+export async function loadSplitSheetDocumentForExport(snapshot: StoredSplitSheetDocument): Promise<StoredSplitSheetDocument> {
+  if (!isSupabaseConfigured || splitSheetCanUseLocalDraftFallback(snapshot)) return snapshot;
+  await getActiveUserId();
+  // Reuse the participant-scoped RPC. An inaccessible or failed read must not export stale data.
+  const { data, error } = await supabase.rpc("load_my_split_sheets");
+  if (error) throw new Error("SPLIT could not refresh this record. Check your connection and try exporting again.");
+  const row = ((data ?? []) as SplitSheetRpcRow[]).find((item) => item.id === snapshot.id);
+  const document = row ? rpcRowToDocument(row) : null;
+  if (!document) throw new Error("This split sheet is no longer available to your account. Refresh and reopen it.");
+  return document;
 }
 
 export async function saveSplitSheetDocument(
@@ -445,9 +458,12 @@ export async function saveSplitSheetDocument(
       p_actor_label: actor,
     });
 
-    if (error) throw new Error(error.message);
+    if (error) throw Object.assign(new Error(error.message), { code: error.code });
 
-    const persistedDocument = isStoredSplitSheetDocument(data) ? documentWithServerIdentity(data, userId) : documentForSave;
+    if (!isStoredSplitSheetDocument(data) || data.id !== document.id) {
+      throw new Error("The server did not return a confirmed split sheet. Refresh and try again.");
+    }
+    const persistedDocument = documentWithServerIdentity(data, userId);
     removeLocalDocument(persistedDocument.id, ownerKey);
 
     return {
@@ -459,7 +475,9 @@ export async function saveSplitSheetDocument(
     if (mode === "send" || mode === "contract_delivery") {
       throw new Error(`Could not send this split sheet. ${explainSplitSheetPersistenceError(error)}`);
     }
-    if (!splitSheetCanUseLocalDraftFallback(document)) {
+    const rejectedByDatabase = error instanceof Error && "code" in error &&
+      ["40001", "42501", "22023", "55000"].includes(String(error.code));
+    if (!splitSheetCanUseLocalDraftFallback(document) || rejectedByDatabase) {
       throw new Error(`Could not save this split sheet. ${explainSplitSheetPersistenceError(error)}`);
     }
 
@@ -486,7 +504,10 @@ export async function saveSplitSheetParticipantAction(
     return { document, persisted: false };
   }
 
-  if (!context.action || context.action === "creator_update") {
+  if (!context.action) {
+    if (!splitSheetCanUseLocalDraftFallback(document)) {
+      throw new Error("Use a Messages action to update a sent split sheet.");
+    }
     return saveSplitSheetDocument(document, "update", profile);
   }
 
@@ -505,7 +526,10 @@ export async function saveSplitSheetParticipantAction(
 
     if (error) throw new Error(error.message);
 
-    const persistedDocument = isStoredSplitSheetDocument(data) ? data : document;
+    if (!isStoredSplitSheetDocument(data) || data.id !== document.id) {
+      throw new Error("The server did not return a confirmed split sheet. Refresh and try again.");
+    }
+    const persistedDocument = data;
     removeLocalDocument(persistedDocument.id, ownerKey);
 
     return {

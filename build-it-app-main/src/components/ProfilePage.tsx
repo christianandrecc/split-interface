@@ -501,7 +501,7 @@ export default function ProfilePage({ userProfile, onUpdateProfile, onBackToPubl
                 </div>
 
                 {simplePublishingSetup && (
-                  <div className="rounded-lg border border-emerald-200 bg-emerald-50/70 p-4 text-sm leading-6 text-emerald-900">
+                  <div className="rounded-lg border border-[hsl(var(--split-verified)/0.24)] bg-[hsl(var(--split-verified)/0.08)] p-4 text-sm leading-6 text-foreground">
                     <span className="font-semibold">Simple setup:</span> no publisher/admin fields needed. Your publishing share defaults to 100% of your writer share.
                   </div>
                 )}

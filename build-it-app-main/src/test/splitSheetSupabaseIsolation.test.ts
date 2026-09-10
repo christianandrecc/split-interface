@@ -8,6 +8,51 @@ describe("split sheet Supabase isolation", () => {
     window.localStorage.clear();
   });
 
+  it("uses canonical server state after signing instead of optimistic document fields", async () => {
+    const proposed = makeDocument();
+    proposed.serverRevision = 4;
+    proposed.status = "Verified and Stored";
+    const confirmed = { ...proposed, serverRevision: 5, status: "Pending Signatures", splitSignatures: [] };
+    const rpc = vi.fn(async () => ({ data: confirmed, error: null }));
+    vi.doMock("@/integrations/supabase/client", () => ({
+      isSupabaseConfigured: true,
+      supabase: { auth: { getUser: async () => ({ data: { user: { id: "current-auth-user" } }, error: null }) }, rpc },
+    }));
+    const { saveSplitSheetParticipantAction } = await import("@/lib/splitSheetStorage");
+    const result = await saveSplitSheetParticipantAction(proposed, { action: "sign" }, createEmptyProfile());
+    expect(result.document).toEqual(confirmed);
+    expect(rpc).toHaveBeenCalledWith("apply_split_sheet_participant_update", expect.objectContaining({
+      p_document_payload: expect.objectContaining({ serverRevision: 4 }), p_action: "sign",
+    }));
+  });
+
+  it.each([null, { id: "different-record" }])("does not treat an invalid RPC response as a confirmed signature: %s", async data => {
+    vi.doMock("@/integrations/supabase/client", () => ({
+      isSupabaseConfigured: true,
+      supabase: {
+        auth: { getUser: async () => ({ data: { user: { id: "current-auth-user" } }, error: null }) },
+        rpc: async () => ({ data, error: null }),
+      },
+    }));
+    const { saveSplitSheetParticipantAction } = await import("@/lib/splitSheetStorage");
+    await expect(saveSplitSheetParticipantAction(makeDocument(), { action: "sign" }, createEmptyProfile()))
+      .rejects.toThrow(/server did not return a confirmed split sheet/);
+  });
+
+  it("surfaces stale revisions without confirming or caching a participant update", async () => {
+    vi.doMock("@/integrations/supabase/client", () => ({
+      isSupabaseConfigured: true,
+      supabase: {
+        auth: { getUser: async () => ({ data: { user: { id: "current-auth-user" } }, error: null }) },
+        rpc: async () => ({ data: null, error: { code: "40001", message: "This split sheet changed. Refresh it before trying again." } }),
+      },
+    }));
+    const { saveSplitSheetParticipantAction } = await import("@/lib/splitSheetStorage");
+    await expect(saveSplitSheetParticipantAction(makeDocument(), { action: "sign" }, createEmptyProfile()))
+      .rejects.toThrow(/Refresh it before trying again/);
+    expect(window.localStorage.length).toBe(0);
+  });
+
   it("does not merge stale local split sheets after an authenticated Supabase load", async () => {
     const getUser = vi.fn(async () => ({
       data: { user: { id: "fresh-auth-user" } },
@@ -316,7 +361,7 @@ describe("split sheet Supabase isolation", () => {
     expect(loadLocalSplitSheetDocuments(profile, splitSheetLocalStorageOwnerForAuthUser("current-auth-user"))).toEqual([]);
   });
 
-  it("routes creator Messages updates through the server-owned document RPC", async () => {
+  it("routes creator counter-offers through the same action RPC as collaborators", async () => {
     const document = makeDocument();
     document.sentAt = document.createdAt;
     document.status = "Pending Split Approval";
@@ -346,19 +391,22 @@ describe("split sheet Supabase isolation", () => {
       displayName: "Chori",
     };
 
-    await expect(saveSplitSheetParticipantAction(document, { action: "creator_update" }, profile)).resolves.toMatchObject({
+    await expect(saveSplitSheetParticipantAction(document, { action: "counter_offer" }, profile)).resolves.toMatchObject({
       document: expect.objectContaining({ id: document.id }),
       persisted: true,
     });
-    expect(rpc).toHaveBeenCalledWith("upsert_split_sheet_document", {
+    expect(rpc).toHaveBeenCalledWith("apply_split_sheet_participant_update", {
+      p_split_sheet_id: document.id,
       p_document_payload: expect.objectContaining({ id: document.id }),
-      p_mode: "update",
+      p_action: "counter_offer",
       p_actor_label: "Chori",
+      p_response_type: null,
+      p_notes: null,
     });
-    expect(rpc).not.toHaveBeenCalledWith("apply_split_sheet_participant_update", expect.anything());
+    expect(rpc).not.toHaveBeenCalledWith("upsert_split_sheet_document", expect.anything());
   });
 
-  it("routes generic sent split-sheet updates through the server-owned document RPC", async () => {
+  it("rejects generic sent updates without an explicit Messages action", async () => {
     const document = makeDocument();
     document.sentAt = document.createdAt;
     document.status = "Pending Split Approval";
@@ -388,15 +436,7 @@ describe("split sheet Supabase isolation", () => {
       displayName: "Chori",
     };
 
-    await expect(saveSplitSheetParticipantAction(document, {}, profile)).resolves.toMatchObject({
-      document: expect.objectContaining({ id: document.id }),
-      persisted: true,
-    });
-    expect(rpc).toHaveBeenCalledWith("upsert_split_sheet_document", {
-      p_document_payload: expect.objectContaining({ id: document.id }),
-      p_mode: "update",
-      p_actor_label: "Chori",
-    });
-    expect(rpc).not.toHaveBeenCalledWith("apply_split_sheet_participant_update", expect.anything());
+    await expect(saveSplitSheetParticipantAction(document, {}, profile)).rejects.toThrow(/Use a Messages action/);
+    expect(rpc).not.toHaveBeenCalled();
   });
 });

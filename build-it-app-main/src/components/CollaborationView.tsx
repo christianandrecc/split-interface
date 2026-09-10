@@ -6,13 +6,17 @@ import {
   ChevronDown,
   FileSignature,
   GitBranch,
+  Lightbulb,
+  Lock,
   PanelRightClose,
   PanelRightOpen,
   PenLine,
   Send,
+  Sparkles,
   Split,
   X,
 } from "lucide-react";
+import splitLockup from "@/assets/split-navy-amber-lockup.png";
 import { addDocumentAuditTrail, type StoredSplitSheetDocument } from "@/components/contract-builder/document";
 import {
   documentBelongsToProfile,
@@ -84,6 +88,7 @@ export default function CollaborationView({ documents, userProfile, initialDealI
     : deals[0] ?? null;
   const currentVersion = selectedDeal?.splitVersions.find((version) => version.id === selectedDeal.currentVersionId) ?? selectedDeal?.splitVersions.at(-1);
   const readyToSign = Boolean(selectedDeal && dealReadyToSign(selectedDeal));
+  const isFinalRecord = Boolean(selectedDeal && FINAL_NEGOTIATION_DOCUMENT_STATUSES.has(selectedDeal.document.status));
   const viewerIdentity = selectedDeal ? participantIdentityForProfile(selectedDeal.document, userProfile) : null;
   const viewerName = viewerIdentity?.name || getProfileDisplayName(userProfile);
   const viewerParticipantId = selectedDeal ? viewerIdentity?.id || firstViewerParticipantId(selectedDeal) : "";
@@ -108,7 +113,7 @@ export default function CollaborationView({ documents, userProfile, initialDealI
   const updateDocument = async (document: StoredSplitSheetDocument, context: PersistContext) => {
     try {
       const persistedDocument = await onUpdateDocument(document, context);
-      if (persistedDocument?.id) {
+      if (persistedDocument && persistedDocument.id) {
         setSelectedDealId(persistedDocument.id);
       }
       if (context.successMessage) {
@@ -304,6 +309,12 @@ export default function CollaborationView({ documents, userProfile, initialDealI
 
   const openCounterComposer = () => {
     if (!selectedDeal || !currentVersion) return;
+    if (FINAL_NEGOTIATION_DOCUMENT_STATUSES.has(selectedDeal.document.status)) {
+      toast.info("This SPLIT is signed and locked", {
+        description: "Locked SPLIT records cannot be renegotiated or changed.",
+      });
+      return;
+    }
     setCounterPercents(Object.fromEntries(currentVersion.allocations.map((allocation) => [allocation.participantId, String(allocation.percent)])));
     setCounterNote("");
     setCounterOpen(true);
@@ -311,6 +322,11 @@ export default function CollaborationView({ documents, userProfile, initialDealI
 
   const createCounterOffer = async () => {
     if (!selectedDeal || !currentVersion) return;
+    if (FINAL_NEGOTIATION_DOCUMENT_STATUSES.has(selectedDeal.document.status)) {
+      toast.error("This SPLIT is signed and locked");
+      setCounterOpen(false);
+      return;
+    }
 
     const total = Object.values(counterPercents).reduce((sum, value) => sum + (Number(value) || 0), 0);
     if (Math.abs(total - 100) > 0.01) {
@@ -385,8 +401,8 @@ export default function CollaborationView({ documents, userProfile, initialDealI
 
     setCounterOpen(false);
     await updateDocument(updatedDocument, {
-      action: isCreator ? "creator_update" : "counter_offer",
-      responseType: isCreator ? undefined : "split_reject",
+      action: "counter_offer",
+      responseType: "split_reject",
       notes: counterNote.trim() || "Counter-offer from Messages",
       successMessage: "Counter-offer sent",
     });
@@ -415,6 +431,8 @@ export default function CollaborationView({ documents, userProfile, initialDealI
             status: "Signed" as const,
             signedAt: now,
             signatureMethod: "SPLIT in-app acknowledgement",
+            signerLegalName: (userProfile.legalName || "").trim() || undefined,
+            signerArtistName: (userProfile.pkaNames || userProfile.displayName || "").trim() || undefined,
           }
         : signature,
     );
@@ -511,7 +529,7 @@ export default function CollaborationView({ documents, userProfile, initialDealI
                       <button
                         type="button"
                         onClick={signDeal}
-                        className="inline-flex items-center justify-center gap-2 rounded-lg bg-[hsl(var(--split-verified))] px-4 py-2 text-sm font-bold text-primary-foreground hover:opacity-90"
+                        className="inline-flex items-center justify-center gap-2 rounded-lg bg-[hsl(var(--split-verified))] px-4 py-2 text-sm font-bold text-white hover:opacity-90"
                       >
                         <FileSignature className="h-4 w-4" />
                         Sign
@@ -593,16 +611,22 @@ export default function CollaborationView({ documents, userProfile, initialDealI
                 <button
                   type="button"
                   onClick={openCounterComposer}
-                  disabled={FINAL_NEGOTIATION_DOCUMENT_STATUSES.has(selectedDeal.document.status)}
-                  className="flex h-11 items-center justify-center gap-2 rounded-xl border border-border px-3 text-xs font-bold text-muted-foreground hover:bg-secondary disabled:cursor-default disabled:opacity-40"
+                  disabled={isFinalRecord}
+                  className="flex h-11 flex-shrink-0 items-center justify-center gap-2 rounded-xl border border-border px-3 text-xs font-bold text-muted-foreground hover:bg-secondary disabled:cursor-default disabled:opacity-40"
                 >
                   <GitBranch className="h-4 w-4" />
-                  Counter
+                  <span className="hidden sm:inline">Counter</span>
                 </button>
+                <ElephantAssistantButton
+                  key={selectedDeal.id}
+                  deal={selectedDeal}
+                  currentVersion={currentVersion}
+                  onOpenCounter={openCounterComposer}
+                />
                 <button
                   type="button"
                   onClick={() => void sendTextMessage()}
-                  className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary text-primary-foreground hover:bg-primary/90"
+                  className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground hover:bg-primary/90"
                 >
                   <Send className="h-4 w-4" />
                 </button>
@@ -743,7 +767,7 @@ function ChatHeader({
           <button
             type="button"
             onClick={onSign}
-            className="hidden items-center gap-2 rounded-lg bg-[hsl(var(--split-verified))] px-3 py-2 text-xs font-bold text-primary-foreground hover:opacity-90 sm:flex"
+            className="hidden items-center gap-2 rounded-lg bg-[hsl(var(--split-verified))] px-3 py-2 text-xs font-bold text-white hover:opacity-90 sm:flex"
           >
             <FileSignature className="h-3.5 w-3.5" />
             Sign
@@ -860,6 +884,114 @@ function MessageRow({
   );
 }
 
+function ElephantAssistantButton({
+  deal,
+  currentVersion,
+  onOpenCounter,
+}: {
+  deal: NegotiationDeal;
+  currentVersion?: SplitVersion;
+  onOpenCounter: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const isLocked = deal.status === "signed" || FINAL_NEGOTIATION_DOCUMENT_STATUSES.has(deal.document.status);
+  const total = currentVersion?.allocations.reduce((sum, allocation) => sum + allocation.percent, 0) ?? 0;
+
+  return (
+    <div className="relative flex-shrink-0">
+      <button
+        type="button"
+        aria-label="Open Elephant private read"
+        aria-expanded={open}
+        title="Elephant's private read"
+        onClick={() => setOpen((current) => !current)}
+        className={`group flex h-11 items-center justify-center gap-2 rounded-xl border px-2.5 text-xs font-bold shadow-sm transition ${
+          open
+            ? "border-primary/45 bg-primary/10 text-foreground"
+            : "border-[hsl(var(--split-pending)/0.3)] bg-[hsl(var(--split-bone))] text-foreground hover:border-primary/50 hover:bg-primary/10"
+        }`}
+      >
+        <span className="flex h-7 w-7 overflow-hidden rounded-lg border border-primary/20 bg-primary/10">
+          <img src={splitLockup} alt="" className="h-full w-full object-cover object-left" />
+        </span>
+        <span className="hidden lg:inline">Elephant</span>
+        <Sparkles className="hidden h-3.5 w-3.5 text-primary sm:block" />
+      </button>
+
+      {open && (
+        <div className="absolute bottom-full right-0 z-40 mb-3 w-[340px] max-w-[calc(100vw-2rem)] rounded-2xl border border-[hsl(var(--split-pending)/0.25)] bg-white/90 p-3 text-left shadow-[0_24px_70px_hsl(var(--split-amended)/0.18)] backdrop-blur-xl">
+          <span className="absolute -bottom-2 right-8 h-4 w-4 rotate-45 border-b border-r border-[hsl(var(--split-pending)/0.25)] bg-white/90" />
+          <div className="relative">
+            <div className="flex items-center gap-3">
+              <span className="flex h-9 w-9 overflow-hidden rounded-xl border border-primary/20 bg-[hsl(var(--split-bone))] shadow-sm">
+                <img src={splitLockup} alt="" className="h-full w-full object-cover object-left" />
+              </span>
+              <div className="min-w-0">
+                <div className="text-sm font-bold text-foreground">Elephant's private read</div>
+                <div className="mt-1 inline-flex items-center gap-1 rounded-full bg-[hsl(var(--split-bone))] px-2 py-0.5 text-[10px] font-bold text-muted-foreground">
+                  <Lock className="h-3 w-3" />
+                  Only you can see this
+                </div>
+              </div>
+            </div>
+
+            {isLocked ? (
+              <div className="mt-3 rounded-xl border border-[hsl(var(--split-verified)/0.24)] bg-[hsl(var(--split-verified)/0.08)] p-3">
+                <div className="flex items-center gap-2 text-sm font-bold text-[hsl(var(--split-verified))]">
+                  <Lock className="h-4 w-4" />
+                  Signed and locked
+                </div>
+                <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                  Everyone signed this SPLIT, so the record is final. I can help you review what happened here, but I will not suggest counters or new terms on a locked record.
+                </p>
+              </div>
+            ) : (
+              <>
+                <div className="mt-3 rounded-xl border border-[hsl(var(--split-pending)/0.28)] bg-[hsl(var(--split-bone))] p-3">
+                  <div className="mb-2 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2 text-sm font-bold text-foreground">
+                      <Lightbulb className="h-4 w-4 text-primary" />
+                      Split read
+                    </div>
+                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold tabular-nums ${Math.round(total) === 100 ? "bg-[hsl(var(--split-verified)/0.12)] text-[hsl(var(--split-verified))]" : "bg-destructive/10 text-destructive"}`}>
+                      Total {total}%
+                    </span>
+                  </div>
+                  {currentVersion && <SplitBars allocations={currentVersion.allocations} />}
+                </div>
+                <p className="mt-3 text-xs leading-5 text-muted-foreground">
+                  If the room feels aligned, keep moving toward signing. If the shares still feel off, use Counter before this SPLIT becomes locked.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOpen(false);
+                    onOpenCounter();
+                  }}
+                  className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-3 py-2.5 text-xs font-bold text-primary-foreground hover:bg-primary/90"
+                >
+                  <GitBranch className="h-4 w-4" />
+                  Suggest a counter
+                </button>
+              </>
+            )}
+
+            {isLocked && (
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                className="mt-3 inline-flex w-full items-center justify-center rounded-xl border border-border bg-background px-3 py-2.5 text-xs font-bold text-foreground hover:bg-secondary"
+              >
+                Got it
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function StructuredMessageCard({
   message,
   version,
@@ -923,7 +1055,7 @@ function StructuredMessageCard({
                 type="button"
                 onClick={onAccept}
                 disabled={alreadyAccepted}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-[hsl(var(--split-verified))] px-3 py-2 text-xs font-bold text-primary-foreground disabled:cursor-default disabled:opacity-50"
+                className="inline-flex items-center gap-1.5 rounded-lg bg-[hsl(var(--split-verified))] px-3 py-2 text-xs font-bold text-white disabled:cursor-default disabled:opacity-50"
               >
                 <Check className="h-3.5 w-3.5" />
                 {alreadyAccepted ? "Accepted" : "Accept"}
@@ -1028,7 +1160,7 @@ function DealContextPanel({ deal, currentVersion }: { deal: NegotiationDeal; cur
 }
 
 function SplitBars({ allocations }: { allocations: SplitAllocation[] }) {
-  const colors = ["bg-primary", "bg-[hsl(var(--split-pending))]", "bg-[hsl(var(--split-amended))]", "bg-muted-foreground"];
+  const colors = ["split-allocation-1", "split-allocation-2", "split-allocation-3", "split-allocation-4", "split-allocation-5"];
 
   return (
     <div>

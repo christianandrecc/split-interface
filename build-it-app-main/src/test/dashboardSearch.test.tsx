@@ -29,14 +29,14 @@ function makeCollaboratorProfile(): UserProfile {
 }
 
 async function openNightSwimFromSearch() {
-  const searchInput = screen.getByPlaceholderText(/search split sheets or users/i);
+  const searchInput = screen.getByRole("textbox", { name: /search split sheets or users/i });
   fireEvent.focus(searchInput);
   fireEvent.change(searchInput, {
     target: { value: "night" },
   });
   const searchResults = screen.getByRole("listbox", { name: /search results/i });
   const result = await within(searchResults).findByText("Night Swim");
-  fireEvent.mouseDown(result.closest("button")!);
+  fireEvent.click(result.closest("button")!);
 }
 
 describe("dashboard global search", () => {
@@ -53,16 +53,17 @@ describe("dashboard global search", () => {
       />,
     );
 
-    const searchInput = screen.getByPlaceholderText(/search split sheets or users/i);
+    const searchInput = screen.getByRole("textbox", { name: /search split sheets or users/i });
     fireEvent.focus(searchInput);
     fireEvent.change(searchInput, { target: { value: "night" } });
     const searchResults = screen.getByRole("listbox", { name: /search results/i });
     expect(searchResults).toBeInTheDocument();
     const result = await within(searchResults).findByText("Night Swim");
-    fireEvent.mouseDown(result.closest("button")!);
+    fireEvent.click(result.closest("button")!);
 
     expect(screen.getAllByRole("heading", { name: "Night Swim" }).length).toBeGreaterThan(0);
-    expect(screen.getByText("Current proposal v1")).toBeInTheDocument();
+    expect(screen.getByText("SPLIT Total")).toBeInTheDocument();
+    expect(screen.getByText("Signatures")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Open in Messages" })).toBeInTheDocument();
   });
 

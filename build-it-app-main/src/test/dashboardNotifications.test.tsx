@@ -100,7 +100,7 @@ describe("dashboard notifications", () => {
 
     fireEvent.click(await screen.findByLabelText("Open notifications"));
     expect(await screen.findByText("New split sheet invite")).toBeInTheDocument();
-    expect(screen.getByText('Chori sent "Night Swim" for review.')).toBeInTheDocument();
+    expect(screen.getAllByText('Chori sent "Night Swim" for review.').length).toBeGreaterThan(0);
 
     fireEvent.click(screen.getByText("New split sheet invite").closest("button")!);
 

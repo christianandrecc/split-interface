@@ -34,6 +34,19 @@ function makeSecondDocument() {
 }
 
 describe("CollaborationView document-backed negotiation", () => {
+  it("sends creator counter-offers through the participant action with the unchanged server revision", async () => {
+    const document = makeDocument();
+    document.sentAt = document.createdAt;
+    document.serverRevision = 7;
+    const onUpdateDocument = vi.fn().mockResolvedValue(undefined);
+    render(<CollaborationView documents={[document]} userProfile={makeCreatorProfile()} onUpdateDocument={onUpdateDocument} />);
+    fireEvent.click(screen.getAllByRole("button", { name: "Counter" })[0]);
+    fireEvent.click(screen.getByRole("button", { name: "Send counter" }));
+    await waitFor(() => expect(onUpdateDocument).toHaveBeenCalledTimes(1));
+    expect(onUpdateDocument.mock.calls[0][0].serverRevision).toBe(7);
+    expect(onUpdateDocument.mock.calls[0][1]).toMatchObject({ action: "counter_offer", responseType: "split_reject" });
+  });
+
   it("lets an invited collaborator accept the invite from Messages before reviewing", async () => {
     const document = makeDocument();
     document.sentAt = document.createdAt;
@@ -224,7 +237,11 @@ describe("CollaborationView document-backed negotiation", () => {
 
     expect(context).toMatchObject({ action: "sign", responseType: "signature" });
     expect(updatedDocument.status).toBe("Verified and Stored");
-    expect(updatedDocument.splitSignatures.find((signature) => signature.id === "maya-signature")?.status).toBe("Signed");
+    expect(updatedDocument.splitSignatures.find((signature) => signature.id === "maya-signature")).toMatchObject({
+      status: "Signed",
+      signerLegalName: makeCollaboratorProfile().legalName || undefined,
+      signerArtistName: makeCollaboratorProfile().pkaNames || makeCollaboratorProfile().displayName,
+    });
   });
 
   it("signs the current proposal version when older signature records still exist", async () => {
@@ -388,5 +405,49 @@ describe("CollaborationView document-backed negotiation", () => {
 
     expect(screen.getAllByText("Maya Rios proposed split version 2.").length).toBeGreaterThan(0);
     expect(screen.getAllByRole("heading", { name: "Night Swim" }).length).toBeGreaterThan(0);
+  });
+
+  it("opens the Elephant read and can launch a counter while a split is negotiable", () => {
+    const document = makeDocument();
+    document.sentAt = document.createdAt;
+    const onUpdateDocument = vi.fn().mockResolvedValue(undefined);
+
+    render(
+      <CollaborationView
+        documents={[document]}
+        userProfile={makeCreatorProfile()}
+        onUpdateDocument={onUpdateDocument}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Open Elephant private read" }));
+
+    expect(screen.getByText("Elephant's private read")).toBeInTheDocument();
+    expect(screen.getByText("Split read")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Suggest a counter" }));
+
+    expect(screen.getByText("Counter-offer split percentages")).toBeInTheDocument();
+  });
+
+  it("keeps the Elephant read-only when a split is signed and locked", () => {
+    const document = makeDocument();
+    document.sentAt = document.createdAt;
+    document.status = "Verified and Stored";
+    const onUpdateDocument = vi.fn().mockResolvedValue(undefined);
+
+    render(
+      <CollaborationView
+        documents={[document]}
+        userProfile={makeCreatorProfile()}
+        onUpdateDocument={onUpdateDocument}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Open Elephant private read" }));
+
+    expect(screen.getByText("Signed and locked")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Suggest a counter" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Counter" })).toBeDisabled();
   });
 });

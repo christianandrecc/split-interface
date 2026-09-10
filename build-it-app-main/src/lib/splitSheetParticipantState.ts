@@ -33,6 +33,8 @@ export function ensureSplitSheetCreatorApproval(
   proposal?: ProposalVersionRecord,
   approvedAt?: string,
 ) {
+  // Persisted approvals come from Supabase, never from matching display names.
+  if (document.serverRevision !== undefined) return approvals;
   if (!proposal || !proposalWasCreatedByCreator(document, proposal)) return approvals;
 
   let hasCreatorApproval = false;

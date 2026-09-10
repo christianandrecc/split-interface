@@ -7,6 +7,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import AccountAccess from "@/components/AccountAccess";
+import NewUserOnboarding from "@/components/NewUserOnboarding";
 import { normalizeUserProfile, type UserProfile } from "@/lib/userProfile";
 import {
   createSupabaseAccountProfile,
@@ -21,6 +22,7 @@ import { toast } from "sonner";
 const queryClient = new QueryClient();
 const PROFILE_STORAGE_KEY = "split.userProfile.v6";
 const PROFILE_SESSION_STORAGE_KEY = "split.userProfileSession.v1";
+const NEW_USER_ONBOARDING_STORAGE_PREFIX = "split.newUserOnboarding.v1";
 
 function readLocalProfile() {
   try {
@@ -72,10 +74,17 @@ function hasPasswordRecoveryUrl() {
   return window.location.hash.includes("type=recovery") || window.location.search.includes("type=recovery");
 }
 
+function getNewUserOnboardingStorageKey(authUserId: string | null, profile: UserProfile | null) {
+  if (!profile) return "";
+  const profileIdentity = authUserId || profile.authUserId || profile.emailAddress || profile.username || "local-profile";
+  return `${NEW_USER_ONBOARDING_STORAGE_PREFIX}:${profileIdentity}`;
+}
+
 const App = () => {
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [activeAuthUserId, setActiveAuthUserId] = useState<string | null>(null);
   const [showAccountCreation, setShowAccountCreation] = useState(false);
+  const [showNewUserOnboarding, setShowNewUserOnboarding] = useState(false);
   const [loadingProfile, setLoadingProfile] = useState(true);
   const [passwordRecoveryActive, setPasswordRecoveryActive] = useState(() => hasPasswordRecoveryUrl());
 
@@ -132,6 +141,21 @@ const App = () => {
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (!userProfile || showAccountCreation || passwordRecoveryActive) {
+      setShowNewUserOnboarding(false);
+      return;
+    }
+
+    const onboardingStorageKey = getNewUserOnboardingStorageKey(activeAuthUserId, userProfile);
+
+    try {
+      setShowNewUserOnboarding(window.localStorage.getItem(onboardingStorageKey) !== "complete");
+    } catch {
+      setShowNewUserOnboarding(false);
+    }
+  }, [activeAuthUserId, passwordRecoveryActive, showAccountCreation, userProfile]);
 
   const persistProfile = (profile: UserProfile, authUserId = activeAuthUserId) => {
     const normalizedProfile = normalizeUserProfile({
@@ -202,6 +226,36 @@ const App = () => {
     window.history.replaceState(null, "", window.location.pathname);
   };
 
+  const completeNewUserOnboarding = () => {
+    const onboardingStorageKey = getNewUserOnboardingStorageKey(activeAuthUserId, userProfile);
+
+    try {
+      if (onboardingStorageKey) {
+        window.localStorage.setItem(onboardingStorageKey, "complete");
+      }
+    } catch {
+      // Ignore disabled storage.
+    }
+
+    setShowNewUserOnboarding(false);
+  };
+
+  const viewNewUserOnboardingAgain = () => {
+    const onboardingStorageKey = getNewUserOnboardingStorageKey(activeAuthUserId, userProfile);
+
+    try {
+      if (onboardingStorageKey) {
+        window.localStorage.removeItem(onboardingStorageKey);
+      }
+    } catch {
+      // Ignore disabled storage.
+    }
+
+    setShowAccountCreation(false);
+    setPasswordRecoveryActive(false);
+    setShowNewUserOnboarding(true);
+  };
+
   if (loadingProfile) {
     return (
       <QueryClientProvider client={queryClient}>
@@ -221,7 +275,9 @@ const App = () => {
       <TooltipProvider>
         <Toaster />
         <Sonner />
-        {userProfile && !showAccountCreation && !passwordRecoveryActive ? (
+        {userProfile && !showAccountCreation && !passwordRecoveryActive && showNewUserOnboarding ? (
+          <NewUserOnboarding onComplete={completeNewUserOnboarding} />
+        ) : userProfile && !showAccountCreation && !passwordRecoveryActive ? (
           <BrowserRouter>
             <Routes>
               <Route
@@ -246,6 +302,7 @@ const App = () => {
             onCreateAccount={handleCreateAccount}
             onSignIn={handleSignIn}
             onPasswordResetComplete={handlePasswordResetComplete}
+            onViewOnboardingAgain={userProfile ? viewNewUserOnboardingAgain : undefined}
           />
         )}
       </TooltipProvider>

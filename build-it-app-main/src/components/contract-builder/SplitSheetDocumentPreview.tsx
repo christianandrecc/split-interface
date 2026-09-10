@@ -1,4 +1,4 @@
-import { ArrowLeft, CheckCircle2, Download, FileText, Save, Send, Users } from "lucide-react";
+import { ArrowLeft, CheckCircle2, ChevronDown, Clock, Download, FileText, Save, Send, Users } from "lucide-react";
 import type { UserProfile } from "@/lib/userProfile";
 import type { StoredSplitSheetDocument } from "./document";
 import { sumPercents } from "./types";
@@ -9,6 +9,8 @@ import {
 } from "@/lib/splitSheetDisplay";
 import { downloadSplitSheetRecord } from "@/lib/splitSheetDownload";
 import { getSplitWorkflowLabel, PENDING_SPLIT_STATUSES, VERIFIED_SPLIT_STATUSES } from "@/lib/splitWorkflow";
+
+const SPLIT_ALLOCATION_COLORS = ["split-allocation-1", "split-allocation-2", "split-allocation-3", "split-allocation-4", "split-allocation-5"];
 
 type SplitSheetDocumentPreviewProps = {
   document: StoredSplitSheetDocument;
@@ -46,13 +48,13 @@ function StatusPill({ status }: { status: StoredSplitSheetDocument["status"] }) 
   const pending = PENDING_SPLIT_STATUSES.includes(status);
   let className = "border-slate-200 bg-slate-50 text-slate-700";
 
-  if (verified) className = "border-emerald-200 bg-emerald-50 text-emerald-700";
+  if (verified) className = "border-[hsl(var(--split-verified)/0.25)] bg-[hsl(var(--split-verified)/0.10)] text-[hsl(var(--split-verified))]";
   else if (status === "Disputed") className = "border-red-200 bg-red-50 text-red-700";
   else if (status === "Archived") className = "border-slate-200 bg-slate-50 text-slate-600";
   else if (pending) className = "border-amber-200 bg-amber-50 text-amber-700";
 
   return (
-    <span className={"inline-flex rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-[0.12em] " + className}>
+    <span className={"inline-flex rounded-full border px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] " + className}>
       {getSplitWorkflowLabel(status)}
     </span>
   );
@@ -60,9 +62,9 @@ function StatusPill({ status }: { status: StoredSplitSheetDocument["status"] }) 
 
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="grid gap-1 sm:grid-cols-[150px_1fr]">
-      <dt className="text-slate-500">{label}</dt>
-      <dd className="font-medium text-slate-900">{value || "Not provided"}</dd>
+    <div className="grid gap-0.5 sm:grid-cols-[118px_1fr] sm:items-start">
+      <dt className="text-[13px] leading-5 text-slate-500">{label}</dt>
+      <dd className="text-[13px] font-semibold leading-5 text-slate-900">{value || "Not provided"}</dd>
     </div>
   );
 }
@@ -81,49 +83,49 @@ export function SplitSheetDocumentPage({ document: splitDocument, viewerProfile,
       id={compact ? undefined : "split-sheet-document"}
       className={
         compact
-          ? "space-y-5 rounded-2xl border border-slate-200 bg-white p-5 text-slate-900"
-          : "mx-auto max-w-5xl space-y-6 rounded-[28px] border border-slate-200 bg-white p-8 text-slate-900 shadow-sm"
+          ? "space-y-4 rounded-2xl border border-slate-200 bg-white p-4 text-slate-900"
+          : "mx-auto max-w-5xl space-y-5 rounded-[24px] border border-slate-200 bg-white p-6 text-slate-900 shadow-sm"
       }
     >
-      <header className="flex flex-col gap-5 border-b border-slate-200 pb-5 lg:flex-row lg:items-start lg:justify-between">
-        <div className="space-y-3">
-          <div className="flex flex-wrap items-center gap-3">
-            <span className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-[#31598f] text-white">
-              <FileText className="h-5 w-5" />
+      <header className="flex flex-col gap-4 border-b border-slate-200 pb-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="space-y-2.5">
+          <div className="flex flex-wrap items-center gap-2.5">
+            <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-[hsl(var(--sidebar-background))] text-white">
+              <FileText className="h-4 w-4" />
             </span>
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
                 {isVerifiedRecord ? "SPLIT verified record" : "SPLIT beta draft"}
               </p>
-              <h1 className="text-3xl font-semibold tracking-tight text-slate-950">{data.songTitle || "Untitled Work"}</h1>
+              <h1 className={(compact ? "text-2xl" : "text-3xl") + " font-semibold tracking-tight text-slate-950"}>{data.songTitle || "Untitled Work"}</h1>
             </div>
           </div>
-          <p className="max-w-3xl text-sm leading-6 text-slate-600">
+          <p className="max-w-3xl text-[13px] leading-5 text-slate-600">
             {isVerifiedRecord
               ? `Verified and stored by ${viewerProfile.displayName || viewerProfile.legalName || viewerProfile.emailAddress || "SPLIT user"} as the final split record.`
               : `Created by ${viewerProfile.displayName || viewerProfile.legalName || viewerProfile.emailAddress || "SPLIT user"} as a collaborator-approved split record in progress.`}
           </p>
         </div>
 
-        <div className="min-w-[220px] rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm">
-          <div className="mb-3 flex justify-end">
+        <div className="min-w-[190px] rounded-xl border border-slate-200 bg-slate-50 p-3 text-[13px]">
+          <div className="mb-2 flex justify-end">
             <StatusPill status={splitDocument.status} />
           </div>
-          <dl className="space-y-2">
-            <div className="flex justify-between gap-4">
+          <dl className="space-y-1.5">
+            <div className="flex justify-between gap-3">
               <dt className="text-slate-500">Document</dt>
               <dd className="font-semibold text-slate-900">{splitDocument.documentNumber}</dd>
             </div>
-            <div className="flex justify-between gap-4">
+            <div className="flex justify-between gap-3">
               <dt className="text-slate-500">Version</dt>
               <dd className="font-semibold text-slate-900">v{splitDocument.version}</dd>
             </div>
-            <div className="flex justify-between gap-4">
+            <div className="flex justify-between gap-3">
               <dt className="text-slate-500">Created</dt>
               <dd className="font-semibold text-slate-900">{formatDate(splitDocument.createdAt)}</dd>
             </div>
             {splitDocument.verifiedAt && (
-              <div className="flex justify-between gap-4">
+              <div className="flex justify-between gap-3">
                 <dt className="text-slate-500">Verified</dt>
                 <dd className="font-semibold text-slate-900">{formatDate(splitDocument.verifiedAt)}</dd>
               </div>
@@ -132,10 +134,10 @@ export function SplitSheetDocumentPage({ document: splitDocument, viewerProfile,
         </div>
       </header>
 
-      <section className="grid gap-4 md:grid-cols-2">
-        <div className="rounded-2xl border border-slate-200 p-5">
-          <h2 className="mb-4 text-sm font-semibold uppercase tracking-[0.14em] text-slate-500">Work info</h2>
-          <dl className="grid gap-3 text-sm">
+      <section className="grid gap-3 md:grid-cols-2">
+        <div className="rounded-xl border border-slate-200 p-4">
+          <h2 className="mb-3 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Work info</h2>
+          <dl className="grid gap-2">
             <InfoRow label="Title" value={data.songTitle} />
             <InfoRow label="Alternate title" value={data.alternateTitles} />
             <InfoRow label="Artist / project" value={data.artistProjectName || data.recordingArtist} />
@@ -144,9 +146,9 @@ export function SplitSheetDocumentPage({ document: splitDocument, viewerProfile,
           </dl>
         </div>
 
-        <div className="rounded-2xl border border-slate-200 p-5">
-          <h2 className="mb-4 text-sm font-semibold uppercase tracking-[0.14em] text-slate-500">Sample disclosure</h2>
-          <dl className="grid gap-3 text-sm">
+        <div className="rounded-xl border border-slate-200 p-4">
+          <h2 className="mb-3 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Sample disclosure</h2>
+          <dl className="grid gap-2">
             <InfoRow label="Contains sample" value={hasStructuredSample ? "Yes" : hasSampleFlag ? data.sampleStatus : "No"} />
             {hasStructuredSample && <InfoRow label="Sample artist" value={data.sampleOriginalArtist} />}
             {hasStructuredSample && <InfoRow label="Sample title" value={data.sampleOriginalWork} />}
@@ -163,7 +165,7 @@ export function SplitSheetDocumentPage({ document: splitDocument, viewerProfile,
               {isVerifiedRecord ? "Final collaborator shares from the verified split record." : "This proposal can move to approval after collaborators accept participation."}
             </p>
           </div>
-          <span className={total === 100 ? "rounded-full bg-emerald-50 px-3 py-1 text-sm font-semibold text-emerald-700" : "rounded-full bg-amber-50 px-3 py-1 text-sm font-semibold text-amber-700"}>
+          <span className={total === 100 ? "rounded-full bg-[hsl(var(--split-verified)/0.10)] px-3 py-1 text-sm font-semibold text-[hsl(var(--split-verified))]" : "rounded-full bg-amber-50 px-3 py-1 text-sm font-semibold text-amber-700"}>
             Total: {total}%
           </span>
         </div>
@@ -173,7 +175,7 @@ export function SplitSheetDocumentPage({ document: splitDocument, viewerProfile,
             {writers.map((party, index) => (
               <div
                 key={party.id}
-                className={["bg-[#31598f]", "bg-[#e0a63a]", "bg-[#2f8f7b]", "bg-[#8a5fbf]", "bg-[#cc6f4d]"][index % 5]}
+                className={SPLIT_ALLOCATION_COLORS[index % SPLIT_ALLOCATION_COLORS.length]}
                 style={{ width: party.percent + "%" }}
                 title={splitSheetPartyDisplayName(splitDocument, party) + " - " + party.percent + "%"}
               />
@@ -186,7 +188,7 @@ export function SplitSheetDocumentPage({ document: splitDocument, viewerProfile,
             <thead className="bg-slate-50 text-xs uppercase tracking-[0.12em] text-slate-500">
               <tr>
                 <th className="px-4 py-3 font-semibold">Collaborator</th>
-                <th className="px-4 py-3 font-semibold">Contribution</th>
+                <th className="px-4 py-3 font-semibold">Role</th>
                 <th className="px-4 py-3 font-semibold">Share</th>
                 <th className="px-4 py-3 font-semibold">Invite</th>
               </tr>
@@ -196,9 +198,8 @@ export function SplitSheetDocumentPage({ document: splitDocument, viewerProfile,
                 <tr key={party.id}>
                   <td className="px-4 py-4">
                     <div className="font-semibold text-slate-950">{splitSheetPartyDisplayName(splitDocument, party)}</div>
-                    <div className="text-xs text-slate-500">{party.role || "Songwriter"}</div>
                   </td>
-                  <td className="px-4 py-4 text-slate-600">{party.contributionCategories.length ? party.contributionCategories.join(", ") : "Pending"}</td>
+                  <td className="px-4 py-4 text-slate-600">{party.role || "Collaborator"}</td>
                   <td className="px-4 py-4 font-semibold text-slate-950">{party.percent}%</td>
                   <td className="px-4 py-4 text-slate-600">{party.isCurrentUser ? "Creator" : party.inviteValue || party.email || "Pending"}</td>
                 </tr>
@@ -216,7 +217,7 @@ export function SplitSheetDocumentPage({ document: splitDocument, viewerProfile,
               <div key={signature.id} className="rounded-xl border border-slate-200 px-4 py-3 text-sm">
                 <div className="flex items-center justify-between gap-3">
                   <span className="font-semibold text-slate-950">{splitSheetParticipantDisplayName(splitDocument, signature.collaboratorId, signature.collaboratorName)}</span>
-                  <span className={signature.status === "Signed" ? "rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700" : "rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700"}>
+                  <span className={signature.status === "Signed" ? "rounded-full bg-[hsl(var(--split-verified)/0.10)] px-2.5 py-1 text-xs font-semibold text-[hsl(var(--split-verified))]" : "rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700"}>
                     {signature.status}
                   </span>
                 </div>
@@ -228,18 +229,25 @@ export function SplitSheetDocumentPage({ document: splitDocument, viewerProfile,
         </section>
       )}
 
-      <section className="rounded-2xl border border-slate-200 p-5">
-        <h2 className="mb-4 text-sm font-semibold uppercase tracking-[0.14em] text-slate-500">Audit trail</h2>
-        <div className="space-y-3">
-          {auditItems.map((item, index) => (
-            <div key={index} className="grid gap-2 rounded-xl border border-slate-200 px-4 py-3 text-sm md:grid-cols-[180px_1fr_1fr]">
-              <span className="text-slate-500">{item.date}</span>
-              <span className="font-semibold text-slate-900">{item.actor}</span>
-              <span className="text-slate-600">{item.event}</span>
-            </div>
-          ))}
+      <details className="group overflow-hidden rounded-xl border border-slate-200 bg-white">
+        <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-3 transition hover:bg-slate-50 [&::-webkit-details-marker]:hidden">
+          <Clock className="h-4 w-4 text-slate-500" />
+          <span className="flex-1 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Audit trail</span>
+          <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-500">{auditItems.length} entries</span>
+          <ChevronDown className="h-4 w-4 text-slate-500 transition-transform group-open:rotate-180" />
+        </summary>
+        <div className="border-t border-slate-200 px-4 py-3">
+          <div className="space-y-2">
+            {auditItems.map((item, index) => (
+              <div key={index} className="grid gap-1 rounded-lg border border-slate-200 px-3 py-2.5 text-[13px] md:grid-cols-[150px_1fr_1.2fr] md:gap-3">
+                <span className="text-slate-500">{item.date}</span>
+                <span className="font-semibold text-slate-900">{item.actor}</span>
+                <span className="text-slate-600">{item.event}</span>
+              </div>
+            ))}
+          </div>
         </div>
-      </section>
+      </details>
     </article>
   );
 }
@@ -258,7 +266,7 @@ export default function SplitSheetDocumentPreview({
   const isVerifiedRecord = VERIFIED_SPLIT_STATUSES.includes(splitDocument.status) || splitDocument.status === "Archived";
 
   return (
-    <div className="min-h-screen bg-[#f6f8fb] px-4 py-6 text-slate-900 sm:px-8 lg:px-12">
+    <div className="min-h-screen bg-background px-4 py-6 text-slate-900 sm:px-8 lg:px-12">
       <style>
         {"@media print { body * { visibility: hidden; } #split-sheet-document, #split-sheet-document * { visibility: visible; } #split-sheet-document { position: absolute; left: 0; top: 0; width: 100%; box-shadow: none; border: 0; } .no-print { display: none !important; } }"}
       </style>
@@ -288,7 +296,7 @@ export default function SplitSheetDocumentPreview({
             type="button"
             onClick={onStore}
             disabled={stored || isVerifiedRecord}
-            className={(stored ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-white text-slate-700 hover:border-[#31598f] hover:text-[#31598f]") + " inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold shadow-sm transition disabled:cursor-default"}
+            className={(stored ? "border-[hsl(var(--split-verified)/0.25)] bg-[hsl(var(--split-verified)/0.10)] text-[hsl(var(--split-verified))]" : "border-slate-200 bg-white text-slate-700 hover:border-[hsl(var(--sidebar-background))] hover:text-[hsl(var(--sidebar-background))]") + " inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold shadow-sm transition disabled:cursor-default"}
           >
             {stored ? <CheckCircle2 className="h-4 w-4" /> : <Save className="h-4 w-4" />}
             {isVerifiedRecord ? "Record stored" : stored ? "Draft stored" : "Save draft"}
@@ -297,7 +305,7 @@ export default function SplitSheetDocumentPreview({
             type="button"
             onClick={onSend}
             disabled={!hasCollaborators || sent || isVerifiedRecord}
-            className={(!hasCollaborators || sent || isVerifiedRecord ? "border-slate-200 bg-slate-100 text-slate-400" : "border-[#31598f] bg-[#31598f] text-white hover:bg-[#264772]") + " inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold shadow-sm transition disabled:cursor-default"}
+            className={(!hasCollaborators || sent || isVerifiedRecord ? "border-slate-200 bg-slate-100 text-slate-400" : "border-[hsl(var(--sidebar-background))] bg-[hsl(var(--sidebar-background))] text-white hover:bg-[hsl(var(--split-amended))]") + " inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold shadow-sm transition disabled:cursor-default"}
           >
             {sent ? <CheckCircle2 className="h-4 w-4" /> : <Send className="h-4 w-4" />}
             {isVerifiedRecord ? "Finalized" : hasCollaborators ? (sent ? "Messages started" : "Start Messages review") : "No collaborators"}
@@ -305,7 +313,7 @@ export default function SplitSheetDocumentPreview({
           <button
             type="button"
             onClick={() => downloadSplitSheetRecord(splitDocument, viewerProfile)}
-            className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-[#31598f] hover:text-[#31598f]"
+            className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-[hsl(var(--sidebar-background))] hover:text-[hsl(var(--sidebar-background))]"
           >
             <Download className="h-4 w-4" />
             {isVerifiedRecord ? "Download split sheet" : "Download draft"}
