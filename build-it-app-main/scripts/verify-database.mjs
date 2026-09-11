@@ -3,6 +3,10 @@ import { pgcrypto } from "@electric-sql/pglite/contrib/pgcrypto";
 import { readFileSync, readdirSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import assert from "node:assert/strict";
+import { verifySplitPrivacy } from "./verify-split-privacy.mjs";
+import { verifySplitRegistration } from "./verify-split-registration.mjs";
+import { verifyAccountSettings } from "./verify-account-settings.mjs";
+import { seedLegacyAccountEmail, verifyAccountEmail } from "./verify-account-email.mjs";
 
 // Disposable PostgreSQL only: no credentials, network calls, or live records.
 // The auth shim models PostgREST's user claim, not hosted GoTrue.
@@ -77,7 +81,8 @@ try {
   await db.exec(`
     create role anon; create role authenticated; create role service_role;
     create schema auth; create schema extensions;
-    create table auth.users (id uuid primary key, email text, phone text, raw_user_meta_data jsonb default '{}'::jsonb);
+    create table auth.users (id uuid primary key, email text, phone text, email_confirmed_at timestamptz,
+      phone_confirmed_at timestamptz, email_change text default '', raw_user_meta_data jsonb default '{}'::jsonb);
     create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid$$;
     grant usage on schema auth, public to anon, authenticated;
     grant execute on function auth.uid() to anon, authenticated;
@@ -85,6 +90,7 @@ try {
     alter default privileges in schema public grant all on functions to anon, authenticated, service_role;
   `);
   for (const file of readdirSync("supabase/migrations").filter(name => name.endsWith(".sql")).sort()) {
+    if (file.endsWith("_sync_profile_account_email.sql")) await seedLegacyAccountEmail(db);
     await db.exec(readFileSync(`supabase/migrations/${file}`, "utf8"));
     report.migrations.push(file);
   }
@@ -106,8 +112,22 @@ try {
     await db.query("insert into auth.users(id,email,raw_user_meta_data) values($1,$2,$3)",
       [id, `${username}@example.test`, { username, display_name: username, legal_name: legalName }]);
   }
-  assert.equal((await db.query("select count(*)::integer as count from public.profiles")).rows[0].count, 3);
+  assert.equal((await db.query("select count(*)::integer as count from public.profiles where user_id=any($1::uuid[])", [[creator, participant, outsider]])).rows[0].count, 3);
   report.checks.push("Signup still creates profiles with legal names");
+  const artistUser = randomUUID();
+  await db.query("insert into auth.users(id,email,raw_user_meta_data) values($1,$2,$3)", [artistUser, "qa_artist@example.test", {
+    username: "qa_artist", display_name: "Aurora Music", pka_names: "Aurora Music", stage_name: "Aurora Music", legal_name: "Alex Rivera",
+    profile_data: { username: "qa_artist", displayName: "Aurora Music", pkaNames: "Aurora Music", legalName: "Alex Rivera" },
+  }]);
+  await login(artistUser);
+  const artistProfile = (await db.query("select display_name,pka_names,stage_name,profile_data from public.profiles where user_id=$1", [artistUser])).rows[0];
+  assert.equal(artistProfile.display_name, "Aurora Music");
+  assert.equal(artistProfile.pka_names, "Aurora Music");
+  assert.equal(artistProfile.stage_name, "Aurora Music");
+  assert.equal(artistProfile.profile_data.displayName, "Aurora Music");
+  assert.equal(artistProfile.profile_data.pkaNames, "Aurora Music");
+  assert.equal((await db.query("select display_name from public.search_split_profiles('Aurora',10)")).rows[0].display_name, "Aurora Music");
+  report.checks.push("Artist name: full signup name survives the auth trigger, authenticated profile read and profile search");
   await login(creator);
   const maliciousDraft = fixture();
   maliciousDraft.status = "Verified and Stored";
@@ -355,6 +375,10 @@ try {
   signedDraft.splitSignatures[0].status = "Signed";
   await admin("update public.split_sheets set document_payload=$1 where id=$2", [signedDraft, signedDraft.id]);
   await rejectsWithoutWrites("Draft with a historical signature cannot be deleted", () => deleteDraft(signedDraft), "55000", /unsent, unsigned/);
+  await verifySplitPrivacy({ db, report, login, admin, load, save, action, fixture });
+  await verifySplitRegistration({ db, report, login, admin, load, save, action, rejectsWithoutWrites });
+  await verifyAccountSettings({ db, report, login, admin, fixture, save, load });
+  await verifyAccountEmail({ db, report, login, admin, save, action, load, fixture });
   console.log(JSON.stringify(report, null, 2));
 } catch (error) {
   console.error(JSON.stringify({ message: error.message, code: error.code, detail: error.detail, where: error.where, stack: error.code ? undefined : error.stack }, null, 2));

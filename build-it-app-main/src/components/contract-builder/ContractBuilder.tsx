@@ -29,6 +29,7 @@ import { toast } from "sonner";
 import type { SplitSheetSaveResult } from "@/lib/splitSheetStorage";
 import type { CollaboratorSuggestion } from "@/lib/collaboratorSuggestions";
 import DeleteDraftButton from "@/components/DeleteDraftButton";
+import { DEFAULT_APP_SETTINGS, type AppSettings } from "@/lib/accountSettings";
 
 export default function ContractBuilder({
   userProfile,
@@ -40,6 +41,7 @@ export default function ContractBuilder({
   onDeleteDocument,
   initialDocument,
   recentCollaborators = [],
+  settings = DEFAULT_APP_SETTINGS,
 }: {
   userProfile: UserProfile;
   onBack: () => void;
@@ -50,10 +52,11 @@ export default function ContractBuilder({
   onDeleteDocument?: (document: StoredSplitSheetDocument) => Promise<void>;
   initialDocument?: StoredSplitSheetDocument;
   recentCollaborators?: CollaboratorSuggestion[];
+  settings?: AppSettings;
 }) {
   const [step, setStep] = useState<StepId>(initialDocument ? "review" : "metadata");
   const [furthestStep, setFurthestStep] = useState(initialDocument ? STEPS.length - 1 : 0);
-  const [data, setData] = useState<ContractData>(() => initialDocument?.data ?? createInitialContract(userProfile));
+  const [data, setData] = useState<ContractData>(() => initialDocument?.data ?? createInitialContract(userProfile, settings));
   const documentRef = useRef<StoredSplitSheetDocument | null>(initialDocument ?? null);
   const inFlight = useRef(false);
   const [saving, setSaving] = useState<"draft" | "send" | null>(null);
@@ -329,14 +332,15 @@ function CreationElephantAssistant({ currentStep }: { currentStep: StepId }) {
   );
 }
 
-function createInitialContract(userProfile: UserProfile): ContractData {
+function createInitialContract(userProfile: UserProfile, settings: AppSettings): ContractData {
   return {
     ...DEFAULT_CONTRACT,
+    splitType: settings.defaultSplitMethod,
     creationDate: getTodayDateInputValue(),
     artistProjectName: getSignedInArtistName(userProfile),
     recordingArtist: getSignedInArtistName(userProfile),
     parties: [
-      profileToParty(userProfile),
+      profileToParty(userProfile, settings),
     ],
   };
 }
@@ -353,8 +357,8 @@ function getSignedInArtistName(userProfile: UserProfile) {
   ].map(safeText).filter(Boolean).join(" ");
 
   return (
-    displayName ||
     pkaName ||
+    displayName ||
     legalName ||
     fullLegalName ||
     emailAddress ||
@@ -372,14 +376,8 @@ function bindContractToSignedInArtist(data: ContractData, userProfile: UserProfi
   };
 }
 
-function requiresPublishingDetails(status?: string) {
-  return ["Signed to publisher", "Admin by third party", "Co-published"].includes(status ?? "");
-}
-
-function profileToParty(userProfile: UserProfile): Party {
+function profileToParty(userProfile: UserProfile, settings: AppSettings): Party {
   const phoneNumber = [userProfile.phoneCountryCode, userProfile.phoneNumber].map(safeText).filter(Boolean).join(" ").trim();
-  const publishingStatus = userProfile.publishingStatus || "Unknown";
-  const needsPublishingDetails = requiresPublishingDetails(publishingStatus);
   const username = safeText(userProfile.username);
   const emailAddress = safeText(userProfile.emailAddress);
   const legalName = safeText(userProfile.legalName) || [
@@ -402,13 +400,9 @@ function profileToParty(userProfile: UserProfile): Party {
     proAffiliation: safeText(userProfile.proAffiliation) || "Unknown",
     customProName: safeText(userProfile.customProName),
     ipiNumber: safeText(userProfile.ipiNumber),
-    publishingStatus,
-    publisherName: needsPublishingDetails ? safeText(userProfile.publisherName) || safeText(userProfile.adminCompanyName) : "",
-    publisherIpi: needsPublishingDetails ? safeText(userProfile.publisherIpi) || safeText(userProfile.adminIpi) : "",
-    publisherPro: needsPublishingDetails ? safeText(userProfile.publisherPro) || safeText(userProfile.proAffiliation) : "",
-    publisherContact: needsPublishingDetails ? safeText(userProfile.publisherContact) : "",
     percent: 100,
-    role: "Songwriter",
+    role: settings.defaultUserRole,
+    societyTerritory: settings.defaultTerritory,
     signingOrder: 1,
   });
 }

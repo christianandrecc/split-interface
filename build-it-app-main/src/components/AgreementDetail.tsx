@@ -301,7 +301,7 @@ export default function AgreementDetail({
         <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
           <StackedCollapsibleSection
             title="Work & Metadata"
-            description="Title, writers, publishers, codes, territory"
+            description="Title, writers, codes, territory"
             icon={FileText}
             open={showWorkMetadata}
             onToggle={() => setShowWorkMetadata((v) => !v)}
@@ -319,11 +319,12 @@ export default function AgreementDetail({
           </StackedCollapsibleSection>
           <StackedCollapsibleSection
             title="Registration"
-            description="PRO, publisher, codes, territories"
+            description="PRO, codes, territories"
             icon={Hash}
             open={showRegistration}
             onToggle={() => setShowRegistration((v) => !v)}
           >
+            {document && <CollaboratorRegistration document={document} />}
             <MetadataGroups groups={registrationGroups} showAdvancedRow advancedTitle="Advanced registration metadata" />
           </StackedCollapsibleSection>
           <StackedCollapsibleSection
@@ -457,6 +458,29 @@ function buildInviteDetailGroup(
       };
     }),
   };
+}
+
+function CollaboratorRegistration({ document }: { document: NonNullable<Agreement["document"]> }) {
+  return (
+    <div className="mb-5">
+      <h3 className="mb-3 text-sm font-bold">Collaborator registration</h3>
+      <table aria-label="Collaborator registration" className="w-full table-fixed text-left text-xs sm:text-sm">
+        <colgroup><col className="w-1/3 sm:w-[44%]" /><col className="w-1/3 sm:w-[26%]" /><col className="w-1/3 sm:w-[30%]" /></colgroup>
+        <thead className="border-b border-border text-xs text-muted-foreground">
+          <tr><th scope="col" className="pb-2 pr-2 font-medium sm:pr-3">Collaborator</th><th scope="col" className="pb-2 pr-2 font-medium sm:pr-3">PRO</th><th scope="col" className="pb-2 font-medium">IPI / CAE</th></tr>
+        </thead>
+        <tbody className="divide-y divide-border">
+          {document.data.parties.map((party) => (
+            <tr key={party.id} className="align-top">
+              <th scope="row" className="py-3 pr-2 font-medium [overflow-wrap:anywhere] sm:pr-3">{splitSheetPartyDisplayName(document, party)}</th>
+              <td className="py-3 pr-2 [overflow-wrap:anywhere] sm:pr-3">{(party.proAffiliation === "Other" ? party.customProName || "Other" : party.proAffiliation) || "Not provided"}</td>
+              <td className="py-3 tabular-nums [overflow-wrap:anywhere]">{party.ipiNumber || "Not provided"}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
 }
 
 function buildRegistrationDisplayGroups(group: MetadataGroupDefinition | undefined): MetadataGroupDefinition[] {
@@ -1188,8 +1212,8 @@ function getMetadataGroupPresentation(title: string): {
       subtitle: legal
         ? "Sample details, dispute fields, authorization toggles, and delivery settings"
         : registration
-          ? "Additional release, code, publisher, and registration details"
-        : "Additional codes, publishers, writers, territory, and more",
+          ? "Additional release, code, and registration details"
+        : "Additional codes, writers, territory, and more",
       icon: SlidersHorizontal,
       iconClass: "bg-secondary text-[hsl(var(--split-amended))]",
       tone: "advanced",

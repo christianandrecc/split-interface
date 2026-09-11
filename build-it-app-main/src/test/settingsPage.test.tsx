@@ -1,123 +1,109 @@
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import SettingsPage from "@/components/SettingsPage";
-import { CREATOR_ROLE_OPTIONS } from "@/lib/creatorRoles";
+import { DEFAULT_APP_SETTINGS, type SavedSettings } from "@/lib/accountSettings";
 import { createEmptyProfile } from "@/lib/userProfile";
 
-afterEach(() => { cleanup(); vi.restoreAllMocks(); });
-
-function openCategory(name: string) {
-  fireEvent.mouseDown(screen.getByRole("tab", { name }), { button: 0, ctrlKey: false });
+const mocks = vi.hoisted(() => ({ load: vi.fn(), save: vi.fn() }));
+vi.mock("@/lib/accountSettings", async (original) => ({ ...await original<typeof import("@/lib/accountSettings")>(), loadAccountSettings: mocks.load, saveAccountSettings: mocks.save }));
+const profile = { ...createEmptyProfile(), authUserId: "account-a", roleTags: "Engineer, Producer" };
+let stored: SavedSettings;
+beforeEach(() => {
+  stored = { settings: { ...DEFAULT_APP_SETTINGS }, revision: null };
+  mocks.load.mockImplementation(async () => structuredClone(stored));
+  mocks.save.mockImplementation(async (_id, settings) => {
+    stored = { settings, revision: (stored.revision ?? 0) + 1 };
+    return structuredClone(stored);
+  });
+});
+afterEach(() => { cleanup(); vi.clearAllMocks(); });
+function openCategory(name: string) { fireEvent.mouseDown(screen.getByRole("tab", { name }), { button: 0, ctrlKey: false }); }
+async function setup() {
+  const result = render(<SettingsPage userProfile={profile} />);
+  await waitFor(() => expect(screen.getByRole("radio", { name: "Equal" })).toBeEnabled());
+  return result;
 }
 
-describe("SettingsPage", () => {
-  it("offers only Equal and Custom split defaults, starting at Custom", () => {
-    render(<form><SettingsPage userProfile={createEmptyProfile()} /></form>);
-    const splitMethod = screen.getByRole("group", { name: "Split method" });
-    expect(within(splitMethod).getByRole("radio", { name: "Custom" })).toBeChecked();
-    expect(within(splitMethod).getAllByRole("radio").map((option) => option.textContent)).toEqual(["Equal", "Custom"]);
-    fireEvent.click(screen.getByRole("radio", { name: "Custom" }));
+describe("account Settings", () => {
+  it("loads composition defaults, not general signup roles, with only Equal and Custom", async () => {
+    await setup();
+    expect(mocks.load).toHaveBeenCalledWith("account-a");
+    expect(screen.getByRole("combobox", { name: "Default composition role" })).toHaveTextContent("Songwriter");
+    expect(within(screen.getByRole("group", { name: "Split method" })).getAllByRole("radio").map(el => el.textContent)).toEqual(["Equal", "Custom"]);
     expect(screen.getByRole("radio", { name: "Custom" })).toBeChecked();
+    expect(screen.getByRole("button", { name: "Save changes" })).toBeDisabled();
   });
-
-  it("uses the first signup role as the default role and matches signup role options", () => {
-    render(
-      <SettingsPage
-        userProfile={{
-          ...createEmptyProfile(),
-          roleTags: "Engineer, Producer",
-        }}
-      />,
-    );
-
-    const defaultRoleSelect = screen.getByRole("combobox", { name: "Default role" });
-    expect(defaultRoleSelect).toHaveTextContent("Engineer");
-    expect(CREATOR_ROLE_OPTIONS).toEqual(["Producer", "Writer", "Artist", "Engineer", "Topliner"]);
-    expect(CREATOR_ROLE_OPTIONS).not.toContain("Songwriter");
-    expect(CREATOR_ROLE_OPTIONS).not.toContain("Composer");
-    expect(CREATOR_ROLE_OPTIONS).not.toContain("Lyricist");
-    expect(CREATOR_ROLE_OPTIONS).not.toContain("Contributor");
-  });
-
-  it("shows one category at a time and retains changes across categories", () => {
-    render(<SettingsPage userProfile={createEmptyProfile()} />);
-    expect(screen.getAllByRole("tab")).toHaveLength(4);
-    expect(screen.getAllByRole("tabpanel")).toHaveLength(1);
+  it("saves across categories and remounts without local storage", async () => {
+    const localSave = vi.spyOn(Storage.prototype, "setItem");
+    const { unmount } = await setup();
     fireEvent.click(screen.getByRole("radio", { name: "Equal" }));
-    openCategory("Notifications");
-    expect(screen.queryByRole("combobox", { name: "Default role" })).not.toBeInTheDocument();
-    const signature = screen.getByRole("switch", { name: "Signature emails" });
-    fireEvent.click(signature);
-    expect(signature).not.toBeChecked();
+    openCategory("Documents");
+    fireEvent.click(screen.getByRole("switch", { name: "Include signature audit trail" }));
+    expect(screen.getByRole("status")).toHaveTextContent("Unsaved changes");
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Saved"));
+    expect(mocks.save).toHaveBeenCalledWith("account-a", { ...DEFAULT_APP_SETTINGS, defaultSplitMethod: "Equal", includeAuditTrail: false }, null);
+    unmount(); await setup();
+    expect(screen.getByRole("radio", { name: "Equal" })).toBeChecked();
+    openCategory("Documents");
+    expect(screen.getByRole("switch")).not.toBeChecked();
+    expect(localSave).not.toHaveBeenCalled(); localSave.mockRestore();
+  });
+  it("keeps contact details private and unsupported delivery controls unavailable", async () => {
+    await setup(); openCategory("Notifications");
+    for (const el of screen.getAllByRole("switch")) { expect(el).toBeDisabled(); expect(el).not.toBeChecked(); }
+    expect(screen.getByRole("switch", { name: "Signature emails" })).toHaveAccessibleDescription(/not connected/);
     openCategory("Privacy & sharing");
     expect(screen.getByRole("switch", { name: "Hide contact details" })).toBeChecked();
-    openCategory("Documents");
-    expect(screen.getByRole("switch", { name: "Include signature audit trail" })).toBeChecked();
-    openCategory("Split defaults");
+    expect(screen.getByRole("switch", { name: "Hide contact details" })).toBeDisabled();
+    expect(screen.getByRole("switch", { name: "Approve external sharing" })).toBeDisabled();
+    expect(mocks.save).not.toHaveBeenCalled();
+  });
+  it("preserves failed edits, prevents duplicate writes, and discards to the last confirmed save", async () => {
+    await setup();
+    let reject!: (error: Error) => void;
+    mocks.save.mockImplementationOnce(() => new Promise((_, fail) => { reject = fail; }));
+    fireEvent.click(screen.getByRole("radio", { name: "Equal" }));
+    const save = screen.getByRole("button", { name: "Save changes" });
+    fireEvent.click(save); fireEvent.click(save);
+    expect(save).toBeDisabled(); expect(mocks.save).toHaveBeenCalledOnce();
+    expect(screen.getByRole("radio", { name: "Custom" })).toBeDisabled();
+    await act(async () => reject(new Error("Connection lost")));
+    expect(screen.getByRole("alert")).toHaveTextContent("Connection lost");
     expect(screen.getByRole("radio", { name: "Equal" })).toBeChecked();
-    openCategory("Notifications");
-    expect(screen.getByRole("switch", { name: "Signature emails" })).not.toBeChecked();
-    expect(screen.getByRole("status")).toHaveTextContent("2 preview changes");
-  });
-
-  it("disables timing when reminders are off without losing the cadence", () => {
-    render(<SettingsPage userProfile={createEmptyProfile()} />);
-    openCategory("Notifications");
-    const timing = screen.getByRole("combobox", { name: "Reminder timing" });
-    expect(timing).toBeEnabled();
-    fireEvent.click(screen.getByRole("switch", { name: "Remind unsigned parties" }));
-    expect(timing).toBeDisabled();
-    expect(timing).toHaveTextContent("Every 3 days");
-    fireEvent.click(screen.getByRole("switch", { name: "Remind unsigned parties" }));
-    expect(timing).toBeEnabled();
-    expect(timing).toHaveTextContent("Every 3 days");
-  });
-
-  it("applies and discards only preview changes without storage or form submission", () => {
-    const save = vi.spyOn(Storage.prototype, "setItem");
-    const submit = vi.fn((event) => event.preventDefault());
-    render(<form onSubmit={submit}><SettingsPage userProfile={createEmptyProfile()} /></form>);
-    const apply = screen.getByRole("button", { name: "Apply preview" });
-    const discard = screen.getByRole("button", { name: "Discard preview changes" });
-    expect(apply).toBeDisabled(); expect(discard).toBeDisabled();
-    expect(screen.queryByText("Design preview")).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /Save Settings/ })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("radio", { name: "Equal" }));
-    expect(apply).toBeEnabled();
-    fireEvent.click(discard);
-    expect(screen.getByRole("radio", { name: "Custom" })).toBeChecked();
-    fireEvent.click(screen.getByRole("radio", { name: "Equal" }));
-    fireEvent.click(apply);
-    expect(screen.getByRole("status")).toHaveTextContent("Preview applied");
-    expect(apply).toBeDisabled();
+    fireEvent.click(save);
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Saved"));
     fireEvent.click(screen.getByRole("radio", { name: "Custom" }));
-    fireEvent.click(discard);
+    fireEvent.click(screen.getByRole("button", { name: "Discard changes" }));
     expect(screen.getByRole("radio", { name: "Equal" })).toBeChecked();
-    expect(save).not.toHaveBeenCalled(); expect(submit).not.toHaveBeenCalled();
   });
-
-  it("labels switches and exposes their descriptions", () => {
-    render(<SettingsPage userProfile={createEmptyProfile()} />);
-    openCategory("Notifications");
-    const signature = screen.getByRole("switch", { name: "Signature emails" });
-    expect(signature).toHaveAccessibleDescription("When a collaborator signs");
-    fireEvent.click(screen.getByText("Signature emails"));
-    expect(signature).not.toBeChecked();
-    fireEvent.focus(screen.getByRole("tab", { name: "Documents" }));
-    expect(screen.getByRole("tabpanel", { name: "Documents" })).toBeVisible();
-  });
-
-  it("resets previews between accounts and does not persist on remount", () => {
-    const profile = { ...createEmptyProfile(), authUserId: "account-a", roleTags: "Engineer" };
-    const { rerender, unmount } = render(<SettingsPage userProfile={profile} />);
-    fireEvent.click(screen.getByRole("radio", { name: "Equal" }));
-    fireEvent.click(screen.getByRole("button", { name: "Apply preview" }));
-    rerender(<SettingsPage userProfile={{ ...profile, authUserId: "account-b", roleTags: "Artist" }} />);
-    expect(screen.getByRole("radio", { name: "Custom" })).toBeChecked();
-    expect(screen.getByRole("combobox", { name: "Default role" })).toHaveTextContent("Artist");
-    expect(screen.getByRole("status")).toHaveTextContent("No preview changes");
-    unmount();
+  it("does not enable settings after a failed load, and supports retry", async () => {
+    mocks.load.mockRejectedValueOnce(new Error("Migration unavailable"));
     render(<SettingsPage userProfile={profile} />);
+    expect(await screen.findByRole("alert")).toHaveTextContent("Migration unavailable");
+    expect(screen.getByRole("radio", { name: "Equal" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Save changes" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Retry loading settings" }));
+    await waitFor(() => expect(screen.getByRole("radio", { name: "Equal" })).toBeEnabled());
+  });
+  it("reloads a conflicting revision without overwriting another tab", async () => {
+    await setup();
+    fireEvent.click(screen.getByRole("radio", { name: "Equal" }));
+    mocks.save.mockRejectedValueOnce(new Error("Settings changed in another tab"));
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    await screen.findByRole("alert");
+    stored = { settings: { ...DEFAULT_APP_SETTINGS, defaultUserRole: "Composer" }, revision: 5 };
+    fireEvent.click(screen.getByRole("button", { name: "Reload saved settings" }));
+    await waitFor(() => expect(screen.getByRole("combobox", { name: "Default composition role" })).toHaveTextContent("Composer"));
     expect(screen.getByRole("radio", { name: "Custom" })).toBeChecked();
+  });
+  it("ignores an old account's late response", async () => {
+    let resolve!: (value: SavedSettings) => void;
+    mocks.load.mockImplementationOnce(() => new Promise(done => { resolve = done; }));
+    const { rerender } = render(<SettingsPage userProfile={profile} />);
+    rerender(<SettingsPage userProfile={{ ...profile, authUserId: "account-b" }} />);
+    await waitFor(() => expect(screen.getByRole("radio", { name: "Equal" })).toBeEnabled());
+    await act(async () => resolve({ settings: { ...DEFAULT_APP_SETTINGS, defaultUserRole: "Lyricist" }, revision: 99 }));
+    expect(screen.getByRole("combobox", { name: "Default composition role" })).toHaveTextContent("Songwriter");
   });
 });

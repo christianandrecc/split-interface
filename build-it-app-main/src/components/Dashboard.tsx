@@ -9,7 +9,7 @@ import type { StoredSplitSheetDocument } from "@/components/contract-builder/doc
 import AgreementsList from "@/components/AgreementsList";
 import { INITIAL_LIBRARY_VIEW, type LibraryPosition, type LibraryView } from "@/lib/splitLibrary";
 import AgreementDetail from "@/components/AgreementDetail";
-import ContractBuilder from "@/components/contract-builder/ContractBuilder";
+import AccountContractBuilder from "@/components/contract-builder/AccountContractBuilder";
 import CollaborationView from "@/components/CollaborationView";
 import SettingsPage from "@/components/SettingsPage";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -444,8 +444,9 @@ export default function Dashboard({
 
   if (isNewAgreement) {
     return (
-      <ContractBuilder
-        key={draftToEdit?.id ?? "new"}
+      <AccountContractBuilder
+        key={`${activeAuthUserId ?? userProfile.authUserId ?? "local"}:${draftToEdit?.id ?? "new"}`}
+        accountId={activeAuthUserId}
         initialDocument={draftToEdit}
         userProfile={userProfile}
         onBack={() => { setIsNewAgreement(false); setDraftToEdit(undefined); }}

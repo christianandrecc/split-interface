@@ -219,7 +219,7 @@ class RecordPdf {
     this.text(this.short(person.signature?.signatureMethod || "Awaiting acknowledgement", 246, 7), cx, end+24, 7, "regular", C.muted, "center");
   }
 
-  details() {
+  details(includeHistory = true) {
     let y = this.header("Work & Record Details", "Supporting record");
     let sectionLabel = "";
     const next = () => {
@@ -229,7 +229,8 @@ class RecordPdf {
     const heading = (title: string) => {
       sectionLabel = "";
       const lines = this.lines(title, CW, 14, "bold");
-      if (y+lines.length*18+64 > END) next();
+      // Keep the heading, its 14pt gap, and the first field row on one page.
+      if (y+lines.length*18+14+62 > END) next();
       y = this.paragraph(lines, L, y, 14, "bold", C.ink, 18)+14;
       sectionLabel = title;
     };
@@ -281,7 +282,7 @@ class RecordPdf {
         }
       }
       y += 10;
-      if (groupIndex === 0) drawVersions();
+      if (groupIndex === 0 && includeHistory) drawVersions();
     }
   }
 
@@ -363,7 +364,7 @@ class RecordPdf {
     this.page = pages[this.summaryPages.at(-1)];
     this.rect(L, 669, CW, 28, this.model.signed ? C.mint : C.pale, 4);
     this.text(this.model.verified ? "Signed. Verified by SPLIT." : this.model.signed ? "Signed. Signing activity recorded." : "Not a final signed record.", 58, 683, 9, "bold", this.model.signed ? C.green : C.muted);
-    this.text(`Document history on page ${this.historyPage}`, 554, 683, 8, "regular", C.green, "right");
+    this.text(this.historyPage ? `Document history on page ${this.historyPage}` : "History omitted from this export", 554, 683, 8, "regular", C.green, "right");
     pages.forEach((page, index) => {
       this.page = page;
       this.rule(729);
@@ -381,13 +382,18 @@ class RecordPdf {
   }
 }
 
-export async function renderSplitSheetPdf(document: StoredSplitSheetDocument, viewer: UserProfile, assets: SplitPdfAssets, exportedAt?: string) {
+export type SplitPdfOptions = { includeAuditTrail?: boolean };
+
+export async function renderSplitSheetPdf(document: StoredSplitSheetDocument, viewer: UserProfile, assets: SplitPdfAssets, exportedAt?: string, options: SplitPdfOptions = {}) {
   const model = buildSplitSheetPdfModel(document, viewer, exportedAt);
   const pdf = await PDFDocument.create();
   pdf.setTitle(`${model.title} - SPLIT Sheet`); pdf.setAuthor("SPLIT"); pdf.setCreator("SPLIT Studio Record Export");
   pdf.setSubject(model.signed ? "Final version / recorded signing acknowledgements" : "Not a final signed record");
   const renderer = new RecordPdf(pdf, model);
   await renderer.init(assets);
-  renderer.summary(); renderer.details(); renderer.history(); renderer.finish();
+  const includeHistory = options.includeAuditTrail !== false;
+  renderer.summary(); renderer.details(includeHistory);
+  if (includeHistory) renderer.history();
+  renderer.finish();
   return { bytes: await pdf.save(), layout: renderer.layout, pageCount: pdf.getPageCount(), model };
 }

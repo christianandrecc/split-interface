@@ -102,6 +102,30 @@ describe("split sheet profile matching", () => {
     expect(findInviteForProfile(document, profile)?.id).toBe("maya-invite");
   });
 
+  it("matches the server-linked account after contact redaction or a username change", () => {
+    const document = makeDocument();
+    document.creatorUserId = "creator-auth-user";
+    document.collaboratorInvites[0].collaboratorUserId = "maya-auth-user";
+    document.collaboratorInvites[0].inviteValue = "";
+    document.collaboratorInvites[0].profileSnapshot = {};
+    const profile = { ...createEmptyProfile(), authUserId: "maya-auth-user", username: "new-maya" };
+
+    expect(findInviteForProfile(document, profile)?.id).toBe("maya-invite");
+    expect([...documentParticipantIdsForProfile(document, profile)].sort()).toEqual(["maya-invite", "maya-party"]);
+  });
+
+  it("does not fall back to reused contact details when the invite belongs to another account", () => {
+    const document = makeDocument();
+    document.creatorUserId = "creator-auth-user";
+    document.collaboratorInvites[0].collaboratorUserId = "original-maya-auth-user";
+    const profile = {
+      ...createEmptyProfile(), authUserId: "different-auth-user", username: "mayarios", emailAddress: "maya@example.com",
+    };
+
+    expect(findInviteForProfile(document, profile)).toBeUndefined();
+    expect([...documentParticipantIdsForProfile(document, profile)]).toEqual([]);
+  });
+
   it("resolves every participant id a collaborator can use for approval and signatures", () => {
     const document = makeDocument();
     document.splitApprovals[1].collaboratorId = "maya-party";
@@ -125,6 +149,15 @@ describe("split sheet profile matching", () => {
       "maya-invite",
       "maya-party",
     ]);
+  });
+
+  it("does not claim an invite the server has not linked to an account", () => {
+    const document = makeDocument();
+    document.creatorUserId = "creator-auth-user";
+    document.collaboratorInvites[0].collaboratorUserId = null;
+    const profile = { ...createEmptyProfile(), authUserId: "maya-auth-user", username: "mayarios" };
+    expect(findInviteForProfile(document, profile)).toBeUndefined();
+    expect([...documentParticipantIdsForProfile(document, profile)]).toEqual([]);
   });
 
   it("prefers a collaborator invite over a stale creator profile match", () => {

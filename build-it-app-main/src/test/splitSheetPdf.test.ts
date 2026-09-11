@@ -24,6 +24,30 @@ function signedDocument() {
 const text = (items: PdfLayoutItem[]) => items.filter((item) => item.kind === "text").map((item) => item.text).join("\n");
 
 describe("Studio Record PDF", () => {
+  it("omits deferred publishing setup from exports without altering composition shares or stored data", async () => {
+    const doc = signedDocument();
+    Object.assign(doc.data.parties[0], { publishingStatus: "Co-published", publisherName: "Private Publisher", publisherIpi: "00111222333", publisherContact: "publisher@example.test" });
+    const before = JSON.stringify(doc);
+    const result = await renderSplitSheetPdf(doc, { ...doc.creatorProfile, publisherName: "Live Account Publisher", publishingShare: "50", adminCollectionShare: "10" }, assets);
+    expect(text(result.layout)).not.toMatch(/Private Publisher|Live Account Publisher|00111222333|publisher@example.test|PUBLISHING STATUS|PUBLISHING SHARE|ADMIN COLLECTION SHARE/);
+    expect(result.model.people.map(person => person.share)).toEqual([60, 40]);
+    expect(JSON.stringify(doc)).toBe(before);
+  });
+  it("can omit export history without removing signatures, shares or changing the signed record", async () => {
+    const doc = signedDocument();
+    doc.splitSignatures[0].signerLegalName = "Name At Signing";
+    const before = JSON.stringify(doc);
+    const reduced = await renderSplitSheetPdf(doc, doc.creatorProfile, assets, undefined, { includeAuditTrail: false });
+    const full = await renderSplitSheetPdf(doc, doc.creatorProfile, assets);
+    expect(reduced.pageCount).toBeLessThan(full.pageCount);
+    expect(text(reduced.layout)).not.toMatch(/Document History|Document history on page 0|Version History/);
+    expect(text(reduced.layout)).toContain("History omitted from this export");
+    expect(text(reduced.layout)).toContain("FINAL VERSION");
+    expect(text(reduced.layout)).toContain("Name At Signing");
+    expect(text(reduced.layout)).toContain("60%");
+    expect(reduced.model.people).toEqual(full.model.people);
+    expect(JSON.stringify(doc)).toBe(before);
+  });
   it("renders the selected font, actual legal names, metadata, signed state and history", async () => {
     const doc = signedDocument();
     doc.data.songTitle = "SAMPLE - Night Swim";
@@ -65,6 +89,19 @@ describe("Studio Record PDF", () => {
     expect(result.model.verified).toBe(false);
     expect(text(result.layout)).not.toContain("FINAL VERSION");
     expect(text(result.layout)).not.toContain("Signed. Verified by SPLIT.");
+  });
+
+  it("exports stored collaborator PRO/IPI and preserves leading zeroes", async () => {
+    const doc = signedDocument();
+    Object.assign(doc.data.parties[0], { proAffiliation: "ASCAP", ipiNumber: "00123456789" });
+    Object.assign(doc.data.parties[1], { proAffiliation: "Other", customProName: "Independent Writers Society", ipiNumber: "00012345678" });
+    const result = await renderSplitSheetPdf(doc, { ...doc.creatorProfile, proAffiliation: "Unrelated current PRO", ipiNumber: "99999999999" }, assets);
+    expect(text(result.layout)).toContain("ASCAP");
+    expect(text(result.layout)).toContain("00123456789");
+    expect(text(result.layout)).toContain("Independent Writers Society");
+    expect(text(result.layout)).toContain("00012345678");
+    expect(text(result.layout)).not.toContain("Unrelated current PRO");
+    expect(text(result.layout)).not.toContain("99999999999");
   });
 
   it("keeps signing snapshots and does not guess missing legal names", () => {

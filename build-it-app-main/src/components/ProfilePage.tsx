@@ -1,4 +1,5 @@
-import { type ReactNode, useEffect, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import AccountEmailControl from "@/components/AccountEmailControl";
 import AddressSearchField from "@/components/AddressSearchField";
 import { CREATOR_ROLE_OPTIONS } from "@/lib/creatorRoles";
 import { normalizeUserProfile, normalizeUsername, type UserProfile } from "@/lib/userProfile";
@@ -11,7 +12,6 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { AtSign, Check, Eye, HelpCircle, IdCard, Link2, Mail, MapPin, Music2, Save, Tags, User } from "lucide-react";
 
 const proOptions = ["ASCAP", "BMI", "SESAC", "Other", "Skip PRO Registration"];
-const publishingStatusOptions = ["Self-published", "Signed to publisher", "Co-published"];
 
 const visibilityOptions = ["Public", "Collaborators only", "Private"];
 
@@ -111,28 +111,27 @@ type ProfilePageProps = {
   onBackToPublicProfile?: () => void;
 };
 
-function requiresPublishingDetails(status?: string) {
-  return ["Signed to publisher", "Co-published"].includes(status ?? "");
-}
-
-function isSimplePublishingSetup(status?: string) {
-  return status === "Self-published";
-}
-
 export default function ProfilePage({ userProfile, onUpdateProfile, onBackToPublicProfile }: ProfilePageProps) {
   const [draft, setDraft] = useState<UserProfile>(() => hydrateProfileForEditing(userProfile));
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
+  const previousProfile = useRef(userProfile);
 
   useEffect(() => {
-    setDraft(hydrateProfileForEditing(userProfile));
+    const previous = hydrateProfileForEditing(previousProfile.current);
+    const next = hydrateProfileForEditing(userProfile);
+    const sameAccount = previous.authUserId === next.authUserId;
+    // Auth confirmation may arrive while unrelated profile edits are still unsaved.
+    setDraft(current => sameAccount ? Object.fromEntries(Object.entries(next).map(([key, value]) => [
+      key, key === "emailAddress" || current[key as keyof UserProfile] === previous[key as keyof UserProfile]
+        ? value : current[key as keyof UserProfile],
+    ])) as UserProfile : next);
+    previousProfile.current = userProfile;
     setSaveError("");
   }, [userProfile]);
 
   const displayName = useMemo(() => draft.displayName || buildLegalName(draft) || draft.emailAddress || "Your Profile", [draft]);
-  const needsPublishingDetails = requiresPublishingDetails(draft.publishingStatus);
-  const simplePublishingSetup = isSimplePublishingSetup(draft.publishingStatus);
   const phoneMaxLength = getPhoneInputMaxLength(draft.phoneCountryCode);
   const usernameAvailable = draft.username.length >= 3 && !["split", "admin", "support"].includes(draft.username);
   const selectedRoles = parseRoleTags(draft.roleTags);
@@ -155,16 +154,6 @@ export default function ProfilePage({ userProfile, onUpdateProfile, onBackToPubl
         }
       }
 
-      if (field === "publishingStatus" && !requiresPublishingDetails(value)) {
-        next.publisherName = "";
-        next.publisherIpi = "";
-        next.publisherPro = "";
-        next.adminCompanyName = "";
-        next.adminIpi = "";
-        next.adminCollectionShare = "";
-        next.publisherContact = "";
-        next.publishingShare = isSimplePublishingSetup(value) ? "100" : "";
-      }
 
       return next;
     });
@@ -379,9 +368,6 @@ export default function ProfilePage({ userProfile, onUpdateProfile, onBackToPubl
                 />
               </Field>
             </div>
-            <Field label="Email Address" htmlFor="profileEmail">
-              <Input id="profileEmail" inputMode="email" value={draft.emailAddress} onChange={(event) => update("emailAddress", event.target.value)} />
-            </Field>
           </ProfileSection>
 
           <ProfileSection icon={<MapPin className="h-4 w-4" />} title="Legal Address">
@@ -475,113 +461,14 @@ export default function ProfilePage({ userProfile, onUpdateProfile, onBackToPubl
               )}
             </div>
 
-            <div className="rounded-lg border border-border bg-secondary/30 p-4">
-              <div className="mb-4">
-                <h3 className="text-sm font-bold">Private Publishing Routing</h3>
-                <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                  SPLIT uses this in the background for final exports. Collaborators only see their own publishing details.
-                </p>
-              </div>
-              <div className="space-y-4">
-                <div className="md:max-w-md">
-                  <Field label="Publishing Status" htmlFor="profilePublishingStatus" help="Publishing details tell SPLIT whether you control your own publishing or work through a publisher. You can find this in your publishing/admin agreement.">
-                    <Select value={draft.publishingStatus ?? ""} onValueChange={(value) => update("publishingStatus", value)}>
-                      <SelectTrigger id="profilePublishingStatus">
-                        <SelectValue placeholder="Select publishing setup" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {publishingStatusOptions.map((option) => (
-                          <SelectItem key={option} value={option}>
-                            {option}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </Field>
-                </div>
-
-                {simplePublishingSetup && (
-                  <div className="rounded-lg border border-[hsl(var(--split-verified)/0.24)] bg-[hsl(var(--split-verified)/0.08)] p-4 text-sm leading-6 text-foreground">
-                    <span className="font-semibold">Simple setup:</span> no publisher/admin fields needed. Your publishing share defaults to 100% of your writer share.
-                  </div>
-                )}
-
-                {needsPublishingDetails && (
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <Field label="Publisher / Admin Company" htmlFor="profilePublisherName" help="The company that controls or administers your publishing. Look at your publishing or admin agreement.">
-                      <Input
-                        id="profilePublisherName"
-                        value={draft.publisherName ?? ""}
-                        onChange={(event) => update("publisherName", event.target.value)}
-                        placeholder="Company name"
-                      />
-                    </Field>
-                    <Field label="Publisher IPI" htmlFor="profilePublisherIpi" help="The publisher identifier from the publisher's PRO or society account.">
-                      <Input
-                        id="profilePublisherIpi"
-                        value={draft.publisherIpi ?? ""}
-                        onChange={(event) => update("publisherIpi", event.target.value)}
-                        placeholder="Publisher IPI/CAE"
-                      />
-                    </Field>
-                    <Field label="Publisher PRO / Society" htmlFor="profilePublisherPro" help="The society your publisher uses, such as ASCAP, BMI, PRS, SGAE, or another PRO.">
-                      <Input
-                        id="profilePublisherPro"
-                        value={draft.publisherPro ?? ""}
-                        onChange={(event) => update("publisherPro", event.target.value)}
-                        placeholder="ASCAP, BMI, SESAC, PRS..."
-                      />
-                    </Field>
-                    <Field label="Your Publishing Share %" htmlFor="profilePublishingShare" help="The percentage of publishing you control for your writer share. Check your publishing agreement if you have one.">
-                      <Input
-                        id="profilePublishingShare"
-                        type="number"
-                        min="0"
-                        max="100"
-                        value={draft.publishingShare ?? ""}
-                        onChange={(event) => update("publishingShare", event.target.value)}
-                        placeholder="Example: 50"
-                      />
-                    </Field>
-                    <Field label="Admin Company (Optional)" htmlFor="profileAdminCompany">
-                      <Input
-                        id="profileAdminCompany"
-                        value={draft.adminCompanyName ?? ""}
-                        onChange={(event) => update("adminCompanyName", event.target.value)}
-                        placeholder="If separate"
-                      />
-                    </Field>
-                    <Field label="Admin Collection Share %" htmlFor="profileAdminShare">
-                      <Input
-                        id="profileAdminShare"
-                        type="number"
-                        min="0"
-                        max="100"
-                        value={draft.adminCollectionShare ?? ""}
-                        onChange={(event) => update("adminCollectionShare", event.target.value)}
-                        placeholder="Example: 10"
-                      />
-                    </Field>
-                    <Field label="Publisher / Admin Contact" htmlFor="profilePublisherContact" help="Registration email or contact for your publisher/admin team. This can usually be found in your agreement or company portal.">
-                      <Input
-                        id="profilePublisherContact"
-                        value={draft.publisherContact ?? ""}
-                        onChange={(event) => update("publisherContact", event.target.value)}
-                        placeholder="Registration email or contact"
-                      />
-                    </Field>
-                  </div>
-                )}
-              </div>
-            </div>
           </ProfileSection>
 
           <ProfileSection icon={<IdCard className="h-4 w-4" />} title="Sign In Details">
             <div className="grid gap-4 md:grid-cols-2">
               <ReadOnlyDetail label="@Username" value={draft.username ? `@${draft.username}` : "Not set"} />
-              <ReadOnlyDetail label="Account Email" value={draft.emailAddress || "Not set"} />
               <ReadOnlyDetail label="Password" value="Managed by sign in" />
             </div>
+            <AccountEmailControl key={userProfile.authUserId || "signed-out"} userId={userProfile.authUserId} />
           </ProfileSection>
         </div>
       </div>
@@ -610,15 +497,6 @@ function normalizeProfile(profile: UserProfile): UserProfile {
       .join(", "),
     ipiNumber: profile.proAffiliation === "Skip PRO Registration" ? "" : (profile.ipiNumber ?? "").trim(),
     customProName: profile.proAffiliation === "Other" ? (profile.customProName ?? "").trim() : "",
-    publishingStatus: (profile.publishingStatus ?? "").trim(),
-    publisherName: requiresPublishingDetails(profile.publishingStatus) ? (profile.publisherName ?? "").trim() : "",
-    publisherIpi: requiresPublishingDetails(profile.publishingStatus) ? (profile.publisherIpi ?? "").trim() : "",
-    publisherPro: requiresPublishingDetails(profile.publishingStatus) ? (profile.publisherPro ?? "").trim() : "",
-    publishingShare: isSimplePublishingSetup(profile.publishingStatus) ? "100" : (profile.publishingShare ?? "").trim(),
-    adminCompanyName: requiresPublishingDetails(profile.publishingStatus) ? (profile.adminCompanyName ?? "").trim() : "",
-    adminIpi: requiresPublishingDetails(profile.publishingStatus) ? (profile.adminIpi ?? "").trim() : "",
-    adminCollectionShare: requiresPublishingDetails(profile.publishingStatus) ? (profile.adminCollectionShare ?? "").trim() : "",
-    publisherContact: requiresPublishingDetails(profile.publishingStatus) ? (profile.publisherContact ?? "").trim() : "",
   });
 }
 

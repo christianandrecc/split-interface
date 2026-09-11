@@ -12,10 +12,11 @@ import { normalizeUserProfile, type UserProfile } from "@/lib/userProfile";
 import {
   createSupabaseAccountProfile,
   loadProfileSessionForActiveSession,
+  normalizeEmailAddress,
   saveSupabaseProfile,
   signInAndLoadSupabaseProfile,
 } from "@/lib/profileStorage";
-import { isSupabaseConfigured } from "@/integrations/supabase/client";
+import { isSupabaseConfigured, supabase } from "@/integrations/supabase/client";
 import type { CachedProfileSession } from "@/lib/profileSessionCache";
 import { toast } from "sonner";
 
@@ -111,11 +112,14 @@ const App = () => {
             clearProfileCache();
             setUserProfile(null);
           }
-        } catch {
+        } catch (error) {
           if (active) {
             setActiveAuthUserId(null);
             clearProfileCache();
             setUserProfile(null);
+            toast.error("Could not restore sign-in", {
+              description: error instanceof Error ? error.message : "Please sign in again.",
+            });
           }
         } finally {
           if (active) setLoadingProfile(false);
@@ -141,6 +145,40 @@ const App = () => {
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (!isSupabaseConfigured || !activeAuthUserId) return;
+    let active = true;
+    let request = 0;
+    let timer: ReturnType<typeof setTimeout>;
+    const refreshEmail = async () => {
+      const generation = ++request;
+      try {
+        const { data, error } = await supabase.auth.getUser();
+        if (!active || generation !== request || error || data.user?.id !== activeAuthUserId) return;
+        const emailAddress = normalizeEmailAddress(data.user.email);
+        setUserProfile(current => {
+          if (!current || current.authUserId !== activeAuthUserId || current.emailAddress === emailAddress) return current;
+          const profile = { ...current, emailAddress };
+          writeProfileSession(activeAuthUserId, profile);
+          return profile;
+        });
+      } catch { /* A transient refresh failure must not replace the saved profile. */ }
+    };
+    const { data } = supabase.auth.onAuthStateChange(event => {
+      if (["USER_UPDATED", "SIGNED_IN", "TOKEN_REFRESHED"].includes(event)) {
+        clearTimeout(timer);
+        timer = setTimeout(() => void refreshEmail(), 0);
+      }
+    });
+    window.addEventListener("focus", refreshEmail);
+    return () => {
+      active = false;
+      clearTimeout(timer);
+      data.subscription.unsubscribe();
+      window.removeEventListener("focus", refreshEmail);
+    };
+  }, [activeAuthUserId]);
 
   useEffect(() => {
     if (!userProfile || showAccountCreation || passwordRecoveryActive) {
@@ -195,14 +233,14 @@ const App = () => {
   };
 
   const handleUpdateProfile = async (profile: UserProfile) => {
-    const normalizedProfile = persistProfile(profile);
+    const normalizedProfile = normalizeUserProfile(profile);
 
     try {
       const savedProfile = await saveSupabaseProfile(normalizedProfile);
       persistProfile(savedProfile, activeAuthUserId);
       toast.success("Profile saved to Supabase");
     } catch (error) {
-      toast.error("Saved locally, but Supabase did not update", {
+      toast.error("Profile was not saved", {
         description: error instanceof Error ? error.message : "Try again after signing in.",
       });
       throw error;

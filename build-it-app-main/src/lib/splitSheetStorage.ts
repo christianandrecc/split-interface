@@ -325,6 +325,9 @@ export function findInviteForProfile(document: StoredSplitSheetDocument, profile
   const profilePhone = phoneDigits(`${profile.phoneCountryCode ?? ""} ${profile.phoneNumber ?? ""}`);
 
   return document.collaboratorInvites.find((invite) => {
+    if (invite.collaboratorUserId !== undefined) {
+      return Boolean(invite.collaboratorUserId && invite.collaboratorUserId === profile.authUserId);
+    }
     const inviteValue = normalizeIdentifier(invite.inviteValue);
     const snapshot = invite.profileSnapshot;
     const party = document.data.parties.find((item) => item.id === invite.partyId);
@@ -375,10 +378,11 @@ export function documentParticipantIdsForProfile(document: StoredSplitSheetDocum
   document.data.parties.forEach((party) => {
     if (hasCollaboratorIdentity && party.isCurrentUser) return;
     if (documentCreatorUserId && party.isCurrentUser && !isAuthenticatedCreator) return;
+    const invite = document.collaboratorInvites.find((item) => item.partyId === party.id);
+    if (invite?.collaboratorUserId !== undefined && invite.collaboratorUserId !== profile.authUserId) return;
     if (!partyMatchesProfile(party, profile)) return;
 
     ids.add(party.id);
-    const invite = document.collaboratorInvites.find((item) => item.partyId === party.id);
     if (invite) {
       ids.add(invite.id);
       ids.add(invite.partyId);

@@ -1,4 +1,4 @@
-import { type FormEvent, type ReactNode, useEffect, useMemo, useState } from "react";
+import { type FormEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import splitLockup from "@/assets/split-navy-amber-lockup.png";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -17,6 +17,7 @@ import {
   isValidEmailAddress,
   normalizeEmailAddress,
   requestSupabasePasswordReset,
+  requestSignupConfirmation,
   updateSupabasePassword,
 } from "@/lib/profileStorage";
 import { CREATOR_ROLE_OPTIONS } from "@/lib/creatorRoles";
@@ -37,7 +38,7 @@ const accountPages = [
   {
     title: "Professional information",
     eyebrow: "Creator Details",
-    description: "Add the role, PRO, and publishing details SPLIT can use when split sheets become registration-ready.",
+    description: "Add your creator role and optional PRO/IPI details.",
   },
   {
     title: "Security and consent",
@@ -47,7 +48,6 @@ const accountPages = [
 ];
 
 const proOptions = ["ASCAP", "BMI", "SESAC", "Other", "Skip PRO Registration"];
-const publishingStatusOptions = ["Self-published", "Signed to publisher", "Co-published"];
 
 const proOptionHelp: Record<string, string> = {
   ASCAP: "Choose ASCAP if your songwriter or composer account is registered there.",
@@ -57,11 +57,6 @@ const proOptionHelp: Record<string, string> = {
   "Skip PRO Registration": "Choose this if you have not registered with a PRO yet. You can create the account now and add it later.",
 };
 
-const publishingStatusHelp: Record<string, string> = {
-  "Self-published": "You currently control your own publishing. SPLIT will default your publishing share to 100% of your writer share.",
-  "Signed to publisher": "A publisher or administrator controls or manages your publishing. SPLIT will ask for the company, PRO, IPI, contact, and share details.",
-  "Co-published": "You and a publisher both control part of the publishing. Use this when your agreement splits publishing ownership or administration.",
-};
 
 const phoneCountries = [
   { value: "+1", label: "🇺🇸 +1", country: "United States" },
@@ -359,7 +354,7 @@ export default function AccountAccess({
                 onGoToSignIn={() => {
                   setMode("signin");
                   setFormError("");
-                  setFormNotice("Once your email is confirmed, sign in to finish loading your SPLIT account.");
+                  setFormNotice("Already confirmed? Sign in with your existing password. Use Forgot password if you need a reset.");
                   setSignInEmail(pendingConfirmationEmail);
                 }}
                 onUseAnotherEmail={() => {
@@ -598,6 +593,41 @@ function EmailConfirmationPage({
   onGoToSignIn: () => void;
   onUseAnotherEmail: () => void;
 }) {
+  const [resending, setResending] = useState(false);
+  const [retryAt, setRetryAt] = useState(0);
+  const [remaining, setRemaining] = useState(0);
+  const [notice, setNotice] = useState("");
+  const [error, setError] = useState("");
+  const pending = useRef(false);
+  useEffect(() => {
+    if (!retryAt) return;
+    const tick = () => {
+      const seconds = Math.max(0, Math.ceil((retryAt - Date.now()) / 1000));
+      setRemaining(seconds);
+      if (!seconds) setRetryAt(0);
+    };
+    tick();
+    const timer = window.setInterval(tick, 1000);
+    return () => window.clearInterval(timer);
+  }, [retryAt]);
+  const resend = async () => {
+    if (pending.current || Date.now() < retryAt) return;
+    pending.current = true;
+    setResending(true);
+    setNotice("");
+    setError("");
+    try {
+      await requestSignupConfirmation(emailAddress);
+      setNotice("If confirmation is still required, a new link will be sent. Check your spam or junk folder too.");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not request confirmation. Please try again.");
+    } finally {
+      setRetryAt(Date.now() + 60_000);
+      setRemaining(60);
+      setResending(false);
+      pending.current = false;
+    }
+  };
   return (
     <section className="overflow-hidden rounded-lg border border-primary/15 bg-card shadow-sm">
       <div className="border-b border-border bg-gradient-to-br from-primary/10 via-card to-secondary/60 px-6 py-8">
@@ -605,19 +635,27 @@ function EmailConfirmationPage({
           <MailCheck className="h-7 w-7" />
         </div>
         <p className="mt-6 text-xs font-semibold uppercase tracking-[0.18em] text-primary">
-          Email confirmation sent
+          Email confirmation
         </p>
         <h2 className="mt-3 max-w-lg text-3xl font-bold tracking-tight">
-          Check your inbox to activate your SPLIT account.
+          Check your inbox
         </h2>
         <p className="mt-3 max-w-xl text-sm leading-6 text-muted-foreground">
-          We sent a secure confirmation link to{" "}
-          {emailAddress ? <span className="font-semibold text-foreground">{emailAddress}</span> : "your email address"}.
-          Open that link, then come back and sign in.
+          If confirmation is needed for{" "}
+          {emailAddress ? <span className="break-all font-semibold text-foreground">{emailAddress}</span> : "your email address"},
+          you will receive a link. Already registered? Sign in with your existing password.
         </p>
       </div>
 
       <div className="px-6 py-6">
+        <div className="mb-5 space-y-3">
+          <Button type="button" variant="outline" className="h-11 w-full gap-2" disabled={resending || remaining > 0} onClick={() => void resend()}>
+            <RotateCcw className={`h-4 w-4 ${resending ? "animate-spin" : ""}`} />
+            {resending ? "Requesting..." : remaining ? `Resend in ${remaining}s` : "Resend confirmation"}
+          </Button>
+          {notice && <p role="status" className="text-sm text-muted-foreground">{notice}</p>}
+          {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+        </div>
         <div className="grid gap-3 text-sm text-muted-foreground md:grid-cols-3">
           <div className="rounded-lg border border-border bg-background p-4">
             <div className="text-xs font-semibold uppercase tracking-[0.14em] text-primary">1</div>
@@ -709,10 +747,7 @@ function PersonalInformationPage({
         <Input
           id="artistName"
           value={profile.pkaNames ?? ""}
-          onChange={(event) => {
-            updateProfile("pkaNames", event.target.value);
-            if (!profile.displayName) updateProfile("displayName", event.target.value);
-          }}
+          onChange={(event) => updateProfile("pkaNames", event.target.value)}
           placeholder="Artist name, producer name, alias"
           className="h-12 rounded-full px-5 text-base shadow-sm shadow-foreground/5 md:text-sm"
         />
@@ -768,8 +803,6 @@ function ProfessionalInformationPage({
   updateProfile: (field: keyof UserProfile, value: string) => void;
 }) {
   const skippedPro = profile.proAffiliation === "Skip PRO Registration";
-  const needsPublishingDetails = requiresPublishingDetails(profile.publishingStatus);
-  const simplePublishingSetup = isSimplePublishingSetup(profile.publishingStatus);
 
   return (
     <div className="space-y-5">
@@ -854,79 +887,6 @@ function ProfessionalInformationPage({
         </div>
       )}
 
-      <div className="rounded-xl border border-border bg-secondary/30 p-4">
-        <Field label="Publishing Information" htmlFor="publishingStatus" help="Publishing tells SPLIT who controls the publishing side of your writer share. This can be you, a publisher, or a co-publishing setup. It helps future split sheets route registration and contract details correctly.">
-          <Select value={profile.publishingStatus ?? ""} onValueChange={(value) => updateProfile("publishingStatus", value)}>
-            <SelectTrigger id="publishingStatus" className="h-12 text-base md:text-sm">
-              <SelectValue placeholder="Select publishing setup" />
-            </SelectTrigger>
-            <SelectContent>
-              {publishingStatusOptions.map((option) => (
-                <SelectItemWithHelp key={option} value={option} label={option} help={publishingStatusHelp[option]} />
-              ))}
-            </SelectContent>
-          </Select>
-        </Field>
-
-        {simplePublishingSetup && (
-          <div className="mt-4 rounded-lg border border-[hsl(var(--split-verified)/0.24)] bg-[hsl(var(--split-verified)/0.08)] p-3 text-xs leading-5 text-foreground">
-            Self-published accounts default to 100% of their controlled publishing share.
-          </div>
-        )}
-
-        {needsPublishingDetails && (
-          <div className="mt-4 grid gap-4 md:grid-cols-2">
-            <Field label="Publisher / Admin Company" htmlFor="publisherName" help="The company that controls or administers your publishing. Look at your publishing or admin agreement.">
-              <Input
-                id="publisherName"
-                value={profile.publisherName ?? ""}
-                onChange={(event) => updateProfile("publisherName", event.target.value)}
-                placeholder="Company name"
-                className="h-12 text-base md:text-sm"
-              />
-            </Field>
-            <Field label="Publisher IPI" htmlFor="publisherIpi" help="The publisher identifier from the publisher's PRO/society account.">
-              <Input
-                id="publisherIpi"
-                value={profile.publisherIpi ?? ""}
-                onChange={(event) => updateProfile("publisherIpi", event.target.value)}
-                placeholder="Publisher IPI/CAE"
-                className="h-12 text-base md:text-sm"
-              />
-            </Field>
-            <Field label="Publisher PRO / Society" htmlFor="publisherPro" help="The society your publisher uses, such as ASCAP, BMI, PRS, SGAE, or another PRO.">
-              <Input
-                id="publisherPro"
-                value={profile.publisherPro ?? ""}
-                onChange={(event) => updateProfile("publisherPro", event.target.value)}
-                placeholder="ASCAP, BMI, SESAC, PRS..."
-                className="h-12 text-base md:text-sm"
-              />
-            </Field>
-            <Field label="Your Publishing Share %" htmlFor="publishingShare" help="The percentage of publishing you control for your writer share. Check your publishing agreement if you have one.">
-              <Input
-                id="publishingShare"
-                type="number"
-                min="0"
-                max="100"
-                value={profile.publishingShare ?? ""}
-                onChange={(event) => updateProfile("publishingShare", event.target.value)}
-                placeholder="Example: 50"
-                className="h-12 text-base md:text-sm"
-              />
-            </Field>
-            <Field label="Publisher / Admin Contact" htmlFor="publisherContact" help="Registration email or contact for your publisher/admin team. This can usually be found in your agreement or company portal.">
-              <Input
-                id="publisherContact"
-                value={profile.publisherContact ?? ""}
-                onChange={(event) => updateProfile("publisherContact", event.target.value)}
-                placeholder="Registration email or contact"
-                className="h-12 text-base md:text-sm"
-              />
-            </Field>
-          </div>
-        )}
-      </div>
     </div>
   );
 }
@@ -1023,14 +983,6 @@ function SecurityConsentPage({
   );
 }
 
-function requiresPublishingDetails(status?: string) {
-  return ["Signed to publisher", "Co-published"].includes(status ?? "");
-}
-
-function isSimplePublishingSetup(status?: string) {
-  return status === "Self-published";
-}
-
 function validateAccountPage(
   page: number,
   profile: UserProfile,
@@ -1062,17 +1014,16 @@ function validateAccountPage(
 
 function prepareProfileForRegistration(profile: UserProfile): UserProfile {
   const now = new Date().toISOString();
-  const publishingStatus = (profile.publishingStatus ?? "").trim();
-  const needsPublishingDetails = requiresPublishingDetails(publishingStatus);
+  const artistName = (profile.pkaNames ?? "").trim();
   const skippedPro = profile.proAffiliation === "Skip PRO Registration";
 
   return normalizeUserProfile({
     ...profile,
     username: normalizeUsername(profile.username),
     emailAddress: normalizeEmailAddress(profile.emailAddress),
-    displayName: (profile.displayName || profile.pkaNames || profile.username || profile.legalName).trim(),
+    displayName: profile.displayName.trim() || artistName || profile.username.trim() || profile.legalName.trim(),
     legalName: profile.legalName.trim(),
-    pkaNames: (profile.pkaNames ?? "").trim(),
+    pkaNames: artistName,
     roleTags: parseRoleTags(profile.roleTags)
       .filter((role) => !["Manager", "Publisher"].includes(role))
       .join(", "),
@@ -1080,15 +1031,6 @@ function prepareProfileForRegistration(profile: UserProfile): UserProfile {
     proAffiliation: skippedPro ? "Skip PRO Registration" : (profile.proAffiliation ?? "").trim(),
     ipiNumber: skippedPro ? "" : (profile.ipiNumber ?? "").trim(),
     customProName: !skippedPro && profile.proAffiliation === "Other" ? (profile.customProName ?? "").trim() : "",
-    publishingStatus,
-    publisherName: needsPublishingDetails ? (profile.publisherName ?? "").trim() : "",
-    publisherIpi: needsPublishingDetails ? (profile.publisherIpi ?? "").trim() : "",
-    publisherPro: needsPublishingDetails ? (profile.publisherPro ?? "").trim() : "",
-    publishingShare: isSimplePublishingSetup(publishingStatus) ? "100" : (profile.publishingShare ?? "").trim(),
-    adminCompanyName: "",
-    adminIpi: "",
-    adminCollectionShare: "",
-    publisherContact: needsPublishingDetails ? (profile.publisherContact ?? "").trim() : "",
     termsAcceptedAt: now,
     termsVersion: TERMS_VERSION,
     privacyAcknowledgedAt: now,

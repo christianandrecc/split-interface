@@ -84,8 +84,7 @@ export function supportingFields(model: SplitSheetPdfModel): Array<{ title: stri
     ["Role", p.role], ["Contribution", [p.contributionCategories?.join(", "), p.contributionDescription].filter(Boolean).join(" / ")],
     ["Country", p.country], ["PRO", p.proAffiliation === "Other" ? p.customProName : p.proAffiliation],
     ["IPI / CAE", p.ipiNumber], ["PRO member number", p.proMemberNumber], ["Society territory", p.societyTerritory],
-    ["Publishing status", p.publishingStatus], ["Publisher", p.publisherName], ["Publisher IPI", p.publisherIpi],
-    ["Publisher PRO", p.publisherPro], ["Publisher contact", p.publisherContact], ["Registration notes", p.registrationNotes],
+    ["Registration notes", p.registrationNotes],
   ]);
   return [
     { title: "Work metadata", fields: fields([

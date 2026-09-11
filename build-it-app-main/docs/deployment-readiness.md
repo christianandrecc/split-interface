@@ -1,5 +1,11 @@
 # Deployment Readiness
 
+For the latest release checks and migration status, see
+[September 11 partner release](partner-release-2026-09-11.md).
+The report below is the historical September 10 baseline, not current counts.
+
+## September 10 Historical Report
+
 September 10, 2026: **the user approved updating the existing projects for partner testing**. Both backend migrations are applied to Supabase project `hpwquupkqssqqgqtwdyu`; the rollback-only hosted database smoke test passed. The frontend release targets GitHub `main` and the existing protected Vercel project. Hosted browser sessions and confirmation/reset email delivery still need manual partner checks.
 
 Vercel connector and CLI access work for `christianandreccs-projects/split-interface`. GitHub access also works. The complete local release gate and both browser checks passed after reconnection. No real user signatures, agreement contents, or email deliveries were created during verification.

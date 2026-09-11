@@ -400,7 +400,7 @@ function profileFromAuthUserMetadata(user: AuthUserLike) {
     pkaNames: firstMetaText(metadata, "pka_names", "stage_name", "pkaNames") ?? payload.pkaNames,
     phoneCountryCode: firstMetaText(metadata, "phone_country_code", "phoneCountryCode") ?? payload.phoneCountryCode,
     phoneNumber: firstMetaText(metadata, "phone_number", "phoneNumber", "full_phone_number") ?? payload.phoneNumber,
-    emailAddress: firstMetaText(metadata, "email", "emailAddress") ?? user.email ?? payload.emailAddress,
+    emailAddress: normalizeEmailAddress(user.email),
     legalAddress: firstMetaText(metadata, "legal_address", "legalAddress") ?? payload.legalAddress,
     addressLine: firstMetaText(metadata, "address_line", "address_street", "addressLine") ?? payload.addressLine,
     zipCode: firstMetaText(metadata, "zip_code", "address_zip", "zipCode") ?? payload.zipCode,
@@ -441,13 +441,13 @@ async function loadProfileForAuthUser(user: AuthUserLike) {
   const storedProfile = await loadProfileForUser(user.id);
   const metadataProfile = profileFromAuthUserMetadata(user);
 
-  if (!metadataProfile) return storedProfile;
+  if (!metadataProfile) return storedProfile ? { ...storedProfile, emailAddress: normalizeEmailAddress(user.email) } : null;
 
   if (!storedProfile) {
     return upsertProfileForUser(user.id, metadataProfile);
   }
 
-  const mergedProfile = mergeProfileWithFallback(storedProfile, metadataProfile);
+  const mergedProfile = { ...mergeProfileWithFallback(storedProfile, metadataProfile), emailAddress: normalizeEmailAddress(user.email) };
   if (profileGainedBackfillData(storedProfile, mergedProfile)) {
     return upsertProfileForUser(user.id, mergedProfile);
   }
@@ -543,7 +543,8 @@ export async function consumeSupabaseAuthCallbackFromUrl() {
 
   const url = new URL(window.location.href);
   const hashParams = authHashParams();
-  const callbackError = url.searchParams.get("error_description") || hashParams.get("error_description");
+  const callbackError = url.searchParams.get("error_description") || hashParams.get("error_description")
+    || url.searchParams.get("error") || hashParams.get("error");
   if (callbackError) {
     clearSupabaseAuthUrl();
     throw new Error(callbackError);
@@ -648,8 +649,11 @@ export async function saveSupabaseProfile(profile: UserProfile) {
 
   const { data, error } = await supabase.auth.getUser();
   if (error || !data.user) throw new Error("Sign in before saving profile changes to Supabase.");
+  if (profile.authUserId && profile.authUserId !== data.user.id) {
+    throw new Error("Your account changed. Reload your profile before saving.");
+  }
 
-  return upsertProfileForUser(data.user.id, profile);
+  return upsertProfileForUser(data.user.id, { ...profile, emailAddress: normalizeEmailAddress(data.user.email) });
 }
 
 export async function requestSupabasePasswordReset(emailAddress: string): Promise<PasswordResetResult> {
@@ -667,6 +671,24 @@ export async function requestSupabasePasswordReset(emailAddress: string): Promis
   if (error) throw new Error("If this account can receive reset emails, Supabase will send one shortly.");
 
   return { sent: true };
+}
+
+export async function requestSignupConfirmation(emailAddress: string) {
+  requireSupabaseConfig();
+  const email = normalizeEmailAddress(emailAddress);
+  if (!isValidEmailAddress(email) || email.length > 254) throw new Error("Enter a valid email address.");
+  const { error } = await supabase.auth.resend({
+    type: "signup", email, options: { emailRedirectTo: getSupabaseAuthRedirectUrl() },
+  });
+  if (error?.code === "over_email_send_rate_limit" || error?.code === "over_request_rate_limit") {
+    throw new Error("Please wait a minute before requesting another confirmation email.");
+  }
+  if (error?.code === "email_address_not_authorized") {
+    throw new Error("Confirmation email delivery is unavailable for this address. Please contact SPLIT support.");
+  }
+  if (error) throw new Error("Could not request a confirmation email. Check your connection and try again.");
+  // Supabase deliberately does not reveal whether an address is registered/confirmed.
+  return { requested: true };
 }
 
 export async function updateSupabasePassword(password: string) {

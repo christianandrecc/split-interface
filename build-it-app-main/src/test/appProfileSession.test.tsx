@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import App from "@/App";
 import { profileSessionMatchesSignIn } from "@/lib/profileSessionCache";
 import { createEmptyProfile, type UserProfile } from "@/lib/userProfile";
+import { supabase } from "@/integrations/supabase/client";
 
 const mocks = vi.hoisted(() => ({
   createSupabaseAccountProfile: vi.fn(),
@@ -14,11 +15,12 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@/pages/Index", () => ({
-  default: ({ userProfile }: { userProfile: UserProfile }) => (
+  default: ({ userProfile, onUpdateProfile }: { userProfile: UserProfile; onUpdateProfile: (profile: UserProfile) => Promise<void> }) => (
     <main>
       <h1>Your Profile</h1>
       <p>{userProfile.displayName}</p>
       <p>{userProfile.emailAddress}</p>
+      <button onClick={() => void onUpdateProfile({ ...userProfile, displayName: "Edited Artist", emailAddress: "unconfirmed@example.com" }).catch(() => {})}>Save profile</button>
     </main>
   ),
 }));
@@ -62,6 +64,46 @@ describe("App profile session loading", () => {
   afterEach(() => {
     window.localStorage.clear();
     vi.clearAllMocks();
+  });
+
+  it("does not publish or cache failed profile edits", async () => {
+    const profile = makeProfile({ displayName: "Saved Artist", emailAddress: "saved@example.com" });
+    mocks.loadProfileSessionForActiveSession.mockResolvedValue({ userId: "current-user", profile });
+    mocks.saveSupabaseProfile.mockRejectedValue(new Error("Offline"));
+    markOnboardingComplete("current-user");
+    render(<App />);
+    await screen.findByText("Saved Artist");
+    fireEvent.click(screen.getByRole("button", { name: "Save profile" }));
+    await waitFor(() => expect(mocks.saveSupabaseProfile).toHaveBeenCalledOnce());
+    expect(screen.queryByText("Edited Artist")).not.toBeInTheDocument();
+    expect(screen.queryByText("unconfirmed@example.com")).not.toBeInTheDocument();
+    expect(JSON.parse(localStorage.getItem("split.userProfileSession.v1")!).profile.emailAddress).toBe(profile.emailAddress);
+  });
+
+  it("refreshes the active Auth email and cache after returning from confirmation", async () => {
+    const profile = makeProfile({ displayName: "Saved Artist", emailAddress: "old@example.com" });
+    mocks.loadProfileSessionForActiveSession.mockResolvedValue({ userId: "current-user", profile });
+    markOnboardingComplete("current-user");
+    render(<App />);
+    await screen.findByText("old@example.com");
+    vi.mocked(supabase.auth.getUser).mockResolvedValueOnce({ data: { user: { id: "current-user", email: "confirmed@example.com", user_metadata: { email: "stale@example.com" } } }, error: null } as never);
+    fireEvent(window, new Event("focus"));
+    await screen.findByText("confirmed@example.com");
+    expect(JSON.parse(localStorage.getItem("split.userProfileSession.v1")!).profile.emailAddress).toBe("confirmed@example.com");
+    expect(mocks.saveSupabaseProfile).not.toHaveBeenCalled();
+  });
+
+  it("ignores email refreshes belonging to another account", async () => {
+    const profile = makeProfile({ displayName: "Saved Artist", emailAddress: "old@example.com" });
+    mocks.loadProfileSessionForActiveSession.mockResolvedValue({ userId: "current-user", profile });
+    markOnboardingComplete("current-user");
+    render(<App />);
+    await screen.findByText("old@example.com");
+    vi.mocked(supabase.auth.getUser).mockResolvedValueOnce({ data: { user: { id: "different-user", email: "other@example.com" } }, error: null } as never);
+    fireEvent(window, new Event("focus"));
+    await waitFor(() => expect(supabase.auth.getUser).toHaveBeenCalled());
+    expect(screen.queryByText("other@example.com")).not.toBeInTheDocument();
+    expect(JSON.parse(localStorage.getItem("split.userProfileSession.v1")!).profile.emailAddress).toBe("old@example.com");
   });
 
   it("shows the active Supabase user's profile instead of a stale cached profile", async () => {

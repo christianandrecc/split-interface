@@ -28,6 +28,24 @@ function confirm() {
 }
 
 describe("split creation completion", () => {
+  it("uses the saved artist name for work metadata even with an old truncated display name", async () => {
+    const profile = { ...makeDocument().creatorProfile, pkaNames: "Aurora Music", displayName: "A" };
+    const onStoreDocument = vi.fn(async (document: StoredSplitSheetDocument) => ({ document, persisted: true }));
+    render(<ContractBuilder userProfile={profile} onBack={vi.fn()}
+      onStoreDocument={onStoreDocument} onSendDocument={vi.fn()} />);
+    expect(screen.getByText("Aurora Music")).toBeInTheDocument();
+    expect(screen.queryByText("A", { exact: true })).not.toBeInTheDocument();
+    fireEvent.change(screen.getByPlaceholderText("e.g. Work title"), { target: { value: "First Light" } });
+    for (let step = 0; step < 3; step++) fireEvent.click(screen.getByRole("button", { name: /^Continue/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Save To Drafts" }));
+    await waitFor(() => expect(onStoreDocument).toHaveBeenCalledOnce());
+    expect(onStoreDocument.mock.calls[0][0].data).toMatchObject({
+      artistProjectName: "Aurora Music", recordingArtist: "Aurora Music",
+      parties: [expect.objectContaining({ professionalName: "Aurora Music" })],
+    });
+    expect(profile.displayName).toBe("A");
+  });
+
   it("ends the new-work wizard at review with separate draft and invite actions, not a preview", () => {
     const { onStoreDocument, onSendDocument } = setup(false);
     expect(screen.getByRole("heading", { name: "Review Draft" })).toBeInTheDocument();

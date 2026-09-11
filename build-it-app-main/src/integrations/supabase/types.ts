@@ -14,6 +14,31 @@ export type Database = {
   }
   public: {
     Tables: {
+      account_settings: {
+        Row: {
+          user_id: string
+          default_split_method: string
+          default_territory: string
+          default_user_role: string
+          include_audit_trail: boolean
+          revision: number
+          updated_at: string
+        }
+        Insert: {
+          user_id: string
+          default_split_method?: string
+          default_territory?: string
+          default_user_role?: string
+          include_audit_trail?: boolean
+        }
+        Update: {
+          default_split_method?: string
+          default_territory?: string
+          default_user_role?: string
+          include_audit_trail?: boolean
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           address_line: string | null

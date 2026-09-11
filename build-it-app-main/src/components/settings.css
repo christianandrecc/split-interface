@@ -24,14 +24,18 @@
 .settings-row-description { margin-top: 3px; font-size: 12px; line-height: 1.5; color: hsl(var(--muted-foreground)); overflow-wrap: anywhere; }
 .settings-row-control { display: flex; align-items: center; justify-content: flex-end; min-width: 0; }
 .settings-row-control > [role="combobox"] { height: 38px; border-radius: 6px; font-size: 13px; }
+.settings-row-control > input { height: 38px; border-radius: 6px; font-size: 13px; }
+.settings-row-control > .settings-composition-role { height: 60px; gap: 8px; }
+.settings-row-control > .settings-composition-role > span { display: block; -webkit-line-clamp: unset; overflow: visible; white-space: normal; text-align: left; line-height: 16px; }
+.settings-composition-role > svg { flex-shrink: 0; }
 .settings-row[data-toggle="true"] { grid-template-columns: minmax(0, 1fr) 44px; }
 .settings-row[data-disabled="true"] .settings-row-copy { opacity: .5; }
 .settings-method[role="group"] { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; gap: 2px; padding: 3px; border: 1px solid hsl(var(--border)); border-radius: 6px; background: hsl(var(--secondary)/.5); }
 .settings-method > button { height: 30px; min-width: 0; padding: 0 8px; border-radius: 3px; font-size: 12px; color: hsl(var(--muted-foreground)); }
 .settings-method > button[data-state="on"] { background: hsl(var(--background)); color: hsl(var(--foreground)); box-shadow: 0 1px 3px hsl(var(--foreground)/.12); }
 .settings-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 20px; padding-top: 16px; border-top: 1px solid hsl(var(--border)); }
-.settings-preview-status { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; line-height: 1.5; color: hsl(var(--muted-foreground)); }
-.settings-preview-status[data-applied="true"] { color: hsl(var(--split-verified)); }
+.settings-save-status { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; line-height: 1.5; color: hsl(var(--muted-foreground)); }
+.settings-save-status[data-applied="true"] { color: hsl(var(--split-verified)); }
 .settings-footer-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 .settings-footer-actions > button { height: 38px; }
 .settings-apply { min-width: 144px; font-size: 12px; }
@@ -55,6 +59,8 @@
   .settings-section-heading h2 { font-size: 17px; }
   .settings-row { grid-template-columns: minmax(0, 1fr) 160px; gap: 12px; }
   .settings-row-control > [role="combobox"] { height: 44px; }
+  .settings-row-control > input { height: 44px; }
+  .settings-row-control > .settings-composition-role { height: 64px; }
   .settings-method > button { height: 36px; }
   .settings-footer { flex-wrap: wrap; margin-top: 16px; }
   .settings-footer-actions { margin-left: auto; }

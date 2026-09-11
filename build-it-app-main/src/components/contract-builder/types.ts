@@ -351,7 +351,7 @@ export const DEFAULT_CONTRACT: ContractData = {
   authorizePersonalMetadata: true,
   authorizeContributionDescription: true,
   authorizeProIpi: true,
-  authorizePublisherAdmin: true,
+  authorizePublisherAdmin: false,
   authorizeRegistrationUse: true,
   exportPacket: true,
   sendToPRO: false,

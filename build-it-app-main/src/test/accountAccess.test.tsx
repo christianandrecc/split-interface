@@ -1,9 +1,13 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { type ComponentProps } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import AccountAccess from "@/components/AccountAccess";
 import { createEmptyProfile } from "@/lib/userProfile";
+import { profileSignupMetadata } from "@/lib/profileStorage";
+import * as profileStorage from "@/lib/profileStorage";
+
+afterEach(() => vi.restoreAllMocks());
 
 function renderAccountAccess(
   onCreateAccount = vi.fn(),
@@ -26,6 +30,47 @@ function completePersonalPage() {
 }
 
 describe("AccountAccess registration flow", () => {
+  it.each([
+    { label: "typed character by character", finalName: "Aurora Music" },
+    { label: "replaced after returning to the personal page", finalName: "Northern Lights" },
+    { label: "cleared after typing", finalName: "" },
+    { label: "replaced with whitespace", finalName: "   " },
+    { label: "a one-letter artist name is intentional", finalName: "A" },
+    { label: "a separate display name already exists", finalName: "Aurora Music", displayName: "AM" },
+  ])("submits the complete artist name when $label", async ({ finalName, displayName }) => {
+    const onCreateAccount = vi.fn().mockResolvedValue(undefined);
+    renderAccountAccess(onCreateAccount, vi.fn(), {
+      initialProfile: displayName ? { ...createEmptyProfile(), displayName } : undefined,
+    });
+    const artist = screen.getByRole("textbox", { name: /artist name/i });
+    for (let length = 1; length <= "Aurora Music".length; length++) {
+      fireEvent.change(artist, { target: { value: "Aurora Music".slice(0, length) } });
+    }
+    completePersonalPage();
+    fireEvent.click(screen.getByRole("button", { name: "Back" }));
+    fireEvent.change(screen.getByRole("textbox", { name: /artist name/i }), { target: { value: finalName } });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    fireEvent.click(screen.getByRole("button", { name: "Artist" }));
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    fireEvent.change(screen.getByPlaceholderText("8 characters minimum"), { target: { value: "password123" } });
+    fireEvent.change(screen.getByPlaceholderText("Repeat password"), { target: { value: "password123" } });
+    fireEvent.click(screen.getByLabelText(/terms & conditions/i));
+    fireEvent.click(screen.getByLabelText(/privacy policy/i));
+    fireEvent.click(screen.getAllByRole("button", { name: /create account/i })[1]);
+
+    await waitFor(() => expect(onCreateAccount).toHaveBeenCalledTimes(1));
+    const [profile] = onCreateAccount.mock.calls[0];
+    const expectedName = displayName || finalName.trim() || "chori_one";
+    expect(profile.displayName).toBe(expectedName);
+    expect(profile.pkaNames).toBe(finalName.trim());
+    expect(profileSignupMetadata(profile)).toMatchObject({
+      display_name: expectedName,
+      stage_name: finalName.trim() || expectedName,
+      pka_names: finalName.trim() || null,
+      profile_data: { displayName: expectedName, pkaNames: finalName.trim() },
+    });
+  });
+
   it("lets an existing account replay the new-user onboarding", () => {
     const onViewOnboardingAgain = vi.fn();
     renderAccountAccess(vi.fn(), vi.fn(), {
@@ -69,7 +114,7 @@ describe("AccountAccess registration flow", () => {
     expect(screen.queryByText(/mlc number/i)).not.toBeInTheDocument();
   });
 
-  it("exposes focused signup help for artist, PRO, IPI, and publishing fields", () => {
+  it("keeps artist and PRO/IPI help without asking for publishing setup", () => {
     renderAccountAccess();
 
     expect(screen.getByRole("button", { name: /artist name help/i })).toHaveAttribute(
@@ -87,13 +132,10 @@ describe("AccountAccess registration flow", () => {
       "data-help",
       expect.stringContaining("unique songwriter/composer ID"),
     );
-    expect(screen.getByRole("button", { name: /publishing information help/i })).toHaveAttribute(
-      "data-help",
-      expect.stringContaining("who controls the publishing side"),
-    );
+    expect(screen.queryByRole("button", { name: /publishing information help/i })).not.toBeInTheDocument();
 
     expect(screen.getByRole("combobox", { name: /pro affiliation/i })).toBeInTheDocument();
-    expect(screen.getByRole("combobox", { name: /publishing information/i })).toBeInTheDocument();
+    expect(screen.queryByRole("combobox", { name: /publishing information/i })).not.toBeInTheDocument();
   });
 
   it("submits normalized email and consent metadata after all pages are valid", async () => {
@@ -123,7 +165,10 @@ describe("AccountAccess registration flow", () => {
     expect(profile.privacyPolicyVersion).toBe("split-privacy-2026-08-12");
   });
 
-  it("moves email confirmation into a dedicated success screen", async () => {
+  it.each([false, true])("offers confirmation resend without claiming delivery (failure: %s)", async failure => {
+    const resend = vi.spyOn(profileStorage, "requestSignupConfirmation");
+    if (failure) resend.mockRejectedValue(new Error("Could not request confirmation. Please try again."));
+    else resend.mockResolvedValue({ requested: true });
     const onCreateAccount = vi.fn().mockResolvedValue({
       needsEmailConfirmation: true,
       emailAddress: "chori@example.com",
@@ -143,6 +188,20 @@ describe("AccountAccess registration flow", () => {
     expect(await screen.findByRole("heading", { name: /check your inbox/i })).toBeInTheDocument();
     expect(screen.getByText("chori@example.com")).toBeInTheDocument();
     expect(screen.queryByText(/supabase created the account/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/email confirmation sent/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/already registered/i)).toBeInTheDocument();
+    expect(resend).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Resend confirmation" }));
+    expect(await screen.findByRole("button", { name: /resend in \d+s/i })).toBeDisabled();
+    expect(resend).toHaveBeenCalledExactlyOnceWith("chori@example.com");
+    if (failure) {
+      expect(screen.getByRole("alert")).toHaveTextContent(/Could not request confirmation/);
+      expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    } else {
+      expect(screen.getByRole("status")).toHaveTextContent(/If confirmation is still required/);
+    }
+    fireEvent.click(screen.getByRole("button", { name: /resend in \d+s/i }));
+    expect(resend).toHaveBeenCalledTimes(1);
 
     fireEvent.click(screen.getByRole("button", { name: /go to sign in/i }));
     expect(screen.getByRole("heading", { name: /sign in to split/i })).toBeInTheDocument();

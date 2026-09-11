@@ -35,6 +35,7 @@ export type StoredSplitSheetDocument = {
   collaboratorInvites: {
     id: string;
     partyId: string;
+    collaboratorUserId?: string | null;
     name: string;
     inviteMethod: string;
     inviteValue: string;
@@ -47,6 +48,9 @@ export type StoredSplitSheetDocument = {
       email?: string;
       phoneNumber?: string;
       splitId?: string;
+      proAffiliation?: string;
+      customProName?: string;
+      ipiNumber?: string;
     };
   }[];
   currentProposalId?: string;
@@ -87,6 +91,11 @@ export type StoredSplitSheetDocument = {
     signerLegalName?: string;
     signerArtistName?: string;
     signerUserId?: string;
+    registrationSnapshot?: {
+      proAffiliation?: string;
+      customProName?: string;
+      ipiNumber?: string;
+    };
   }[];
   auditTrail: {
     timestamp: string;
