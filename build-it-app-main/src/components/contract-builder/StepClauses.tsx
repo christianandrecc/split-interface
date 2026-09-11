@@ -30,7 +30,7 @@ const SAMPLE_SECONDS_PRESETS = ["0-15 sec", "0-30 sec", "0-45 sec", "0-1:00 min"
 function FieldGroup({ icon: Icon, label, children }: { icon: ElementType; label: string; children: ReactNode }) {
   return (
     <label>
-      <span className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+      <span className="mb-2 flex items-center gap-2 text-xs font-medium text-muted-foreground">
         <Icon className="h-3.5 w-3.5" />
         {label}
       </span>
@@ -53,7 +53,7 @@ function TextInput({
       value={value}
       onChange={(event) => onChange(event.target.value)}
       placeholder={placeholder}
-      className="w-full rounded-lg border border-border bg-card px-4 py-3 text-sm placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-ring/30"
+      className="h-11 min-w-0 w-full rounded-lg border border-border bg-card px-3 text-sm placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-ring/30"
     />
   );
 }
@@ -64,23 +64,21 @@ export default function StepClauses({ data, onChange }: Props) {
 
   return (
     <div>
-      <h1 className="mb-1 text-xl font-bold">Sample Disclosure</h1>
-      <p className="mb-8 text-sm text-muted-foreground">
-        Flag any pre-existing material so collaborators can review clearance before approving the split.
-      </p>
+      <h1 tabIndex={-1} className="mb-6 text-2xl font-bold outline-none">Sample Disclosure</h1>
 
       <div className="space-y-6">
-        <section>
-          <label className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+        <fieldset>
+          <legend className="mb-3 flex items-center gap-2 text-sm font-medium">
             <FileQuestion className="h-3.5 w-3.5" />
-            Does this work contain a sample?
-          </label>
-          <div className="grid gap-3 md:grid-cols-3">
+            Does this work contain a sample or interpolation?
+          </legend>
+          <div className="grid max-w-md grid-cols-3 gap-1 rounded-lg bg-muted/60 p-1">
             {SAMPLE_CHOICES.map((choice) => (
-              <button
-                key={choice.value}
-                type="button"
-                onClick={() => {
+              <label key={choice.value} className="relative cursor-pointer">
+                <input type="radio" name="sample-status" value={choice.value}
+                  checked={selected.value === choice.value}
+                  className="peer sr-only"
+                  onChange={() => {
                   const hasNoSample = choice.value === "No sample or interpolation";
                   const hasStructuredSample = choice.value === "Sample";
                   onChange({
@@ -91,22 +89,16 @@ export default function StepClauses({ data, onChange }: Props) {
                     sampleOriginalWork: hasStructuredSample ? data.sampleOriginalWork : "",
                     samplePortion: hasStructuredSample ? data.samplePortion : "",
                   });
-                }}
-                className={`rounded-lg border px-4 py-4 text-left transition-colors ${
-                  selected.value === choice.value
-                    ? "border-primary bg-primary/10 text-primary"
-                    : "border-border bg-card text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                <span className="block text-sm font-bold">{choice.label}</span>
-                <span className="mt-1 block text-xs leading-5">{choice.helper}</span>
-              </button>
+                }} />
+                <span className="flex h-10 items-center justify-center rounded-md border border-transparent text-sm font-semibold text-muted-foreground transition-colors peer-checked:border-border peer-checked:bg-background peer-checked:text-foreground peer-checked:shadow-sm peer-focus-visible:ring-2 peer-focus-visible:ring-ring">{choice.label}</span>
+              </label>
             ))}
           </div>
-        </section>
+          <p className="mt-3 text-xs leading-5 text-muted-foreground">{selected.helper}</p>
+        </fieldset>
 
         {needsSampleDetails && (
-          <section className="rounded-xl border border-border bg-card/70 p-4">
+          <section className="border-t border-border pt-5">
             <div className="grid gap-4 md:grid-cols-2">
               <FieldGroup icon={UserRound} label="Sample Artist">
                 <TextInput
@@ -130,7 +122,7 @@ export default function StepClauses({ data, onChange }: Props) {
                 <select
                   value={data.samplePortion}
                   onChange={(event) => onChange({ samplePortion: event.target.value })}
-                  className="w-full rounded-lg border border-border bg-card px-4 py-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring/30"
+                  className="h-11 w-full rounded-lg border border-border bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring/30"
                 >
                   <option value="">Select range</option>
                   {SAMPLE_SECONDS_PRESETS.map((preset) => (

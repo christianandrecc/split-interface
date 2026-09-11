@@ -10,10 +10,10 @@ interface Props {
   onChange: (d: Partial<ContractData>) => void;
 }
 
-function FieldGroup({ icon: Icon, label, children }: { icon: ElementType; label: string; children: ReactNode }) {
+function FieldGroup({ icon: Icon, label, children, htmlFor }: { icon: ElementType; label: string; children: ReactNode; htmlFor?: string }) {
   return (
     <div>
-      <label className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+      <label htmlFor={htmlFor} className="mb-2 flex items-center gap-2 text-xs font-medium text-muted-foreground">
         <Icon className="h-3.5 w-3.5" />
         {label}
       </label>
@@ -28,21 +28,24 @@ function TextInput({
   placeholder,
   type = "text",
   max,
+  id,
 }: {
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
   type?: string;
   max?: string;
+  id: string;
 }) {
   return (
     <input
+      id={id}
       type={type}
       value={value}
       max={max}
       onChange={(event) => onChange(event.target.value)}
       placeholder={placeholder}
-      className="w-full rounded-lg border border-border bg-card px-4 py-3 text-sm placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-ring/30"
+      className="h-11 min-w-0 w-full rounded-lg border border-border bg-card px-3 text-sm placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-ring/30"
     />
   );
 }
@@ -77,44 +80,42 @@ export default function StepMetadata({ data, signedInArtistName, onChange }: Pro
 
   return (
     <div>
-      <h1 className="mb-1 text-xl font-bold">Create a New Work</h1>
-      <p className="mb-8 text-sm text-muted-foreground">
-        Start with only what collaborators need in the room. Registration and royalty details can come later.
-      </p>
+      <h1 tabIndex={-1} className="mb-6 text-2xl font-bold outline-none">Create a New Work</h1>
 
-      <div className="space-y-6">
-        <FieldGroup icon={Music} label="Work Title">
+      <div className="space-y-5">
+        <FieldGroup icon={Music} label="Work Title" htmlFor="work-title">
           <TextInput
+            id="work-title"
             value={data.songTitle}
             onChange={(value) => onChange({ songTitle: value })}
             placeholder="e.g. Work title"
           />
         </FieldGroup>
 
-        <FieldGroup icon={UserRound} label="Artist / Project">
-          <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-muted/30 px-4 py-3 text-sm">
-            <span className="min-w-0 truncate font-medium text-foreground">{signedInArtistName}</span>
-            <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-border bg-background px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-              <LockKeyhole className="h-3 w-3" />
-              <span className="hidden sm:inline">Signed-in profile</span>
-            </span>
-          </div>
-        </FieldGroup>
+        <div className="grid gap-5 sm:grid-cols-2">
+          <FieldGroup icon={UserRound} label="Artist / Project">
+            <div className="flex min-h-11 items-center justify-between gap-3 rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm">
+              <span className="min-w-0 break-words font-medium text-foreground">{signedInArtistName}</span>
+              <span title="From your signed-in profile" className="shrink-0"><LockKeyhole aria-label="From your signed-in profile" className="h-3.5 w-3.5 text-muted-foreground" /></span>
+            </div>
+          </FieldGroup>
 
-        <FieldGroup icon={Calendar} label="Creation Date">
-          <TextInput
-            type="date"
-            value={data.creationDate}
-            max={today}
-            onChange={handleCreationDateChange}
-          />
-        </FieldGroup>
+          <FieldGroup icon={Calendar} label="Creation Date" htmlFor="creation-date">
+            <TextInput
+              id="creation-date"
+              type="date"
+              value={data.creationDate}
+              max={today}
+              onChange={handleCreationDateChange}
+            />
+          </FieldGroup>
+        </div>
 
         <Collapsible open={optionalDetailsOpen} onOpenChange={setOptionalDetailsOpen}>
           <CollapsibleTrigger asChild>
             <button
               type="button"
-              className="flex w-full items-center justify-between rounded-lg border border-border bg-card px-4 py-3 text-left text-sm font-semibold text-foreground transition-colors hover:bg-muted/30"
+              className="flex min-h-12 w-full items-center justify-between border-t border-border py-3 text-left text-sm font-semibold text-foreground transition-colors hover:text-muted-foreground"
             >
               <span className="flex items-center gap-2">
                 <FileText className="h-3.5 w-3.5 text-muted-foreground" />
@@ -126,21 +127,23 @@ export default function StepMetadata({ data, signedInArtistName, onChange }: Pro
             </button>
           </CollapsibleTrigger>
           <CollapsibleContent>
-            <div className="mt-4 space-y-6 rounded-lg border border-dashed border-border bg-card/60 p-4">
-              <FieldGroup icon={FileText} label="Alternate Title">
+            <div className="mt-4 space-y-4">
+              <FieldGroup icon={FileText} label="Alternate Title" htmlFor="alternate-title">
                 <TextInput
+                  id="alternate-title"
                   value={data.alternateTitles}
                   onChange={(value) => onChange({ alternateTitles: value })}
                   placeholder="Working title, remix title, optional"
                 />
               </FieldGroup>
 
-              <FieldGroup icon={NotebookPen} label="Session Notes">
+              <FieldGroup icon={NotebookPen} label="Session Notes" htmlFor="session-notes">
                 <textarea
+                  id="session-notes"
                   value={data.workNotes}
                   onChange={(event) => onChange({ workNotes: event.target.value })}
                   placeholder="Optional notes for context, session, or creative intent."
-                  className="min-h-28 w-full resize-none rounded-lg border border-border bg-card px-4 py-3 text-sm placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-ring/30"
+                  className="min-h-24 w-full resize-y rounded-lg border border-border bg-card px-3 py-2 text-sm placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-ring/30"
                 />
               </FieldGroup>
             </div>

@@ -81,10 +81,6 @@ export default function StepParties({ data, onChange, recentCollaborators = [], 
       missing: getMissingWriterItems(party),
     }))
     .filter((writer) => writer.missing.length > 0);
-  const missingSummary = [
-    !valid ? `Split total must equal 100% (${total}%)` : "",
-    ...incompleteWriters.map((writer) => `${writer.label}: ${writer.missing.join(", ")}`),
-  ].filter(Boolean);
 
   const update = <Key extends keyof Party>(id: string, field: Key, val: Party[Key]) =>
     onChange({ parties: parties.map((p) => (p.id === id ? { ...p, [field]: val } : p)) });
@@ -196,159 +192,101 @@ export default function StepParties({ data, onChange, recentCollaborators = [], 
   };
   return (
     <div>
-      <div className="mb-1 flex items-center gap-2">
-        <h1 className="text-xl font-bold">Invite Collaborators</h1>
-      </div>
-      <p className="text-sm text-muted-foreground mb-8">
-        Add the people who were part of the work, then start from an even split or propose custom percentages.
-      </p>
+      <h1 tabIndex={-1} className="mb-6 text-2xl font-bold outline-none">Invite Collaborators</h1>
 
-      <div className="mb-5 rounded-lg border border-border bg-card/70 px-3 py-2.5">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="mr-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Initial split</span>
-          <div className="inline-flex rounded-full border border-border bg-background p-0.5">
-            {SPLIT_TYPE_OPTIONS.map((option) => (
-              <button
-                key={option}
-                onClick={() => chooseSplitType(option)}
-                className={`rounded-full px-3 py-1 text-[11px] font-semibold transition-colors ${
-                  activeSplitType === option
-                    ? "bg-primary/10 text-primary"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                {option}
-              </button>
-            ))}
-          </div>
-          <div className={`ml-auto text-xs font-bold tabular-nums ${valid ? "text-[hsl(var(--split-verified))]" : "text-destructive"}`}>
-            {total}%
+      <div className="mb-2 border-b border-border pb-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <fieldset className="flex items-center gap-3">
+            <legend className="sr-only">Initial split</legend>
+            <span aria-hidden="true" className="text-xs font-medium text-muted-foreground">Initial split</span>
+            <div className="inline-flex gap-1 rounded-lg bg-muted/60 p-1">
+              {SPLIT_TYPE_OPTIONS.map((option) => (
+                <label key={option} className="relative cursor-pointer">
+                  <input type="radio" name="split-method" value={option} checked={activeSplitType === option}
+                    onChange={() => chooseSplitType(option)} className="peer sr-only" />
+                  <span className="inline-flex h-9 items-center rounded-md border border-transparent px-3 text-xs font-semibold text-muted-foreground transition-colors peer-checked:border-border peer-checked:bg-background peer-checked:text-foreground peer-checked:shadow-sm peer-focus-visible:ring-2 peer-focus-visible:ring-ring">{option}</span>
+                </label>
+              ))}
+            </div>
+          </fieldset>
+          <div className="text-right" role="status">
+            <span className={`inline-flex items-center gap-1.5 text-sm font-semibold tabular-nums ${valid ? "text-[hsl(var(--split-verified))]" : "text-destructive"}`}>
+              {valid ? <CheckCircle2 className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
+              {total}% <span className="font-normal text-muted-foreground">/ 100%</span>
+            </span>
+            {!valid && <p className="mt-1 text-xs text-destructive">{total > 100 ? `Over by ${(total - 100).toFixed(2)}%` : `${(100 - total).toFixed(2)}% remaining`}</p>}
           </div>
         </div>
-        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-secondary">
-          <div
-            className={`h-full rounded-full transition-all duration-300 ${
-              valid ? "bg-[hsl(var(--split-verified))]" : total > 100 ? "bg-destructive" : "bg-primary"
-            }`}
-            style={{ width: `${Math.min(total, 100)}%` }}
-          />
-        </div>
-        {!isEqualSplit && !valid && (
-          <p className="mt-1.5 text-[11px] text-destructive">
-            {total > 100 ? `Over by ${(total - 100).toFixed(2)}%` : `${(100 - total).toFixed(2)}% remaining`}
-          </p>
-        )}
       </div>
 
-      <div className="space-y-4">
+      <div className="divide-y divide-border">
         {parties.map((p, i) => {
           const missingItems = getMissingWriterItems(p);
-
           return (
-            <div key={p.id} className="rounded-xl border border-border bg-card p-5 group">
-              <div className="mb-4 flex items-center gap-2">
-                <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/10">
-                  <User className="h-3.5 w-3.5 text-primary" />
-                </div>
-                <div>
-                  <span className="text-xs font-semibold text-muted-foreground">
-                    Collaborator {i + 1}{p.isCurrentUser ? " · You" : ""}
-                  </span>
-                  <div className="text-sm font-bold">{partyDisplayName(p)}</div>
-                </div>
-                {missingItems.length > 0 ? (
-                  <span className="ml-auto hidden rounded-full bg-[hsl(var(--split-pending)/0.12)] px-2.5 py-1 text-[11px] font-semibold text-[hsl(var(--split-pending))] md:inline-flex">
-                    Needs {missingItems.length}
-                  </span>
-                ) : (
-                  <span className="ml-auto hidden items-center gap-1 rounded-full bg-[hsl(var(--split-verified)/0.12)] px-2.5 py-1 text-[11px] font-semibold text-[hsl(var(--split-verified))] md:inline-flex">
-                    <CheckCircle2 className="h-3 w-3" />
-                    Ready
-                  </span>
-                )}
+            <section key={p.id} aria-label={`Collaborator ${i + 1}`} className="py-4">
+              <div className="mb-3 flex min-h-8 items-center gap-2">
+                <User className="h-3.5 w-3.5 text-muted-foreground" />
+                <h2 className="text-xs font-semibold text-muted-foreground">Collaborator {i + 1}{p.isCurrentUser ? " · You" : ""}</h2>
                 {!p.isCurrentUser && parties.length > 1 && (
-                  <button
-                    onClick={() => remove(p.id)}
-                    className="flex h-8 w-8 items-center justify-center rounded-full border border-border bg-background text-muted-foreground transition-colors hover:border-destructive/30 hover:bg-destructive/10 hover:text-destructive"
-                    aria-label={`Remove ${partyDisplayName(p)}`}
-                  >
+                  <button type="button" onClick={() => remove(p.id)}
+                    className="ml-auto flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:ring-2 focus-visible:ring-ring"
+                    title={`Remove ${partyDisplayName(p)}`} aria-label={`Remove ${partyDisplayName(p)}`}>
                     <X className="h-4 w-4" />
                   </button>
                 )}
               </div>
-
-              {!p.isCurrentUser && (
-                <InviteWriter
-                  party={p}
-                  recentCollaborators={recentCollaborators}
-                  blockedSuggestionKeys={getBlockedSuggestionKeys(parties, p.id, currentProfile)}
-                  onInviteChange={(value) => updateInvite(p.id, value)}
-                  onInviteSelect={(suggestion) => selectInviteSuggestion(p.id, suggestion)}
-                />
-              )}
-
-              <div className="mt-5 grid gap-3 md:grid-cols-2">
+              <div className="grid grid-cols-[minmax(0,1fr)_100px] items-start gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,200px)_100px]">
+                <div className="col-span-2 min-w-0 md:col-span-1">
+                  {p.isCurrentUser ? (
+                    <div>
+                      <span className="mb-1 block text-xs font-medium text-muted-foreground">Artist / Name</span>
+                      <div className="flex min-h-11 items-center rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm font-medium">
+                        <span className="min-w-0 break-words">{partyDisplayName(p)}</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <InviteWriter party={p} recentCollaborators={recentCollaborators}
+                      blockedSuggestionKeys={getBlockedSuggestionKeys(parties, p.id, currentProfile)}
+                      onInviteChange={(value) => updateInvite(p.id, value)}
+                      onInviteSelect={(suggestion) => selectInviteSuggestion(p.id, suggestion)} />
+                  )}
+                </div>
                 <InputCell label="Role on Composition">
-                  <select
-                    value={p.role}
-                    onChange={(event) => update(p.id, "role", event.target.value)}
-                    className="field-input"
-                  >
-                    {ROLE_OPTIONS.map((role) => (
-                      <option key={role}>{role}</option>
-                    ))}
+                  <select value={p.role} aria-label={`Role on Composition for ${partyDisplayName(p)}`}
+                    onChange={(event) => update(p.id, "role", event.target.value)} className="field-input h-11 min-w-0 py-2">
+                    {!ROLE_OPTIONS.some((role) => role === p.role) && <option value={p.role}>{p.role || "Select role"}</option>}
+                    {ROLE_OPTIONS.map((role) => <option key={role}>{role}</option>)}
                   </select>
                 </InputCell>
                 <InputCell label="Split Share">
-                  <div className="flex items-center gap-1">
-                    <input
-                      type="number"
-                      aria-label={`Split Share for ${partyDisplayName(p)}`}
-                      min={0}
-                      max={100}
-                      step="0.01"
+                  <div className="relative">
+                    <input type="number" aria-label={`Split Share for ${partyDisplayName(p)}`}
+                      min={0} max={100} step="0.01"
                       value={isEqualSplit ? p.percent : percentDrafts[p.id] ?? String(p.percent)}
                       disabled={isEqualSplit}
                       onFocus={(event) => event.currentTarget.select()}
                       onChange={(event) => updatePercent(p.id, event.target.value)}
                       onBlur={() => commitPercent(p.id)}
-                      className={`field-input tabular-nums ${isEqualSplit ? "cursor-not-allowed bg-secondary/60 text-muted-foreground" : ""}`}
-                    />
-                    <span className="text-sm font-semibold text-muted-foreground">%</span>
+                      className={`field-input h-11 py-2 pr-7 tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none ${isEqualSplit ? "cursor-not-allowed bg-secondary/60 text-muted-foreground" : ""}`} />
+                    <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">%</span>
                   </div>
-                  {isEqualSplit && (
-                    <p className="mt-1 text-[11px] leading-4 text-muted-foreground">Calculated by Equal split.</p>
-                  )}
                 </InputCell>
               </div>
-
-            </div>
+              {missingItems.length > 0 && <p className="mt-2 flex items-start gap-1.5 text-xs text-destructive"><AlertCircle className="h-3.5 w-3.5 shrink-0" />Required: {missingItems.join(", ")}</p>}
+            </section>
           );
         })}
       </div>
 
-      <button
-        onClick={add}
-        className="mt-4 flex items-center gap-1.5 text-sm font-medium text-primary transition-colors hover:text-primary/80"
-      >
-        <Plus className="h-3.5 w-3.5" />
-        Invite another collaborator
-      </button>
-
-      {valid && incompleteWriters.length === 0 ? (
-        <div className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium text-[hsl(var(--split-verified))]">
-          <CheckCircle2 className="h-3.5 w-3.5" />
-          Ready to continue
-        </div>
-      ) : (
-        <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs leading-5 text-muted-foreground">
-          <AlertCircle className="h-3.5 w-3.5 text-[hsl(var(--split-pending))]" />
-          <span className="font-semibold text-[hsl(var(--split-pending))]">Required</span>
-          {missingSummary.map((item) => (
-            <span key={item}>{item}</span>
-          ))}
-        </div>
-      )}
+      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4">
+        <button type="button" onClick={add}
+          className="inline-flex min-h-10 items-center gap-2 rounded-md text-sm font-semibold text-foreground hover:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring">
+          <Plus className="h-4 w-4" />Invite another collaborator
+        </button>
+        {valid && incompleteWriters.length === 0 && (
+          <span className="inline-flex items-center gap-1.5 text-xs text-[hsl(var(--split-verified))]"><CheckCircle2 className="h-3.5 w-3.5" />Ready to continue</span>
+        )}
+      </div>
     </div>
   );
 }
@@ -423,11 +361,11 @@ function InviteWriter({
   }, [focused, searchQuery]);
 
   return (
-    <div className="relative rounded-lg border border-border bg-background p-4">
-      <div className="mb-2 flex items-center justify-between gap-3">
-        <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Invite</span>
+    <div className="relative min-w-0">
+      <div className="mb-1 flex items-center justify-between gap-3 text-xs text-muted-foreground">
+        <label htmlFor={`invite-${party.id}`} className="min-w-0 truncate font-medium">{party.professionalName || "Invite"}</label>
         {methodMeta && MethodIcon && (
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-1 text-[11px] font-semibold text-muted-foreground">
+          <span className="inline-flex shrink-0 items-center gap-1 text-xs">
             <MethodIcon className="h-3 w-3" />
             {methodMeta.label}
           </span>
@@ -436,19 +374,21 @@ function InviteWriter({
       <div className="relative">
         <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <input
+          id={`invite-${party.id}`}
+          aria-label={`Invite for ${partyDisplayName(party)}`}
           value={party.inviteValue}
           onChange={(event) => onInviteChange(event.target.value)}
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
           placeholder="Search @username, email, or phone"
-          className="field-input pl-9"
+          className="field-input h-11 py-2 pl-9"
           aria-autocomplete="list"
           aria-expanded={dropdownOpen}
         />
       </div>
       {dropdownOpen && (
         <div
-          className="absolute left-4 right-4 top-[calc(100%-0.75rem)] z-30 max-h-80 overflow-y-auto rounded-xl border border-border bg-card/95 p-2 shadow-xl backdrop-blur-xl"
+          className="absolute left-0 right-0 top-full z-30 mt-1 max-h-72 overflow-y-auto rounded-lg border border-border bg-card p-2 shadow-lg"
           role="listbox"
           aria-label="Collaborator search results"
           onMouseDown={(event) => event.preventDefault()}
@@ -492,9 +432,6 @@ function InviteWriter({
           )}
         </div>
       )}
-      <p className="mt-2 text-xs leading-5 text-muted-foreground">
-        Recent collaborators appear first. Type at least two characters to search the full SPLIT ecosystem.
-      </p>
     </div>
   );
 }
@@ -632,8 +569,8 @@ function InputCell({
   children: ReactNode;
 }) {
   return (
-    <label>
-      <span className="mb-1 block text-[11px] font-medium text-muted-foreground">{label}</span>
+    <label className="min-w-0">
+      <span className="mb-1 block text-xs font-medium text-muted-foreground">{label}</span>
       {children}
     </label>
   );

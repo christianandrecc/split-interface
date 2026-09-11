@@ -1,6 +1,9 @@
-import React, { useState, useCallback, useRef } from "react";
-import splitLockup from "@/assets/split-navy-amber-lockup.png";
-import { ArrowLeft, ChevronRight, Loader2, Lock, Save, Send, Sparkles } from "lucide-react";
+import React, { useState, useCallback, useRef, useEffect } from "react";
+import splitLockup from "@/assets/split-light-lockup.png";
+import elephantMascot from "@/assets/split-elephant-mascot.png";
+import { ArrowLeft, ArrowRight, Loader2, Lock, Save, Send } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { useContentEntrance } from "@/hooks/use-content-entrance";
 import ProgressTracker from "./ProgressTracker";
 import StepMetadata from "./StepMetadata";
 import StepParties from "./StepParties";
@@ -49,6 +52,7 @@ export default function ContractBuilder({
   recentCollaborators?: CollaboratorSuggestion[];
 }) {
   const [step, setStep] = useState<StepId>(initialDocument ? "review" : "metadata");
+  const [furthestStep, setFurthestStep] = useState(initialDocument ? STEPS.length - 1 : 0);
   const [data, setData] = useState<ContractData>(() => initialDocument?.data ?? createInitialContract(userProfile));
   const documentRef = useRef<StoredSplitSheetDocument | null>(initialDocument ?? null);
   const inFlight = useRef(false);
@@ -62,7 +66,9 @@ export default function ContractBuilder({
     && data.parties.every(isWriterReady) && Math.abs(sumPercents(data.parties) - 100) < 0.01);
 
   const stepIdx = STEPS.findIndex((s) => s.id === step);
-  const isSongStep = step === "metadata";
+  const contentRef = useContentEntrance<HTMLDivElement>(step);
+  const previousStep = useRef(step);
+  const stepStartRef = useRef<HTMLDivElement>(null);
   const signedInArtistName = getSignedInArtistName(userProfile);
 
   const update = useCallback(
@@ -70,9 +76,9 @@ export default function ContractBuilder({
     []
   );
 
-  const canContinue = (): boolean => {
+  const isStepReady = (target: StepId): boolean => {
     const writersReady = data.parties.every(isWriterReady);
-    switch (step) {
+    switch (target) {
       case "metadata": return !!data.songTitle.trim();
       case "clauses": return !!data.sampleStatus;
       case "parties": return data.parties.length >= 1 && writersReady && Math.abs(sumPercents(data.parties) - 100) < 0.01;
@@ -81,8 +87,28 @@ export default function ContractBuilder({
     }
   };
 
-  const next = () => { if (stepIdx < STEPS.length - 1) setStep(STEPS[stepIdx + 1].id); };
-  const prev = () => { if (stepIdx > 0) setStep(STEPS[stepIdx - 1].id); };
+  const canNavigate = (target: StepId) => {
+    const targetIdx = STEPS.findIndex((item) => item.id === target);
+    return !savingDocument && !completed && targetIdx <= furthestStep
+      && (targetIdx <= stepIdx || STEPS.slice(0, targetIdx).every((item) => isStepReady(item.id)));
+  };
+  const navigate = (target: StepId) => {
+    if (!inFlight.current && canNavigate(target)) setStep(target);
+  };
+  const next = () => {
+    if (stepIdx < STEPS.length - 1 && isStepReady(step) && !inFlight.current && !deleting && !completed) {
+      setFurthestStep((current) => Math.max(current, stepIdx + 1));
+      setStep(STEPS[stepIdx + 1].id);
+    }
+  };
+  const prev = () => { if (stepIdx > 0) navigate(STEPS[stepIdx - 1].id); };
+
+  useEffect(() => {
+    if (previousStep.current === step) return;
+    previousStep.current = step;
+    stepStartRef.current?.scrollIntoView?.({ block: "start", behavior: "instant" });
+    contentRef.current?.querySelector<HTMLElement>("h1")?.focus({ preventScroll: true });
+  }, [step, contentRef]);
 
   const finishDocument = async (mode: "draft" | "send") => {
     if (inFlight.current || completed || deleting) return;
@@ -147,44 +173,44 @@ export default function ContractBuilder({
   };
 
   return (
-    <div className="min-h-screen bg-background flex flex-col safe-top safe-bottom">
+    <div ref={stepStartRef} className="min-h-screen bg-background flex flex-col safe-top safe-bottom">
       {/* Header */}
-      <header className="h-[56px] md:h-[60px] border-b border-border flex items-center px-4 md:px-6 gap-3 md:gap-4 flex-shrink-0 bg-background">
-        <button
-          type="button"
-          aria-label="Go to Dashboard"
-          disabled={savingDocument}
-          onClick={onHome ?? onBack}
-          className="hidden rounded-lg bg-[hsl(var(--sidebar-background))] px-2 py-1 transition-transform hover:scale-[1.02] focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30 md:inline-flex"
-        >
-          <img src={splitLockup} alt="SPLIT" className="h-5 w-auto object-contain" />
-        </button>
-        <button
-          onClick={onBack}
-          disabled={savingDocument}
-          className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <ArrowLeft className="h-3.5 w-3.5" />
-          <span className="hidden md:inline">Back</span>
-        </button>
-        <div className="h-5 w-px bg-border hidden md:block" />
-        <span className="text-sm font-semibold">{initialDocument ? "Edit Draft" : "New SPLIT"}</span>
-        <div className="ml-auto overflow-x-auto">
-          <ProgressTracker current={step} onNavigate={(nextStep) => { if (!inFlight.current && !deleting) setStep(nextStep); }} />
+      <header className="border-b border-border bg-background">
+        <div className="mx-auto grid h-16 max-w-4xl grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 px-4 md:px-6">
+          <div className="flex min-w-0 items-center gap-3">
+            <button
+              type="button"
+              onClick={onBack}
+              aria-label="Back"
+              disabled={savingDocument}
+              title="Back"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              aria-label="Go to Dashboard"
+              disabled={savingDocument}
+              onClick={onHome ?? onBack}
+              className="hidden h-11 shrink-0 items-center rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30 sm:inline-flex"
+            >
+              <img src={splitLockup} alt="SPLIT" className="h-8 w-auto object-contain" />
+            </button>
+          </div>
+          <span className="text-center text-sm font-semibold">{initialDocument ? "Edit Draft" : "New SPLIT"}</span>
+          <div className="justify-self-end">
+            <CreationElephantAssistant currentStep={step} />
+          </div>
         </div>
       </header>
 
-      <CreationElephantAssistant currentStep={step} />
-
       {/* Content */}
-      <div className="flex-1 overflow-y-auto">
-        <div
-          className={`mx-auto w-full px-4 md:px-6 ${
-            isSongStep
-              ? "max-w-2xl py-6 md:flex md:min-h-[calc(100vh-60px)] md:flex-col md:justify-center md:py-8"
-              : "max-w-4xl py-6 md:py-10"
-          }`}
-        >
+      <main className="mx-auto w-full max-w-4xl px-4 pb-6 md:px-6">
+        <div className="mb-7 pt-3">
+          <ProgressTracker current={step} onNavigate={navigate} canNavigate={canNavigate}
+            completed={(target) => STEPS.findIndex((item) => item.id === target) < furthestStep && isStepReady(target)} />
+        </div>
           {initialDocument && onDeleteDocument && (
             <div className="mb-4 flex justify-end">
               <DeleteDraftButton document={initialDocument} profile={userProfile} onDelete={onDeleteDocument}
@@ -192,6 +218,7 @@ export default function ContractBuilder({
             </div>
           )}
           <fieldset disabled={savingDocument || completed} className="min-w-0">
+            <div ref={contentRef}>
             {step === "metadata" && <StepMetadata data={data} signedInArtistName={signedInArtistName} onChange={update} />}
             {step === "clauses" && <StepClauses data={data} onChange={update} />}
             {step === "parties" && (
@@ -202,16 +229,17 @@ export default function ContractBuilder({
                 currentProfile={userProfile}
               />
             )}
-            {step === "review" && <StepReview data={data} />}
+            {step === "review" && <StepReview data={data} onEdit={navigate} />}
+            </div>
 
             {/* Navigation */}
             {saveError && !confirmSend && <p role="alert" className="mt-4 text-sm text-destructive">{saveError}</p>}
-            <div className="mt-8 md:mt-10 flex flex-wrap items-center justify-between gap-4 border-t border-border pt-5 md:pt-6">
+            <div className="sticky bottom-0 z-20 mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-border bg-background py-4">
               <button
                 onClick={stepIdx === 0 ? onBack : prev}
-                className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium"
+                className="inline-flex min-h-11 items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors font-medium"
               >
-                ← {stepIdx === 0 ? "Cancel" : "Back"}
+                <ArrowLeft className="h-4 w-4" />{stepIdx === 0 ? "Cancel" : "Back"}
               </button>
 
               {step === "review" ? (
@@ -242,106 +270,62 @@ export default function ContractBuilder({
                 </div>
               ) : (
                 <button
-                  disabled={!canContinue()}
+                  disabled={!isStepReady(step)}
                   onClick={next}
-                  className="split-press bg-primary text-primary-foreground rounded-lg px-5 md:px-6 py-2.5 text-sm font-semibold hover:bg-primary/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed shadow-sm"
+                  className="split-press inline-flex min-h-11 items-center gap-2 bg-primary text-primary-foreground rounded-lg px-5 text-sm font-semibold hover:bg-primary/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                 >
-                  Continue →
+                  Continue <ArrowRight className="h-4 w-4" />
                 </button>
               )}
             </div>
           </fieldset>
-        </div>
-      </div>
+      </main>
     </div>
   );
 }
 
-const elephantStepCopy: Record<StepId, { title: string; body: string; prompt: string }> = {
+const elephantStepCopy: Record<StepId, { title: string; body: string }> = {
   metadata: {
     title: "Help me fill this",
     body: "Start with the work title, artist/project, and creation date. Optional details can stay tucked away until they matter.",
-    prompt: "Guiding this SPLIT",
   },
   clauses: {
     title: "Check sample details",
     body: "If this work uses a sample, keep the source artist, title, and seconds used clear before anyone reviews terms.",
-    prompt: "Watching clearance",
   },
   parties: {
     title: "Balance the split",
     body: "Add collaborators by username or email, then make sure the shares land at exactly 100% before sending.",
-    prompt: "Reading the shares",
   },
   review: {
     title: "Final private read",
     body: "This is the last pass before Messages review starts. Check the collaborators, percentages, and sample answers once more.",
-    prompt: "Reviewing before send",
   },
 };
 
 function CreationElephantAssistant({ currentStep }: { currentStep: StepId }) {
-  const [open, setOpen] = useState(false);
   const copy = elephantStepCopy[currentStep];
 
   return (
-    <div className="pointer-events-none fixed right-3 top-[70px] z-40 sm:right-5 md:right-6 lg:right-8">
-      <div className="pointer-events-auto relative">
-        <button
-          type="button"
-          aria-label="Open Elephant creation assistant"
-          aria-expanded={open}
-          onClick={() => setOpen((value) => !value)}
-          className={`group flex items-center gap-2 rounded-2xl border px-2.5 py-2 text-left shadow-[0_18px_44px_hsl(var(--split-pending)/0.14)] backdrop-blur-xl transition ${
-            open
-              ? "border-[hsl(var(--split-pending)/0.45)] bg-white/95"
-              : "border-[hsl(var(--split-pending)/0.32)] bg-white/80 hover:border-[hsl(var(--split-pending)/0.48)] hover:bg-white/95"
-          }`}
-        >
-          <span className="flex h-9 w-9 flex-shrink-0 overflow-hidden rounded-xl border border-[hsl(var(--split-pending)/0.28)] bg-[hsl(var(--sidebar-background))]">
-            <img src={splitLockup} alt="" className="h-full w-full object-cover object-left" />
+    <Popover>
+      <PopoverTrigger asChild>
+        <button type="button" aria-label="Open Elephant creation assistant"
+          title="Open Elephant creation assistant"
+          className="flex h-11 w-11 items-center justify-center gap-2 rounded-md text-sm font-medium transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring sm:w-auto sm:px-2">
+          <span className="h-7 w-7 shrink-0 overflow-hidden">
+            <img src={elephantMascot} alt="" className="h-full w-full object-contain" />
           </span>
-          <span className="hidden min-w-0 sm:block">
-            <span className="flex items-center gap-2">
-              <span className="text-sm font-bold leading-none text-foreground">Elephant</span>
-              <span className="inline-flex items-center gap-1 rounded-full border border-border bg-background/85 px-1.5 py-0.5 text-[10px] font-bold text-muted-foreground">
-                <Lock className="h-2.5 w-2.5" />
-                Private
-              </span>
-            </span>
-            <span className="mt-1 block text-xs leading-none text-muted-foreground">{copy.prompt}</span>
-          </span>
-          <ChevronRight className="hidden h-3.5 w-3.5 text-muted-foreground transition-transform group-hover:translate-x-0.5 md:block" />
+          <span className="hidden sm:inline">Elephant</span>
         </button>
-
-        {open && (
-          <div className="absolute right-0 top-full mt-3 w-[320px] max-w-[calc(100vw-1.5rem)] rounded-2xl border border-[hsl(var(--split-pending)/0.25)] bg-white/92 p-4 text-left shadow-[0_24px_70px_hsl(var(--split-amended)/0.18)] backdrop-blur-xl">
-            <div className="flex items-start gap-3">
-              <span className="flex h-9 w-9 flex-shrink-0 overflow-hidden rounded-xl border border-[hsl(var(--split-pending)/0.28)] bg-[hsl(var(--sidebar-background))]">
-                <img src={splitLockup} alt="" className="h-full w-full object-cover object-left" />
-              </span>
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2">
-                  <p className="text-sm font-bold text-foreground">Elephant</p>
-                  <span className="inline-flex items-center gap-1 rounded-full bg-[hsl(var(--split-bone))] px-2 py-0.5 text-[10px] font-bold text-muted-foreground">
-                    <Lock className="h-3 w-3" />
-                    Only you can see this
-                  </span>
-                </div>
-                <p className="mt-2 text-base font-bold text-foreground">{copy.title}</p>
-                <p className="mt-2 text-sm leading-6 text-muted-foreground">{copy.body}</p>
-              </div>
-            </div>
-            <div className="mt-3 flex items-center justify-between rounded-xl border border-[hsl(var(--split-pending)/0.2)] bg-[hsl(var(--split-bone)/0.72)] px-3 py-2 text-xs font-semibold text-muted-foreground">
-              <span className="inline-flex items-center gap-2">
-                <Sparkles className="h-3.5 w-3.5 text-primary" />
-                Private assistant, no collaborator visibility
-              </span>
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-80 max-w-[calc(100vw-2rem)] rounded-lg">
+        <div className="mb-3 flex items-center gap-1.5 text-xs text-muted-foreground">
+          <Lock className="h-3.5 w-3.5" />Only you can see this
+        </div>
+        <h2 className="text-sm font-semibold">{copy.title}</h2>
+        <p className="mt-2 text-sm leading-6 text-muted-foreground">{copy.body}</p>
+      </PopoverContent>
+    </Popover>
   );
 }
 
