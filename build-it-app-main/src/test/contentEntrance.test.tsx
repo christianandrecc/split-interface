@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { useContentEntrance } from "@/hooks/use-content-entrance";
+import { useContentEntrance, type ContentEntrance } from "@/hooks/use-content-entrance";
 
-function View({ viewKey, value = "unchanged" }: { viewKey: string; value?: string }) {
-  const ref = useContentEntrance<HTMLDivElement>(viewKey);
+function View({ viewKey, value = "unchanged", entrance }: { viewKey: string; value?: string; entrance?: ContentEntrance }) {
+  const ref = useContentEntrance<HTMLDivElement>(viewKey, entrance);
   return <div ref={ref}><input aria-label="Draft" defaultValue="" /><span>{value}</span></div>;
 }
 
@@ -49,6 +49,8 @@ describe("content motion", () => {
     try {
       const { rerender } = render(<View viewKey="all" />);
       rerender(<View viewKey="signed" />);
+      rerender(<View viewKey="agreements:record" entrance="preview" />);
+      rerender(<View viewKey="agreements" entrance="back" />);
       expect(motion.animate).not.toHaveBeenCalled();
     } finally { motion.restore(); }
   });
@@ -66,5 +68,30 @@ describe("content motion", () => {
     const { rerender } = render(<View viewKey="all" />);
     rerender(<View viewKey="signed" value="Signed records" />);
     expect(screen.getByText("Signed records")).toBeInTheDocument();
+  });
+
+  it("opens a record forward and returns backward without replaying on data refresh", () => {
+    const motion = mockMotion();
+    try {
+      const { rerender, unmount } = render(<View viewKey="agreements" entrance="back" />);
+      rerender(<View viewKey="agreements:record" entrance="preview" />);
+      expect(motion.animate).toHaveBeenLastCalledWith([
+        { opacity: 0.3, transform: "translateX(18px) scale(0.995)" },
+        { opacity: 1, transform: "translateX(0) scale(1)" },
+      ], { duration: 220, easing: "cubic-bezier(0.2, 0.8, 0.2, 1)" });
+      rerender(<View viewKey="agreements:record" entrance="preview" value="Refreshed record" />);
+      expect(motion.animate).toHaveBeenCalledOnce();
+      rerender(<View viewKey="agreements" entrance="back" />);
+      expect(motion.cancel).toHaveBeenCalledOnce();
+      expect(motion.animate).toHaveBeenLastCalledWith([
+        { opacity: 0.5, transform: "translateX(-12px)" },
+        { opacity: 1, transform: "translateX(0)" },
+      ], { duration: 180, easing: "cubic-bezier(0.2, 0.8, 0.2, 1)" });
+      rerender(<View viewKey="agreements:another-record" entrance="preview" />);
+      expect(motion.cancel).toHaveBeenCalledTimes(2);
+      expect(motion.animate).toHaveBeenCalledTimes(3);
+      unmount();
+      expect(motion.listeners.size).toBe(0);
+    } finally { motion.restore(); }
   });
 });

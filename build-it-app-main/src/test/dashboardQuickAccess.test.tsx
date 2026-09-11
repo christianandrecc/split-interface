@@ -42,7 +42,8 @@ describe("dashboard workspace", () => {
     fireEvent.click(screen.getByRole("button", { name: "Delete Draft" }));
     fireEvent.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "Delete Draft" }));
     await waitFor(() => expect(screen.queryByText("Edit Draft")).not.toBeInTheDocument());
-    expect(screen.queryByRole("button", { name: /Night Swim.*Draft/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Open Night Swim preview" })).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "No split sheets yet" })).toBeInTheDocument();
     expect(loadLocalSplitSheetDocuments()).toEqual([]);
     fireEvent.click(screen.getByRole("button", { name: "Dashboard" }));
     expect(screen.getByRole("button", { name: /0 drafts/i })).toBeInTheDocument();
@@ -69,8 +70,9 @@ describe("dashboard workspace", () => {
     await waitFor(() => expect(screen.queryByRole("heading", { name: "Review Draft" })).not.toBeInTheDocument());
     expect(screen.getByRole("heading", { name: "Night Swim Revised" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Edit Draft" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Draft" })).toHaveClass("bg-primary");
-    fireEvent.click(screen.getByRole("button", { name: /Night Swim.*Draft/i }));
+    expect(screen.queryByRole("region", { name: "Split sheet library" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Back to split sheets" }));
+    fireEvent.click(screen.getByRole("button", { name: "Open Night Swim Revised preview" }));
     expect(screen.getByRole("heading", { name: "Night Swim Revised" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Send Split Invite" })).not.toBeInTheDocument();
     expect(loadLocalSplitSheetDocuments()[0]).toMatchObject({ id: document.id, status: "Draft" });
@@ -146,5 +148,31 @@ describe("dashboard workspace", () => {
 
     expect(screen.queryByRole("button", { name: "Open messages" })).not.toBeInTheDocument();
     expect(screen.queryByText("Night Swim")).not.toBeInTheDocument();
+  });
+
+  it("preserves the library's search, filter, page, and focus across draft previews", async () => {
+    const documents = Array.from({ length: 27 }, (_, index) => {
+      const document = makeDocument();
+      document.id = `draft-${index}`;
+      document.status = "Draft";
+      document.data.songTitle = `Night Swim ${String(index + 1).padStart(2, "0")}`;
+      return document;
+    });
+    saveLocalSplitSheetDocuments(documents);
+    render(<Dashboard userProfile={makeProfile()} onUpdateProfile={async () => undefined} onOpenAccountCreation={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Split Sheets" }));
+    await screen.findByRole("button", { name: "Open Night Swim 01 preview" });
+    expect(screen.queryByRole("region", { name: "Draft details" })).not.toBeInTheDocument();
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "Drafts" }), { button: 0, ctrlKey: false });
+    fireEvent.change(screen.getByRole("textbox", { name: "Search your split sheets" }), { target: { value: "night" } });
+    fireEvent.click(screen.getByRole("button", { name: "Next page" }));
+    fireEvent.click(screen.getByRole("button", { name: "Open Night Swim 26 preview" }));
+    expect(screen.getByRole("region", { name: "Draft details" })).toBeInTheDocument();
+    expect(screen.queryByRole("table", { name: "Split sheets" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Back to split sheets" }));
+    expect(screen.getByRole("textbox", { name: "Search your split sheets" })).toHaveValue("night");
+    expect(screen.getByRole("tab", { name: "Drafts" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByText("Page 2 of 2")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Open Night Swim 26 preview" })).toHaveFocus();
   });
 });

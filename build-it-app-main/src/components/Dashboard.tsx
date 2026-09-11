@@ -6,14 +6,14 @@ import ProfilePage from "@/components/ProfilePage";
 import CreatorProfileView from "@/components/CreatorProfileView";
 import { createEmptyProfile, type UserProfile } from "@/lib/userProfile";
 import type { StoredSplitSheetDocument } from "@/components/contract-builder/document";
-import AgreementsList, { type FilterStatus } from "@/components/AgreementsList";
+import AgreementsList from "@/components/AgreementsList";
+import { INITIAL_LIBRARY_VIEW, type LibraryPosition, type LibraryView } from "@/lib/splitLibrary";
 import AgreementDetail from "@/components/AgreementDetail";
 import ContractBuilder from "@/components/contract-builder/ContractBuilder";
 import CollaborationView from "@/components/CollaborationView";
 import SettingsPage from "@/components/SettingsPage";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { useIsMobile } from "@/hooks/use-mobile";
 import { useContentEntrance } from "@/hooks/use-content-entrance";
 import {
   searchPublicProfiles,
@@ -99,7 +99,8 @@ export default function Dashboard({
   const [activeView, setActiveView] = useState<View>("dashboard");
   const [selectedAgreement, setSelectedAgreement] = useState<Agreement | null>(null);
   const [selectedMessageDealId, setSelectedMessageDealId] = useState<string | undefined>();
-  const [agreementFilter, setAgreementFilter] = useState<FilterStatus>("All");
+  const [libraryView, setLibraryView] = useState<LibraryView>(INITIAL_LIBRARY_VIEW);
+  const libraryPosition = useRef<LibraryPosition>({ top: 0, focusId: null });
   const [isNewAgreement, setIsNewAgreement] = useState(false);
   const [draftToEdit, setDraftToEdit] = useState<StoredSplitSheetDocument | undefined>();
   const [generatedDocuments, setGeneratedDocuments] = useState<StoredSplitSheetDocument[]>([]);
@@ -114,7 +115,6 @@ export default function Dashboard({
   const [notifications, setNotifications] = useState<SplitNotification[]>([]);
   const [loadingNotifications, setLoadingNotifications] = useState(true);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
-  const isMobile = useIsMobile();
   const localStorageOwner = splitSheetLocalStorageOwnerForAuthUser(activeAuthUserId);
   const activeAccountKey = localStorageOwner
     ?? `profile:${userProfile.emailAddress || userProfile.username || "anonymous"}`;
@@ -162,6 +162,8 @@ export default function Dashboard({
       deletedDraftIds.current.clear();
       setGeneratedDocuments([]);
       setSelectedAgreement(null);
+      setLibraryView(INITIAL_LIBRARY_VIEW);
+      libraryPosition.current = { top: 0, focusId: null };
       setSelectedMessageDealId(undefined);
       setSplitSheetLoadError(false);
       setLoadingSplitSheets(true);
@@ -306,7 +308,6 @@ export default function Dashboard({
     setDraftToEdit(undefined);
     setIsNewAgreement(false);
     setSelectedMessageDealId(undefined);
-    setAgreementFilter("Draft");
     setActiveView("agreements");
     clearSearch();
   };
@@ -419,7 +420,13 @@ export default function Dashboard({
     clearSearch();
   };
 
-  const contentRef = useContentEntrance<HTMLElement>(activeView);
+  const contentKey = activeView === "agreements" && selectedAgreement
+    ? `agreements:${selectedAgreement.id}`
+    : activeView;
+  const contentRef = useContentEntrance<HTMLElement>(
+    contentKey,
+    activeView === "agreements" ? (selectedAgreement ? "preview" : "back") : "page",
+  );
 
   const goToDashboard = () => {
     setIsNewAgreement(false);
@@ -427,7 +434,6 @@ export default function Dashboard({
     setActiveView("dashboard");
     setSelectedAgreement(null);
     setSelectedMessageDealId(undefined);
-    setAgreementFilter("All");
     clearSearch();
   };
 
@@ -452,27 +458,16 @@ export default function Dashboard({
           setDraftToEdit(undefined);
           setSelectedAgreement(mode === "draft" && draftToEdit ? documentToAgreement(document) : null);
           if (mode === "send") openDealMessages(document.id);
-          else { setAgreementFilter("Draft"); setActiveView("agreements"); }
+          else {
+            if (!draftToEdit) {
+              setLibraryView({ ...INITIAL_LIBRARY_VIEW, filter: "Draft" });
+              libraryPosition.current = { top: 0, focusId: null };
+            }
+            setActiveView("agreements");
+          }
         }}
         recentCollaborators={recentCollaborators}
       />
-    );
-  }
-
-  // On mobile agreements view with a selected agreement, show detail with back button
-  if (isMobile && activeView === "agreements" && selectedAgreement) {
-    return (
-      <div className="flex flex-col h-screen bg-background safe-top safe-bottom">
-        <header className="h-[56px] flex items-center px-4 border-b border-border bg-background flex-shrink-0 gap-3">
-          <button aria-label="Back to split sheets" onClick={() => setSelectedAgreement(null)} className="p-1.5 -ml-1.5 rounded-lg hover:bg-accent">
-            <ArrowLeft className="h-4 w-4 text-muted-foreground" />
-          </button>
-          <span className="text-sm font-semibold truncate flex-1">{selectedAgreement.title}</span>
-        </header>
-        <main className="flex-1 overflow-y-auto">
-          <AgreementDetail key={selectedAgreement.id} agreement={selectedAgreement} viewerProfile={userProfile} onOpenMessages={openDealMessages} onDeleteDraft={deleteDraft} onEditDraft={editDraft} />
-        </main>
-      </div>
     );
   }
 
@@ -492,7 +487,6 @@ export default function Dashboard({
                         setActiveView(id);
                         setSelectedAgreement(null);
                         setSelectedMessageDealId(undefined);
-                        if (id === "agreements") setAgreementFilter("All");
                         clearSearch();
                       }}>
                       <Icon size={20} aria-hidden="true" /><span>{label}</span>
@@ -573,33 +567,29 @@ export default function Dashboard({
             />
           )}
           {activeView === "agreements" && (
-            isMobile ? (
-              <AgreementsList
-                agreements={agreements}
-                selected={selectedAgreement}
-                onSelect={(agreement) => openAgreement(agreement.id)}
-                onNew={startNewAgreement}
-                filter={agreementFilter}
-                onFilterChange={setAgreementFilter}
-              />
-            ) : (
-              <div className="h-full flex">
-                <AgreementsList
-                  agreements={agreements}
-                  selected={selectedAgreement}
-                  onSelect={(agreement) => openAgreement(agreement.id)}
-                  onNew={startNewAgreement}
-                  filter={agreementFilter}
-                  onFilterChange={setAgreementFilter}
-                />
-                <div className="flex-1 min-w-0 overflow-y-auto bg-background">
-                  {selectedAgreement ? (
-                    <AgreementDetail key={selectedAgreement.id} agreement={selectedAgreement} viewerProfile={userProfile} onOpenMessages={openDealMessages} onDeleteDraft={deleteDraft} onEditDraft={editDraft} />
-                  ) : (
-                    <EmptyDetail onNew={startNewAgreement} />
-                  )}
+            selectedAgreement ? (
+              <div className="library-preview">
+                <div className="library-preview-back">
+                  <button type="button" autoFocus aria-label="Back to split sheets" onClick={() => setSelectedAgreement(null)}>
+                    <ArrowLeft size={16} aria-hidden="true" />Back to Split Sheets
+                  </button>
+                </div>
+                <div className="library-preview-body">
+                  <AgreementDetail key={selectedAgreement.id} agreement={selectedAgreement} viewerProfile={userProfile} onOpenMessages={openDealMessages} onDeleteDraft={deleteDraft} onEditDraft={editDraft} />
                 </div>
               </div>
+            ) : (
+              <AgreementsList
+                agreements={agreements}
+                onSelect={(agreement) => openAgreement(agreement.id)}
+                onNew={startNewAgreement}
+                view={libraryView}
+                onViewChange={setLibraryView}
+                scrollPosition={libraryPosition}
+                loading={loadingSplitSheets}
+                loadError={splitSheetLoadError}
+                onRetry={() => setReloadSplitSheets((current) => current + 1)}
+              />
             )
           )}
           {activeView === "collaboration" && (
@@ -1115,27 +1105,6 @@ export function AgreementIcon({ type }: { type: Agreement["type"] }) {
   return (
     <div className={`h-8 w-8 rounded-lg flex items-center justify-center text-[10px] font-bold flex-shrink-0 ${colors[type]}`}>
       {initials[type]}
-    </div>
-  );
-}
-
-function EmptyDetail({ onNew }: { onNew: () => void }) {
-  return (
-    <div className="h-full flex flex-col items-center justify-center text-center px-8">
-      <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center mb-4">
-        <FileText className="h-5 w-5 text-primary" />
-      </div>
-      <h3 className="text-sm font-semibold">No split sheet selected</h3>
-      <p className="text-xs text-muted-foreground mt-1.5 max-w-[240px] leading-relaxed">
-        Select a split sheet to view writers, ownership, registration metadata, and version history.
-      </p>
-      <button
-        onClick={onNew}
-        className="mt-5 flex items-center gap-1.5 bg-primary text-primary-foreground rounded-lg px-4 py-2 text-sm font-semibold hover:bg-primary/90 transition-colors"
-      >
-        <Plus className="h-3.5 w-3.5" />
-        New SPLIT
-      </button>
     </div>
   );
 }
