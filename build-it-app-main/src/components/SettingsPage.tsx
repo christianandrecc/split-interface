@@ -66,7 +66,7 @@ export default function SettingsPage({ userProfile }: { userProfile: UserProfile
                 label="Default Split Method"
                 value={settings.defaultSplitMethod}
                 onValueChange={(value) => update("defaultSplitMethod", value)}
-                options={["Equal", "Custom", "Role-based"]}
+                options={["Equal", "Custom"]}
               />
               <SelectField
                 label="Default Territory"

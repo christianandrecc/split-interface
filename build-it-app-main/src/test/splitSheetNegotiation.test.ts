@@ -5,9 +5,11 @@ import {
   dealReadyToSign,
   documentToNegotiationDeal,
   participantIdentityForProfile,
+  proposalResponsePermissions,
+  proposalAuthorParticipantId,
 } from "@/lib/splitSheetNegotiation";
 import { createEmptyProfile, type UserProfile } from "@/lib/userProfile";
-import { makeDocument } from "@/test/fixtures/splitSheet";
+import { makeCounterDocument, makeDocument } from "@/test/fixtures/splitSheet";
 
 function profile(overrides: Partial<UserProfile> = {}): UserProfile {
   return {
@@ -167,11 +169,61 @@ describe("split sheet negotiation mapping", () => {
 
     const messages = buildNegotiationMessages(document, document.currentProposalId);
 
-    expect(messages.map((message) => message.type)).toEqual(["proposal", "accept", "accept", "text"]);
+    expect(messages.map((message) => message.type)).toEqual(["proposal", "accept", "text"]);
     expect(messages.at(-1)).toMatchObject({
       id: "chat-1",
       senderId: "maya-invite",
       body: "Can we review the producer share?",
     });
+  });
+
+  it("maps legal-name counters by authenticated account and records only one author message", () => {
+    const document = makeCounterDocument();
+    const deal = documentToNegotiationDeal(document, profile())!;
+    expect(deal.splitVersions.at(-1)?.createdByParticipantId).toBe("maya-invite");
+    expect(deal.messages.filter((message) => message.proposedSplitId === "proposal-2")).toEqual([
+      expect.objectContaining({ type: "counter", senderId: "maya-invite" }),
+    ]);
+    expect(deal.acceptedBy).toEqual(["maya-invite"]);
+    expect(proposalResponsePermissions(deal, "proposal-2")).toEqual({ accept: false, counter: false, dispute: false });
+  });
+
+  it("allows only accepted recipients to respond to the latest proposal", () => {
+    const document = makeCounterDocument();
+    const deal = documentToNegotiationDeal(document, document.creatorProfile)!;
+    expect(proposalResponsePermissions(deal, "proposal-2")).toEqual({ accept: true, counter: true, dispute: true });
+    expect(proposalResponsePermissions(deal, "proposal-1")).toEqual({ accept: false, counter: false, dispute: false });
+    document.collaboratorInvites[0].status = "Pending";
+    const invitee = documentToNegotiationDeal(document, profile())!;
+    expect(proposalResponsePermissions(invitee, "proposal-1").counter).toBe(false);
+  });
+
+  it("retains real recipient responses with canonical attribution", () => {
+    const document = makeCounterDocument();
+    document.splitApprovals.find((approval) => approval.id === "v2-creator")!.status = "Approved";
+    document.splitApprovals.find((approval) => approval.id === "v2-creator")!.respondedAt = "2026-09-11T12:40:00Z";
+    const messages = buildNegotiationMessages(document, "proposal-2").filter((message) => message.proposedSplitId === "proposal-2");
+    expect(messages.map((message) => [message.type, message.senderId])).toEqual([["counter", "maya-invite"], ["accept", "creator"]]);
+  });
+
+  it("fails closed on unknown or ambiguous authors instead of assigning the creator", () => {
+    const document = makeCounterDocument();
+    const proposal = document.splitProposalVersions.at(-1)!;
+    proposal.proposedByUserId = "unknown-account";
+    proposal.proposedBy = "Chori";
+    expect(proposalAuthorParticipantId(document, proposal)).toBeUndefined();
+    expect(buildNegotiationMessages(document, proposal.id).find((message) => message.type === "counter")?.senderId).toBe("unknown");
+    expect(proposalResponsePermissions(documentToNegotiationDeal(document, profile())!, proposal.id).counter).toBe(false);
+    delete proposal.proposedByUserId;
+    document.data.parties[1].professionalName = "Chori";
+    expect(proposalAuthorParticipantId(document, proposal)).toBeUndefined();
+  });
+
+  it("keeps signing independent while preventing acceptance changes after a signature", () => {
+    const document = makeCounterDocument();
+    document.splitSignatures.push({ id: "signed", proposalVersionId: "proposal-2", collaboratorId: "maya-party", collaboratorName: "Maya", status: "Signed", signedAt: document.updatedAt });
+    expect(proposalResponsePermissions(documentToNegotiationDeal(document, document.creatorProfile)!, "proposal-2")).toEqual({ accept: false, dispute: false, counter: true });
+    document.status = "Verified and Stored";
+    expect(proposalResponsePermissions(documentToNegotiationDeal(document, document.creatorProfile)!, "proposal-2").counter).toBe(false);
   });
 });

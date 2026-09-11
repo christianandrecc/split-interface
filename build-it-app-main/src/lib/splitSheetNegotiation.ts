@@ -43,6 +43,7 @@ export type SplitVersion = {
   title: string;
   createdAt: string;
   createdBy: string;
+  createdByParticipantId?: string;
   note: string;
   allocations: SplitAllocation[];
   revenueStreams: {
@@ -112,6 +113,7 @@ export function documentToNegotiationDeal(document: StoredSplitSheetDocument, us
     title: proposal.proposedBy,
     createdAt: proposal.createdAt,
     createdBy: proposal.proposedBy,
+    createdByParticipantId: proposalAuthorParticipantId(document, proposal),
     note: proposal.notes || "Split proposal",
     allocations: proposal.allocations.map((allocation) => ({
       participantId: allocation.partyId,
@@ -196,7 +198,7 @@ export function buildNegotiationMessages(document: StoredSplitSheetDocument, cur
     messages.push({
       id: `${proposal.id}-message`,
       type: "counter",
-      senderId: participantIdForActor(document, proposal.proposedBy),
+      senderId: proposalAuthorParticipantId(document, proposal) || "unknown",
       createdAt: proposal.createdAt,
       body: `${proposal.proposedBy} proposed split version ${proposal.versionNumber}.`,
       proposedSplitId: proposal.id,
@@ -204,12 +206,17 @@ export function buildNegotiationMessages(document: StoredSplitSheetDocument, cur
   });
 
   document.splitApprovals.forEach((approval) => {
-    if (!approval.respondedAt) return;
+    if (!approval.respondedAt || approval.status === "Pending") return;
+    const senderId = normalizeSplitSheetParticipantId(document, approval.collaboratorId) || "unknown";
+    const proposal = document.splitProposalVersions.find((item) => item.id === approval.proposalVersionId);
+    // Proposing already records the author's consent; it is not another chat response.
+    if (proposal && approval.status === "Approved" && senderId === proposalAuthorParticipantId(document, proposal)
+      && Date.parse(approval.respondedAt) === Date.parse(proposal.createdAt)) return;
 
     messages.push({
       id: `${approval.id}-response`,
       type: approval.status === "Approved" ? "accept" : "reject",
-      senderId: approval.collaboratorId,
+      senderId,
       createdAt: approval.respondedAt,
       body: approval.status === "Approved"
         ? `${splitSheetParticipantDisplayName(document, approval.collaboratorId, approval.collaboratorName)} accepted this split version.`
@@ -224,7 +231,7 @@ export function buildNegotiationMessages(document: StoredSplitSheetDocument, cur
     messages.push({
       id: `${signature.id}-signed`,
       type: "sign",
-      senderId: signature.collaboratorId,
+      senderId: normalizeSplitSheetParticipantId(document, signature.collaboratorId) || "unknown",
       createdAt: signature.signedAt,
       body: `${splitSheetParticipantDisplayName(document, signature.collaboratorId, signature.collaboratorName)} signed the split sheet.`,
       proposedSplitId: signature.proposalVersionId,
@@ -235,7 +242,7 @@ export function buildNegotiationMessages(document: StoredSplitSheetDocument, cur
     messages.push({
       id: message.id,
       type: "text",
-      senderId: message.senderId,
+      senderId: normalizeSplitSheetParticipantId(document, message.senderId) || "unknown",
       createdAt: message.createdAt,
       body: message.body,
     });
@@ -256,6 +263,46 @@ export function dealReadyToSign(deal: NegotiationDeal) {
 export function participantMatchesViewer(deal: NegotiationDeal, participantId?: string) {
   const canonicalId = normalizeSplitSheetParticipantId(deal.document, participantId);
   return Boolean(participantId && deal.viewerParticipantIds.has(canonicalId ?? participantId));
+}
+
+export function proposalResponsePermissions(deal: NegotiationDeal, proposalId?: string) {
+  const proposal = deal.document.splitProposalVersions.find((item) => item.id === proposalId);
+  const authorId = proposal && proposalAuthorParticipantId(deal.document, proposal);
+  const eligible = Boolean(proposal && authorId && proposal.id === deal.currentVersionId
+    && !participantMatchesViewer(deal, authorId)
+    && !FINAL_NEGOTIATION_DOCUMENT_STATUSES.has(deal.document.status)
+    && deal.requiredSignerIds.some((id) => participantMatchesViewer(deal, id)));
+  const approval = deal.document.splitApprovals.find((item) => item.proposalVersionId === proposalId
+    && participantMatchesViewer(deal, item.collaboratorId));
+  const signaturesStarted = deal.signedBy.length > 0;
+  return {
+    counter: eligible,
+    accept: eligible && !signaturesStarted && approval?.status !== "Approved",
+    dispute: eligible && !signaturesStarted && approval?.status !== "Rejected",
+  };
+}
+
+export function proposalAuthorParticipantId(
+  document: StoredSplitSheetDocument,
+  proposal: StoredSplitSheetDocument["splitProposalVersions"][number],
+): string | undefined {
+  const knownParticipant = (id?: string) => {
+    const normalized = normalizeSplitSheetParticipantId(document, id);
+    return normalized === "creator" || document.collaboratorInvites.some((item) => item.id === normalized) ? normalized : undefined;
+  };
+  if (proposal.proposedByParticipantId) {
+    return knownParticipant(proposal.proposedByParticipantId);
+  }
+  if (proposal.proposedByUserId) {
+    if (proposal.proposedByUserId === document.creatorUserId) return "creator";
+    // Existing server records carry the author's account ID on their automatic approval.
+    const ids = new Set(document.splitApprovals
+      .filter((item) => item.proposalVersionId === proposal.id && item.responderUserId === proposal.proposedByUserId)
+      .map((item) => knownParticipant(item.collaboratorId)).filter(Boolean));
+    return ids.size === 1 ? [...ids][0] : undefined;
+  }
+  // Older local records have labels only. Never assign an unknown author to the creator.
+  return participantIdForActor(document, proposal.proposedBy);
 }
 
 export function firstViewerParticipantId(deal: NegotiationDeal) {
@@ -321,19 +368,16 @@ function normalizeParticipantLabel(value?: string) {
 
 function participantIdForActor(document: StoredSplitSheetDocument, actor: string) {
   const normalizedActor = normalizeParticipantLabel(actor);
-  if (normalizedActor === getProfileDisplayName(document.creatorProfile).trim().toLowerCase()) return "creator";
-
-  const invite = document.collaboratorInvites.find((item) =>
-    [
-      item.name,
-      item.profileSnapshot?.displayName,
-      item.profileSnapshot?.username,
-      item.inviteValue,
-    ]
-      .map(normalizeParticipantLabel)
-      .includes(normalizedActor),
-  );
-  return invite?.id || "creator";
+  if (!normalizedActor) return undefined;
+  const matches = document.data.parties.flatMap((party) => {
+    const invite = document.collaboratorInvites.find((item) => item.partyId === party.id);
+    const names = [party.legalName, party.professionalName, party.inviteValue, invite?.name,
+      invite?.profileSnapshot?.displayName, invite?.profileSnapshot?.username, invite?.inviteValue];
+    if (party.isCurrentUser) names.push(document.creatorProfile.legalName, document.creatorProfile.displayName,
+      document.creatorProfile.pkaNames, document.creatorProfile.username, document.creatorProfile.emailAddress);
+    return names.map(normalizeParticipantLabel).includes(normalizedActor) ? [party.isCurrentUser ? "creator" : invite?.id || party.id] : [];
+  });
+  return matches.length === 1 ? matches[0] : undefined;
 }
 
 function actionableCount(document: StoredSplitSheetDocument, viewerParticipantIds: Set<string>) {

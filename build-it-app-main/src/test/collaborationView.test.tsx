@@ -1,8 +1,11 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { toast } from "sonner";
 import CollaborationView from "@/components/CollaborationView";
 import { createEmptyProfile, type UserProfile } from "@/lib/userProfile";
-import { makeDocument } from "@/test/fixtures/splitSheet";
+import { makeCounterDocument, makeDocument } from "@/test/fixtures/splitSheet";
+
+afterEach(() => vi.restoreAllMocks());
 
 function makeCollaboratorProfile(): UserProfile {
   return {
@@ -34,13 +37,63 @@ function makeSecondDocument() {
 }
 
 describe("CollaborationView document-backed negotiation", () => {
+  it("renders a counter under its real author without self-response actions or an automatic reply", () => {
+    const document = makeCounterDocument();
+    const onUpdateDocument = vi.fn();
+    render(<CollaborationView documents={[document]} userProfile={makeCollaboratorProfile()} onUpdateDocument={onUpdateDocument} />);
+    const message = screen.getAllByText("Maya Alexandra Rios proposed split version 2.").find((item) => item.closest("[data-message-id]"))!.closest("[data-message-id]") as HTMLElement;
+    expect(within(message).getByText("You")).toBeInTheDocument();
+    expect(within(message).getByText("Your proposal. Awaiting collaborators.")).toBeInTheDocument();
+    expect(within(message).queryByRole("button", { name: /Accept|Counter|Dispute/ })).not.toBeInTheDocument();
+    expect(screen.queryByText(/accepted this split version/)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Counter" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Counter" }));
+    fireEvent.click(screen.getByRole("button", { name: "Open Elephant private read" }));
+    expect(screen.getByRole("button", { name: "Suggest a counter" })).toBeDisabled();
+    expect(onUpdateDocument).not.toHaveBeenCalled();
+  });
+
+  it("shows actions only on the latest incoming proposal and accepts solely for the viewer", async () => {
+    const document = makeCounterDocument();
+    const onUpdateDocument = vi.fn().mockResolvedValue(undefined);
+    render(<CollaborationView documents={[document]} userProfile={makeCreatorProfile()} onUpdateDocument={onUpdateDocument} />);
+    const old = screen.getByText("Chori sent the initial split proposal.").closest("[data-message-id]") as HTMLElement;
+    expect(within(old).queryByRole("button")).not.toBeInTheDocument();
+    const current = screen.getAllByText("Maya Alexandra Rios proposed split version 2.").find((item) => item.closest("[data-message-id]"))!.closest("[data-message-id]") as HTMLElement;
+    expect(within(current).getAllByText("Maya Rios").length).toBeGreaterThan(0);
+    fireEvent.click(within(current).getByRole("button", { name: "Accept" }));
+    await waitFor(() => expect(onUpdateDocument).toHaveBeenCalledOnce());
+    const updated = onUpdateDocument.mock.calls[0][0];
+    expect(updated.splitApprovals.find((approval: { id: string }) => approval.id === "v2-creator").status).toBe("Approved");
+    expect(updated.splitApprovals.find((approval: { id: string }) => approval.id === "v2-maya")).toEqual(document.splitApprovals.at(-1));
+  });
+
+  it("turns a sent counter into one read-only outgoing message until the other user responds", async () => {
+    const document = makeCounterDocument();
+    const onUpdateDocument = vi.fn().mockImplementation(async (updated) => updated);
+    const view = render(<CollaborationView documents={[document]} userProfile={makeCreatorProfile()} onUpdateDocument={onUpdateDocument} />);
+    fireEvent.click(screen.getAllByRole("button", { name: "Counter" })[0]);
+    fireEvent.click(screen.getByRole("button", { name: "Split equally" }));
+    fireEvent.click(screen.getByRole("button", { name: "Send counter" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    const updated = onUpdateDocument.mock.calls[0][0];
+    view.rerender(<CollaborationView documents={[updated]} userProfile={makeCreatorProfile()} onUpdateDocument={onUpdateDocument} />);
+    const message = screen.getAllByText("Chori proposed split version 3.").find((item) => item.closest("[data-message-id]"))!.closest("[data-message-id]") as HTMLElement;
+    expect(within(message).getByText("You")).toBeInTheDocument();
+    expect(within(message).queryByRole("button")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Counter" })).toBeDisabled();
+    expect(screen.queryByText(/accepted this split version/)).not.toBeInTheDocument();
+    expect(updated.splitApprovals.at(-1).status).toBe("Pending");
+  });
+
   it("sends creator counter-offers through the participant action with the unchanged server revision", async () => {
-    const document = makeDocument();
+    const document = makeCounterDocument();
     document.sentAt = document.createdAt;
     document.serverRevision = 7;
     const onUpdateDocument = vi.fn().mockResolvedValue(undefined);
     render(<CollaborationView documents={[document]} userProfile={makeCreatorProfile()} onUpdateDocument={onUpdateDocument} />);
     fireEvent.click(screen.getAllByRole("button", { name: "Counter" })[0]);
+    fireEvent.click(screen.getByRole("button", { name: "Split equally" }));
     fireEvent.click(screen.getByRole("button", { name: "Send counter" }));
     await waitFor(() => expect(onUpdateDocument).toHaveBeenCalledTimes(1));
     expect(onUpdateDocument.mock.calls[0][0].serverRevision).toBe(7);
@@ -150,7 +203,7 @@ describe("CollaborationView document-backed negotiation", () => {
     );
 
     expect(screen.getAllByText(/2\/2 accepted/).length).toBeGreaterThan(0);
-    expect(screen.getByText("Ready to sign")).toBeInTheDocument();
+    expect(screen.getAllByText("Ready to sign")).toHaveLength(2);
     expect(screen.getAllByRole("button", { name: "Sign" }).length).toBeGreaterThan(0);
   });
 
@@ -194,7 +247,7 @@ describe("CollaborationView document-backed negotiation", () => {
     expect(message.senderName).toBe("Chori");
   });
 
-  it("lets a collaborator sign a ready split inside Messages", async () => {
+  it.each(["success", "failure"])("waits for the server before giving signature feedback (%s)", async (outcome) => {
     const document = makeDocument();
     document.sentAt = document.createdAt;
     document.status = "Ready to Sign";
@@ -220,15 +273,14 @@ describe("CollaborationView document-backed negotiation", () => {
         status: "Pending",
       },
     ];
-    const onUpdateDocument = vi.fn().mockResolvedValue(undefined);
+    let finish!: () => void;
+    let fail!: (error: Error) => void;
+    const pending = new Promise<void>((resolve, reject) => { finish = resolve; fail = reject; });
+    const onUpdateDocument = vi.fn().mockImplementation(() => pending);
+    const success = vi.spyOn(toast, "success").mockReturnValue("success");
+    const error = vi.spyOn(toast, "error").mockReturnValue("error");
 
-    render(
-      <CollaborationView
-        documents={[document]}
-        userProfile={makeCollaboratorProfile()}
-        onUpdateDocument={onUpdateDocument}
-      />,
-    );
+    render(<CollaborationView documents={[document]} userProfile={makeCollaboratorProfile()} onUpdateDocument={onUpdateDocument} />);
 
     fireEvent.click(screen.getAllByRole("button", { name: "Sign" })[0]);
 
@@ -242,6 +294,18 @@ describe("CollaborationView document-backed negotiation", () => {
       signerLegalName: makeCollaboratorProfile().legalName || undefined,
       signerArtistName: makeCollaboratorProfile().pkaNames || makeCollaboratorProfile().displayName,
     });
+    expect(success).not.toHaveBeenCalled();
+    await act(async () => {
+      if (outcome === "success") finish();
+      else fail(new Error("Connection interrupted"));
+    });
+    if (outcome === "success") {
+      expect(success).toHaveBeenCalledWith("Split sheet signed");
+      expect(error).not.toHaveBeenCalled();
+    } else {
+      expect(success).not.toHaveBeenCalled();
+      expect(error).toHaveBeenCalledWith("Messages could not sync this update", { description: "Connection interrupted" });
+    }
   });
 
   it("signs the current proposal version when older signature records still exist", async () => {
@@ -408,7 +472,7 @@ describe("CollaborationView document-backed negotiation", () => {
   });
 
   it("opens the Elephant read and can launch a counter while a split is negotiable", () => {
-    const document = makeDocument();
+    const document = makeCounterDocument();
     document.sentAt = document.createdAt;
     const onUpdateDocument = vi.fn().mockResolvedValue(undefined);
 
@@ -427,7 +491,7 @@ describe("CollaborationView document-backed negotiation", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Suggest a counter" }));
 
-    expect(screen.getByText("Counter-offer split percentages")).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "Counter offer" })).toBeInTheDocument();
   });
 
   it("keeps the Elephant read-only when a split is signed and locked", () => {

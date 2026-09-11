@@ -3,6 +3,7 @@ import { Archive, ArrowRight, CheckCircle2, CircleAlert, FileText, Filter, LockK
 import elephant from "@/assets/split-elephant-mascot.png";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { useContentEntrance } from "@/hooks/use-content-entrance";
 import type { Agreement } from "@/lib/splitSheetAgreement";
 import { normalizeUserProfile, type UserProfile } from "@/lib/userProfile";
 import type { SplitNotification } from "@/lib/notificationStorage";
@@ -28,6 +29,7 @@ export default function WorkspaceOverview(props: Props) {
   const [filter, setFilter] = useState<WorkspaceFilter>("all");
   const [sort, setSort] = useState<WorkspaceSort>("recent");
   const [guideOpen, setGuideOpen] = useState(false);
+  const tableRef = useContentEntrance<HTMLDivElement>(`${filter}:${sort}`);
   const { legalFirstName, legalLastName } = normalizeUserProfile(userProfile);
   const greetingName = [legalFirstName, legalLastName].filter(Boolean).join(" ");
   const records = useMemo(() => agreements.map((agreement) => workspaceRecord(agreement, userProfile)), [agreements, userProfile]);
@@ -81,7 +83,7 @@ export default function WorkspaceOverview(props: Props) {
             ))}
             {filter === "archived" && <button aria-pressed="true" onClick={() => setFilter("archived")}><Archive aria-hidden="true" /><span>Archived</span></button>}
           </div>
-          <div className="workspace-table" role="table" aria-label="Workspace split sheets" aria-busy={loading}>
+          <div ref={tableRef} className="workspace-table" role="table" aria-label="Workspace split sheets" aria-busy={loading}>
             <div role="row" className="workspace-table-head">
               {["Work", "Collaborators", "Ownership", "Status", "Action"].map((label) => <div role="columnheader" key={label}>{label}</div>)}
             </div>

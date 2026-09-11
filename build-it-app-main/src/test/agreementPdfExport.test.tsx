@@ -1,12 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import AgreementDetail from "@/components/AgreementDetail";
 import { documentToAgreement } from "@/lib/splitSheetAgreement";
 import { makeDocument } from "@/test/fixtures/splitSheet";
-const mocks = vi.hoisted(() => ({ download: vi.fn(), error: vi.fn() }));
+const mocks = vi.hoisted(() => ({ download: vi.fn(), error: vi.fn(), success: vi.fn() }));
 vi.mock("@/lib/splitSheetDownload", () => ({ downloadSplitSheetRecord: mocks.download }));
-vi.mock("sonner", () => ({ toast: { error: mocks.error } }));
-afterEach(() => { cleanup(); vi.clearAllMocks(); });
+vi.mock("sonner", () => ({ toast: { error: mocks.error, success: mocks.success } }));
+afterEach(() => { cleanup(); vi.clearAllMocks(); vi.useRealTimers(); });
 describe("PDF export button", () => {
   it("uses the unmodified source and stays disabled while exporting", async () => {
     const doc = makeDocument(); doc.status = "Verified and Stored";
@@ -17,7 +17,12 @@ describe("PDF export button", () => {
     fireEvent.click(button); fireEvent.click(button);
     expect(mocks.download).toHaveBeenCalledOnce(); expect(mocks.download).toHaveBeenCalledWith(doc, doc.creatorProfile);
     expect(button).toBeDisabled(); expect(button).toHaveAttribute("aria-busy", "true");
+    expect(button).toHaveAttribute("data-export-state", "pending");
+    expect(mocks.success).not.toHaveBeenCalled();
     finish(); await waitFor(() => expect(button).toBeEnabled());
+    expect(button).toHaveAttribute("data-export-state", "ready");
+    expect(button).toHaveTextContent("Download SPLIT");
+    expect(mocks.success).toHaveBeenCalledWith("PDF ready", { description: "The download was requested." });
   });
   it("shows export failures and allows a retry", async () => {
     const doc = makeDocument(); doc.status = "Draft";
@@ -27,5 +32,34 @@ describe("PDF export button", () => {
     fireEvent.click(button);
     await waitFor(() => expect(mocks.error).toHaveBeenCalledWith("Refresh this record"));
     expect(button).toBeEnabled();
+    expect(button).toHaveAttribute("data-export-state", "idle");
+    expect(mocks.success).not.toHaveBeenCalled();
+    mocks.download.mockResolvedValue(undefined);
+    fireEvent.click(button);
+    await waitFor(() => expect(button).toHaveAttribute("data-export-state", "ready"));
+  });
+  it("clears the temporary confirmation without delaying another download", async () => {
+    vi.useFakeTimers();
+    const doc = makeDocument();
+    mocks.download.mockResolvedValue(undefined);
+    render(<AgreementDetail agreement={documentToAgreement(doc)} viewerProfile={doc.creatorProfile} />);
+    const button = screen.getByRole("button", { name: /Download/ });
+    await act(async () => { fireEvent.click(button); });
+    expect(button).toHaveAttribute("data-export-state", "ready");
+    expect(button).toBeEnabled();
+    act(() => { vi.advanceTimersByTime(2400); });
+    expect(button).toHaveAttribute("data-export-state", "idle");
+  });
+  it("does not show a late confirmation on a different record", async () => {
+    const doc = makeDocument();
+    let finish: () => void;
+    mocks.download.mockImplementation(() => new Promise<void>((resolve) => { finish = resolve; }));
+    const { rerender } = render(<AgreementDetail agreement={documentToAgreement(doc)} viewerProfile={doc.creatorProfile} />);
+    fireEvent.click(screen.getByRole("button", { name: /Download/ }));
+    const other = { ...doc, id: "other-record" };
+    rerender(<AgreementDetail agreement={documentToAgreement(other)} viewerProfile={doc.creatorProfile} />);
+    await act(async () => { finish(); });
+    expect(screen.getByRole("button", { name: /Download/ })).toHaveAttribute("data-export-state", "idle");
+    expect(mocks.success).not.toHaveBeenCalled();
   });
 });

@@ -1,6 +1,8 @@
 import React, { useState } from "react";
-import { toast } from "sonner";
+import SplitSheetDownloadButton from "@/components/SplitSheetDownloadButton";
+import DeleteDraftButton from "@/components/DeleteDraftButton";
 import type { Agreement } from "@/lib/splitSheetAgreement";
+import type { StoredSplitSheetDocument } from "@/components/contract-builder/document";
 import {
   formatSplitSheetAuditTrail,
   splitSheetDisplayInitials,
@@ -8,9 +10,10 @@ import {
   splitSheetPartyDisplayName,
 } from "@/lib/splitSheetDisplay";
 import { buildSplitSheetSignatureRecords } from "@/lib/splitSheetParticipantState";
-import { downloadSplitSheetRecord } from "@/lib/splitSheetDownload";
 import { getSplitWorkflowLabel, VERIFIED_SPLIT_STATUSES } from "@/lib/splitWorkflow";
 import type { UserProfile } from "@/lib/userProfile";
+import { documentBelongsToProfile } from "@/lib/splitSheetStorage";
+import { Button } from "@/components/ui/button";
 import {
   Archive,
   BadgeCheck,
@@ -27,8 +30,6 @@ import {
   ChevronDown,
   ChevronUp,
   PenLine,
-  Download,
-  Loader2,
   MessageCircle,
   ListChecks,
   MapPin,
@@ -146,32 +147,24 @@ export default function AgreementDetail({
   agreement,
   viewerProfile,
   onOpenMessages,
+  onDeleteDraft,
+  onEditDraft,
 }: {
   agreement: Agreement;
   viewerProfile: UserProfile;
   onOpenMessages?: (agreementId: string) => void;
+  onDeleteDraft?: (document: StoredSplitSheetDocument) => Promise<void>;
+  onEditDraft?: (agreementId: string) => void;
 }) {
   const [showWorkMetadata, setShowWorkMetadata] = useState(false);
   const [showLegal, setShowLegal] = useState(false);
   const [showRegistration, setShowRegistration] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [showAudit, setShowAudit] = useState(false);
-  const [exporting, setExporting] = useState(false);
-
-  const exportPdf = async () => {
-    const source = agreement.exportDocument || agreement.document;
-    if (!source || exporting) return;
-    setExporting(true);
-    try {
-      await downloadSplitSheetRecord(source, viewerProfile);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "The PDF could not be exported. Please try again.");
-    } finally {
-      setExporting(false);
-    }
-  };
 
   const document = agreement.document;
+  const isDraft = agreement.status === "Draft" && !document?.sentAt;
+  const canEditDraft = isDraft && document && documentBelongsToProfile(document, viewerProfile) && onEditDraft;
   const isFinalRecord = FINAL_STATUSES.includes(agreement.status);
   const invites = document?.collaboratorInvites ?? [];
   const currentProposal = document?.splitProposalVersions.find((proposal) => proposal.id === document.currentProposalId) ?? document?.splitProposalVersions.at(-1);
@@ -182,7 +175,6 @@ export default function AgreementDetail({
     : document && currentProposal && ["Ready to Sign", "Pending Signatures"].includes(agreement.status)
       ? buildSplitSheetSignatureRecords(document, currentProposal.id).filter((signature) => signature.proposalVersionId === currentProposal.id)
       : [];
-  const canDownloadRecord = Boolean(document);
   const canOpenMessages = Boolean(document?.sentAt && agreement.status !== "Draft" && onOpenMessages);
   const participants = buildSummaryParticipants(agreement, currentProposal, currentApprovals, visibleSignatures);
   const totalPercent = Math.round(participants.reduce((s, p) => s + p.percent, 0) * 100) / 100;
@@ -213,10 +205,10 @@ export default function AgreementDetail({
   const registrationGroups = buildRegistrationDisplayGroups(registrationGroup);
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-5 md:px-6 md:py-7">
-      <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-        <div className="min-w-0">
-          <h1 className="text-2xl font-extrabold leading-tight tracking-tight text-[hsl(var(--split-allocation-1))] md:text-[28px]">
+    <section aria-label={isDraft ? "Draft details" : "Split sheet details"} className="mx-auto max-w-3xl px-4 py-5 md:px-6 md:py-7">
+      <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0 flex-1 basis-48">
+          <h1 className="break-words text-2xl font-extrabold leading-tight text-[hsl(var(--split-allocation-1))] md:text-[28px]">
             {agreement.title}
           </h1>
           <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -231,23 +223,20 @@ export default function AgreementDetail({
           </div>
         </div>
 
-        <div className="flex flex-shrink-0 items-center gap-2">
-          <button
-            type="button"
-            onClick={exportPdf}
-            disabled={!canDownloadRecord || exporting}
-            aria-busy={exporting}
-            className="inline-flex items-center gap-2 rounded-lg border border-[hsl(var(--split-allocation-1))] bg-background px-4 py-2.5 text-xs font-bold text-[hsl(var(--split-allocation-1))] shadow-sm transition-colors hover:bg-[hsl(var(--split-allocation-1))] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {exporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-            {isFinalRecord ? "Download SPLIT" : "Download draft"}
-          </button>
+        <div className="flex max-w-full flex-wrap items-center gap-2 [&>button]:h-10">
+          <SplitSheetDownloadButton key={agreement.id} source={agreement.exportDocument || agreement.document} viewerProfile={viewerProfile} isFinalRecord={isFinalRecord} />
+          {canEditDraft && (
+            <Button size="sm" className="gap-2" onClick={() => onEditDraft(agreement.id)}>
+              <PenLine className="h-4 w-4" aria-hidden="true" />Edit Draft
+            </Button>
+          )}
+          {document && onDeleteDraft && <DeleteDraftButton key={`delete-${document.id}`} document={document} profile={viewerProfile} onDelete={onDeleteDraft} />}
           {canOpenMessages && !isFinalRecord && (
             <button
               type="button"
               aria-label="Open in Messages"
               onClick={() => onOpenMessages?.(document?.id || agreement.id)}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
+              className="split-press inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
             >
               <MessageCircle className="h-3.5 w-3.5" />
               Messages
@@ -264,6 +253,7 @@ export default function AgreementDetail({
           signedCount={signedCount}
           requiredSignatureCount={requiredSignatureCount}
           lastUpdatedAt={lastUpdatedAt}
+          draftCollaboratorCount={isDraft ? participants.length : undefined}
         />
 
         <section className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
@@ -292,12 +282,16 @@ export default function AgreementDetail({
                 </div>
 
                 <div className="flex flex-wrap justify-start gap-2 md:justify-end">
-                  {(participant.approvalStatus || participant.inviteStatus || isFinalRecord) && (
-                    <ApprovalStatus
-                      status={participant.approvalStatus ?? (participant.inviteStatus === "Accepted" ? "Approved" : participant.inviteStatus === "Declined" ? "Rejected" : "Pending")}
-                    />
-                  )}
-                  {(participant.signatureStatus || isFinalRecord) && <SignatureRecordStatus status={participant.signatureStatus ?? "Signed"} />}
+                  {isDraft ? (
+                    <Chip tone="neutral">{participant.participantId === "creator" ? "Creator" : "Not invited"}</Chip>
+                  ) : <>
+                    {(participant.approvalStatus || participant.inviteStatus || isFinalRecord) && (
+                      <ApprovalStatus
+                        status={participant.approvalStatus ?? (participant.inviteStatus === "Accepted" ? "Approved" : participant.inviteStatus === "Declined" ? "Rejected" : "Pending")}
+                      />
+                    )}
+                    {(participant.signatureStatus || isFinalRecord) && <SignatureRecordStatus status={participant.signatureStatus ?? "Signed"} />}
+                  </>}
                 </div>
               </div>
             ))}
@@ -334,7 +328,7 @@ export default function AgreementDetail({
           </StackedCollapsibleSection>
           <StackedCollapsibleSection
             title="Version History"
-            description={`${versionItems.length} version${versionItems.length === 1 ? "" : "s"} · current record`}
+            description={`${versionItems.length} version${versionItems.length === 1 ? "" : "s"} · ${isDraft ? "draft" : "current record"}`}
             icon={GitBranch}
             open={showHistory}
             onToggle={() => setShowHistory((v) => !v)}
@@ -348,7 +342,7 @@ export default function AgreementDetail({
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="text-sm font-bold">v{item.version}</span>
-                      {item.active && <Chip tone="verified">Current</Chip>}
+                      {item.active && <Chip tone={isDraft ? "neutral" : "verified"}>{isDraft ? "Draft" : "Current"}</Chip>}
                     </div>
                     <div className="mt-1 text-xs text-muted-foreground">{item.note}</div>
                     <div className="mt-1 text-[11px] text-muted-foreground/70">{item.date}</div>
@@ -384,7 +378,7 @@ export default function AgreementDetail({
           </div>
         )}
       </div>
-    </div>
+    </section>
   );
 }
 
@@ -395,6 +389,16 @@ function buildSummaryParticipants(
   visibleSignatures: NonNullable<Agreement["document"]>["splitSignatures"],
 ): SummaryParticipant[] {
   const document = agreement.document;
+
+  if (document?.status === "Draft" && !document.sentAt) {
+    return document.data.parties.map((party) => ({
+      partyId: party.id,
+      participantId: party.isCurrentUser ? "creator" : party.id,
+      name: splitSheetPartyDisplayName(document, party),
+      role: party.role || "Collaborator",
+      percent: Number(party.percent) || 0,
+    }));
+  }
 
   if (document && currentProposal) {
     return currentProposal.allocations.map((allocation) => {
@@ -444,11 +448,12 @@ function buildInviteDetailGroup(
     items: invites.map((invite) => {
       const invitee = splitSheetParticipantDisplayName(document, invite.id, invite.name);
       const inviteTarget = compactValue(invite.inviteValue);
-      const response = invite.respondedAt ? ` · responded ${formatDisplayDateTime(invite.respondedAt)}` : "";
+      const isDraft = document.status === "Draft" && !document.sentAt;
+      const response = !isDraft && invite.respondedAt ? ` · responded ${formatDisplayDateTime(invite.respondedAt)}` : "";
 
       return {
         label: invitee,
-        value: `${invite.status} · ${invite.inviteMethod}: ${inviteTarget}${response}`,
+        value: `${isDraft ? "Not sent" : invite.status} · ${invite.inviteMethod}: ${inviteTarget}${response}`,
       };
     }),
   };
@@ -506,9 +511,9 @@ function buildDetailGroups(agreement: Agreement): MetadataGroupDefinition[] {
         { label: "Version", value: `v${agreement.version}` },
         { label: "Created", value: formatDisplayDate(document?.createdAt || agreement.created) },
         { label: "Updated", value: formatDisplayDate(document?.updatedAt || agreement.updated) },
-        { label: "Sent", value: formatDisplayDateTime(document?.sentAt) },
+        { label: "Sent", value: agreement.status === "Draft" && !document?.sentAt ? "Not sent" : formatDisplayDateTime(document?.sentAt) },
         { label: "Stored", value: formatDisplayDateTime(document?.storedAt) },
-        { label: "Verified", value: formatDisplayDateTime(document?.verifiedAt) },
+        ...(agreement.status === "Draft" ? [] : [{ label: "Verified", value: formatDisplayDateTime(document?.verifiedAt) }]),
       ],
     },
     {
@@ -600,21 +605,23 @@ function SummaryStrip({
   signedCount,
   requiredSignatureCount,
   lastUpdatedAt,
+  draftCollaboratorCount,
 }: {
   totalPercent: number;
   signedCount: number;
   requiredSignatureCount: number;
   lastUpdatedAt: string | undefined;
+  draftCollaboratorCount?: number;
 }) {
   return (
     <section className="grid overflow-hidden rounded-xl border border-border bg-card shadow-sm md:grid-cols-3">
-      <SummaryStat label="SPLIT Total" value={`${totalPercent}%`} detail={totalPercent === 100 ? "Complete" : "Needs review"} />
-      <SummaryStat
+      <SummaryStat label={draftCollaboratorCount !== undefined ? "Proposed Split" : "SPLIT Total"} value={`${totalPercent}%`} detail={totalPercent === 100 ? "Complete" : "Needs review"} />
+      {draftCollaboratorCount !== undefined ? <SummaryStat label="Collaborators" value={String(draftCollaboratorCount)} detail="Invitations not sent" /> : <SummaryStat
         label="Signatures"
         value={`${signedCount} / ${requiredSignatureCount}`}
         detail={signedCount === requiredSignatureCount ? "All signed" : "Waiting"}
         valueClassName="text-[hsl(var(--split-verified))]"
-      />
+      />}
       <SummaryStat label="Last Updated" value={formatDisplayDate(lastUpdatedAt)} detail={relativeDateLabel(lastUpdatedAt)} last />
     </section>
   );
@@ -709,7 +716,7 @@ function VerificationBanner({ status }: { status: Agreement["status"] }) {
   if (status === "Draft") {
     return (
       <AlertBanner icon={FileText} tone="neutral" title={getSplitWorkflowLabel(status)}>
-        This split sheet has not been sent for review yet.
+        Only you can see this draft. Invitations have not been sent.
       </AlertBanner>
     );
   }

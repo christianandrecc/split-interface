@@ -14,6 +14,7 @@ import SettingsPage from "@/components/SettingsPage";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useContentEntrance } from "@/hooks/use-content-entrance";
 import {
   searchPublicProfiles,
   searchSplitSheets,
@@ -30,6 +31,8 @@ import {
 } from "@/lib/dashboardNotifications";
 import {
   loadSplitSheetDocuments,
+  documentBelongsToProfile,
+  deleteSplitSheetDraft,
   saveLocalSplitSheetDocuments,
   saveSplitSheetDocument,
   saveSplitSheetParticipantAction,
@@ -98,6 +101,7 @@ export default function Dashboard({
   const [selectedMessageDealId, setSelectedMessageDealId] = useState<string | undefined>();
   const [agreementFilter, setAgreementFilter] = useState<FilterStatus>("All");
   const [isNewAgreement, setIsNewAgreement] = useState(false);
+  const [draftToEdit, setDraftToEdit] = useState<StoredSplitSheetDocument | undefined>();
   const [generatedDocuments, setGeneratedDocuments] = useState<StoredSplitSheetDocument[]>([]);
   const [loadingSplitSheets, setLoadingSplitSheets] = useState(true);
   const [splitSheetLoadError, setSplitSheetLoadError] = useState(false);
@@ -116,6 +120,7 @@ export default function Dashboard({
     ?? `profile:${userProfile.emailAddress || userProfile.username || "anonymous"}`;
   const notificationAccountKey = activeAuthUserId ?? activeAccountKey;
   const lastDocumentAccountKeyRef = useRef(activeAccountKey);
+  const deletedDraftIds = useRef(new Set<string>());
   const lastNotificationAccountKeyRef = useRef(notificationAccountKey);
 
   const agreements = useMemo(() => generatedDocuments.map(documentToAgreement), [generatedDocuments]);
@@ -154,6 +159,7 @@ export default function Dashboard({
 
     if (lastDocumentAccountKeyRef.current !== activeAccountKey) {
       lastDocumentAccountKeyRef.current = activeAccountKey;
+      deletedDraftIds.current.clear();
       setGeneratedDocuments([]);
       setSelectedAgreement(null);
       setSelectedMessageDealId(undefined);
@@ -167,7 +173,8 @@ export default function Dashboard({
       const results = await loadSplitSheetDocuments(userProfile, () => { loadFailed = true; });
       if (!active) return;
 
-      const documents = results.map((result) => result.document);
+      // A refresh started before deletion may still return the removed draft.
+      const documents = results.map((result) => result.document).filter((document) => !deletedDraftIds.current.has(document.id));
       setSplitSheetLoadError(loadFailed);
       setGeneratedDocuments((current) => loadFailed && current.length ? current : documents);
       saveLocalSplitSheetDocuments(documents.filter(splitSheetCanUseLocalDraftFallback), localStorageOwner);
@@ -285,18 +292,23 @@ export default function Dashboard({
   };
 
   const persistGeneratedDocument = async (document: StoredSplitSheetDocument, mode: SplitSheetSaveMode) => {
-    const requiresRemoteConfirmation =
-      mode === "send" ||
-      mode === "contract_delivery" ||
-      !splitSheetCanUseLocalDraftFallback(document);
-    if (!requiresRemoteConfirmation) {
-      applyGeneratedDocument(document);
-    }
-
     const result = await saveSplitSheetDocument(document, mode, userProfile);
     applyGeneratedDocument(result.document);
     void refreshNotifications(false);
     return result;
+  };
+
+  const deleteDraft = async (document: StoredSplitSheetDocument) => {
+    await deleteSplitSheetDraft(document, userProfile);
+    deletedDraftIds.current.add(document.id);
+    setGeneratedDocuments((current) => current.filter((item) => item.id !== document.id));
+    setSelectedAgreement(null);
+    setDraftToEdit(undefined);
+    setIsNewAgreement(false);
+    setSelectedMessageDealId(undefined);
+    setAgreementFilter("Draft");
+    setActiveView("agreements");
+    clearSearch();
   };
 
   const updateGeneratedDocument = async (document: StoredSplitSheetDocument, context: SplitSheetUpdateContext = {}) => {
@@ -329,6 +341,15 @@ export default function Dashboard({
       setSelectedAgreement(agreement);
       setActiveView("agreements");
     }
+  };
+
+  const editDraft = (agreementId: string) => {
+    const draft = generatedDocuments.find((item) => item.id === agreementId);
+    if (!draft || draft.status !== "Draft" || draft.sentAt || !documentBelongsToProfile(draft, userProfile)) return;
+    setSelectedAgreement(documentToAgreement(draft));
+    setActiveView("agreements");
+    setDraftToEdit(draft);
+    setIsNewAgreement(true);
   };
 
   const openDealMessages = (agreementId: string) => {
@@ -398,8 +419,11 @@ export default function Dashboard({
     clearSearch();
   };
 
+  const contentRef = useContentEntrance<HTMLElement>(activeView);
+
   const goToDashboard = () => {
     setIsNewAgreement(false);
+    setDraftToEdit(undefined);
     setActiveView("dashboard");
     setSelectedAgreement(null);
     setSelectedMessageDealId(undefined);
@@ -407,14 +431,29 @@ export default function Dashboard({
     clearSearch();
   };
 
+  const startNewAgreement = () => {
+    setDraftToEdit(undefined);
+    setIsNewAgreement(true);
+  };
+
   if (isNewAgreement) {
     return (
       <ContractBuilder
+        key={draftToEdit?.id ?? "new"}
+        initialDocument={draftToEdit}
         userProfile={userProfile}
-        onBack={() => setIsNewAgreement(false)}
+        onBack={() => { setIsNewAgreement(false); setDraftToEdit(undefined); }}
         onHome={goToDashboard}
         onStoreDocument={(document) => persistGeneratedDocument(document, "draft")}
         onSendDocument={(document) => persistGeneratedDocument(document, "send")}
+        onDeleteDocument={deleteDraft}
+        onComplete={(document, mode) => {
+          setIsNewAgreement(false);
+          setDraftToEdit(undefined);
+          setSelectedAgreement(mode === "draft" && draftToEdit ? documentToAgreement(document) : null);
+          if (mode === "send") openDealMessages(document.id);
+          else { setAgreementFilter("Draft"); setActiveView("agreements"); }
+        }}
         recentCollaborators={recentCollaborators}
       />
     );
@@ -425,13 +464,13 @@ export default function Dashboard({
     return (
       <div className="flex flex-col h-screen bg-background safe-top safe-bottom">
         <header className="h-[56px] flex items-center px-4 border-b border-border bg-background flex-shrink-0 gap-3">
-          <button onClick={() => setSelectedAgreement(null)} className="p-1.5 -ml-1.5 rounded-lg hover:bg-accent">
+          <button aria-label="Back to split sheets" onClick={() => setSelectedAgreement(null)} className="p-1.5 -ml-1.5 rounded-lg hover:bg-accent">
             <ArrowLeft className="h-4 w-4 text-muted-foreground" />
           </button>
           <span className="text-sm font-semibold truncate flex-1">{selectedAgreement.title}</span>
         </header>
         <main className="flex-1 overflow-y-auto">
-          <AgreementDetail agreement={selectedAgreement} viewerProfile={userProfile} onOpenMessages={openDealMessages} />
+          <AgreementDetail key={selectedAgreement.id} agreement={selectedAgreement} viewerProfile={userProfile} onOpenMessages={openDealMessages} onDeleteDraft={deleteDraft} onEditDraft={editDraft} />
         </main>
       </div>
     );
@@ -509,14 +548,14 @@ export default function Dashboard({
                 <button onClick={() => { setAccountMenuOpen(false); onOpenAccountCreation(); }} className="flex w-full items-center gap-2 rounded-md px-3 py-2.5 text-sm hover:bg-secondary"><Settings size={16} />Account Setup</button>
               </PopoverContent>
             </Popover>
-            <button onClick={() => setIsNewAgreement(true)} className="workspace-action primary workspace-header-new" aria-label="New SPLIT" title="New SPLIT">
+            <button onClick={startNewAgreement} className="workspace-action primary workspace-header-new" aria-label="New SPLIT" title="New SPLIT">
               <Plus size={20} /><span>New SPLIT</span>
             </button>
           </div>
         </header>
 
         {/* Content */}
-        <main className="workspace-content safe-bottom">
+        <main ref={contentRef} className="workspace-content safe-bottom">
           {activeView === "dashboard" && (
             <WorkspaceOverview
               key={activeAccountKey}
@@ -526,7 +565,7 @@ export default function Dashboard({
               loading={loadingSplitSheets}
               loadError={splitSheetLoadError}
               onRetry={() => setReloadSplitSheets((current) => current + 1)}
-              onNew={() => setIsNewAgreement(true)}
+              onNew={startNewAgreement}
               onOpenAgreement={openAgreement}
               onOpenMessages={openDealMessages}
               onOpenNotification={openNotification}
@@ -538,8 +577,8 @@ export default function Dashboard({
               <AgreementsList
                 agreements={agreements}
                 selected={selectedAgreement}
-                onSelect={setSelectedAgreement}
-                onNew={() => setIsNewAgreement(true)}
+                onSelect={(agreement) => openAgreement(agreement.id)}
+                onNew={startNewAgreement}
                 filter={agreementFilter}
                 onFilterChange={setAgreementFilter}
               />
@@ -548,16 +587,16 @@ export default function Dashboard({
                 <AgreementsList
                   agreements={agreements}
                   selected={selectedAgreement}
-                  onSelect={setSelectedAgreement}
-                  onNew={() => setIsNewAgreement(true)}
+                  onSelect={(agreement) => openAgreement(agreement.id)}
+                  onNew={startNewAgreement}
                   filter={agreementFilter}
                   onFilterChange={setAgreementFilter}
                 />
                 <div className="flex-1 min-w-0 overflow-y-auto bg-background">
                   {selectedAgreement ? (
-                    <AgreementDetail agreement={selectedAgreement} viewerProfile={userProfile} onOpenMessages={openDealMessages} />
+                    <AgreementDetail key={selectedAgreement.id} agreement={selectedAgreement} viewerProfile={userProfile} onOpenMessages={openDealMessages} onDeleteDraft={deleteDraft} onEditDraft={editDraft} />
                   ) : (
-                    <EmptyDetail onNew={() => setIsNewAgreement(true)} />
+                    <EmptyDetail onNew={startNewAgreement} />
                   )}
                 </div>
               </div>
@@ -569,6 +608,7 @@ export default function Dashboard({
               userProfile={userProfile}
               initialDealId={selectedMessageDealId}
               onUpdateDocument={updateGeneratedDocument}
+              onOpenAgreement={openAgreement}
             />
           )}
           {activeView === "settings" && <SettingsPage userProfile={userProfile} />}
@@ -776,7 +816,7 @@ function NotificationsPopover({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <button aria-label="Open notifications" className="relative p-2 rounded-lg hover:bg-accent text-muted-foreground hover:text-foreground transition-colors">
+        <button aria-label="Open notifications" className="split-press relative p-2 rounded-lg hover:bg-accent text-muted-foreground hover:text-foreground transition-colors">
           <Bell className="h-4 w-4" />
           {unreadCount > 0 && (
             <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-primary ring-2 ring-background" />

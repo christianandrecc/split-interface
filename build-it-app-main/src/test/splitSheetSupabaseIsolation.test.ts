@@ -8,6 +8,16 @@ describe("split sheet Supabase isolation", () => {
     window.localStorage.clear();
   });
 
+  it("does not create a local sent record when Supabase is unconfigured", async () => {
+    vi.doMock("@/integrations/supabase/client", () => ({ isSupabaseConfigured: false, supabase: {} }));
+    const { saveSplitSheetDocument, loadLocalSplitSheetDocuments } = await import("@/lib/splitSheetStorage");
+    const document = makeDocument();
+    document.status = "Pending Collaborator Acceptance";
+    document.sentAt = document.createdAt;
+    await expect(saveSplitSheetDocument(document, "send", document.creatorProfile)).rejects.toThrow(/Connect to Supabase/);
+    expect(loadLocalSplitSheetDocuments()).toEqual([]);
+  });
+
   it("uses canonical server state after signing instead of optimistic document fields", async () => {
     const proposed = makeDocument();
     proposed.serverRevision = 4;

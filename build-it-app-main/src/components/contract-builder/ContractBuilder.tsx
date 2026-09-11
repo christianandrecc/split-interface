@@ -1,12 +1,13 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useRef } from "react";
 import splitLockup from "@/assets/split-navy-amber-lockup.png";
-import { ArrowLeft, ChevronRight, Lock, Sparkles } from "lucide-react";
+import { ArrowLeft, ChevronRight, Loader2, Lock, Save, Send, Sparkles } from "lucide-react";
 import ProgressTracker from "./ProgressTracker";
 import StepMetadata from "./StepMetadata";
 import StepParties from "./StepParties";
 import StepClauses from "./StepClauses";
 import StepReview from "./StepReview";
-import SplitSheetDocumentPreview from "./SplitSheetDocumentPreview";
+import { Button } from "@/components/ui/button";
+import { AlertDialog, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogCancel, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { createSplitSheetDocument, addDocumentAuditTrail, type StoredSplitSheetDocument } from "./document";
 import type { UserProfile } from "@/lib/userProfile";
 import { queueContractDelivery } from "@/lib/splitSheetWorkflow";
@@ -24,6 +25,7 @@ import {
 import { toast } from "sonner";
 import type { SplitSheetSaveResult } from "@/lib/splitSheetStorage";
 import type { CollaboratorSuggestion } from "@/lib/collaboratorSuggestions";
+import DeleteDraftButton from "@/components/DeleteDraftButton";
 
 export default function ContractBuilder({
   userProfile,
@@ -31,6 +33,9 @@ export default function ContractBuilder({
   onHome,
   onStoreDocument,
   onSendDocument,
+  onComplete,
+  onDeleteDocument,
+  initialDocument,
   recentCollaborators = [],
 }: {
   userProfile: UserProfile;
@@ -38,14 +43,23 @@ export default function ContractBuilder({
   onHome?: () => void;
   onStoreDocument: (document: StoredSplitSheetDocument) => Promise<SplitSheetSaveResult>;
   onSendDocument: (document: StoredSplitSheetDocument) => Promise<SplitSheetSaveResult>;
+  onComplete?: (document: StoredSplitSheetDocument, mode: "draft" | "send") => void;
+  onDeleteDocument?: (document: StoredSplitSheetDocument) => Promise<void>;
+  initialDocument?: StoredSplitSheetDocument;
   recentCollaborators?: CollaboratorSuggestion[];
 }) {
-  const [step, setStep] = useState<StepId>("metadata");
-  const [data, setData] = useState<ContractData>(() => createInitialContract(userProfile));
-  const [generatedDocument, setGeneratedDocument] = useState<StoredSplitSheetDocument | null>(null);
-  const [documentStored, setDocumentStored] = useState(false);
-  const [documentSent, setDocumentSent] = useState(false);
-  const [savingDocument, setSavingDocument] = useState(false);
+  const [step, setStep] = useState<StepId>(initialDocument ? "review" : "metadata");
+  const [data, setData] = useState<ContractData>(() => initialDocument?.data ?? createInitialContract(userProfile));
+  const documentRef = useRef<StoredSplitSheetDocument | null>(initialDocument ?? null);
+  const inFlight = useRef(false);
+  const [saving, setSaving] = useState<"draft" | "send" | null>(null);
+  const [completed, setCompleted] = useState(false);
+  const [confirmSend, setConfirmSend] = useState(false);
+  const [saveError, setSaveError] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  const savingDocument = saving !== null || deleting;
+  const canFinish = Boolean(data.songTitle.trim() && data.sampleStatus && data.parties.length
+    && data.parties.every(isWriterReady) && Math.abs(sumPercents(data.parties) - 100) < 0.01);
 
   const stepIdx = STEPS.findIndex((s) => s.id === step);
   const isSongStep = step === "metadata";
@@ -62,7 +76,7 @@ export default function ContractBuilder({
       case "metadata": return !!data.songTitle.trim();
       case "clauses": return !!data.sampleStatus;
       case "parties": return data.parties.length >= 1 && writersReady && Math.abs(sumPercents(data.parties) - 100) < 0.01;
-      case "review": return true;
+      case "review": return canFinish;
       default: return false;
     }
   };
@@ -70,130 +84,67 @@ export default function ContractBuilder({
   const next = () => { if (stepIdx < STEPS.length - 1) setStep(STEPS[stepIdx + 1].id); };
   const prev = () => { if (stepIdx > 0) setStep(STEPS[stepIdx - 1].id); };
 
-  const handlePropose = async () => {
-    if (savingDocument) return;
+  const finishDocument = async (mode: "draft" | "send") => {
+    if (inFlight.current || completed || deleting) return;
+    if (!canFinish) {
+      setSaveError("Review the work details, collaborator addresses, and shares. Ownership must total 100%.");
+      return;
+    }
+    if (initialDocument && (initialDocument.status !== "Draft" || initialDocument.sentAt)) {
+      setSaveError("This split has already been sent. Open Messages to review it.");
+      return;
+    }
 
-    const signedInArtistData = bindContractToSignedInArtist(data, userProfile);
-    const document = createSplitSheetDocument(signedInArtistData, userProfile);
-    const actor = userProfile.emailAddress || userProfile.legalName || "SPLIT user";
-    const storedDocument = addDocumentAuditTrail(
-      {
-        ...document,
-        status: "Draft",
-        storedAt: document.storedAt || new Date().toISOString(),
-      },
-      actor,
-      "Stored draft in account",
-    );
-
-    setData(signedInArtistData);
-    setGeneratedDocument(storedDocument);
-    setDocumentStored(false);
-    setDocumentSent(false);
-    setSavingDocument(true);
-
+    inFlight.current = true;
+    setSaving(mode);
+    setSaveError("");
     try {
-      const result = await onStoreDocument(storedDocument);
-      setGeneratedDocument(result.document);
-      setDocumentStored(true);
-      toast.success(result.persisted ? "SPLIT Sheet draft saved" : "SPLIT Sheet draft saved locally", {
-        description: result.persisted
-          ? "The draft is now visible in your account."
-          : "The backend was unavailable, so this preview used local storage.",
-      });
+      const signedInArtistData = bindContractToSignedInArtist(data, userProfile);
+      const fresh = createSplitSheetDocument(signedInArtistData, userProfile);
+      // Keep the same record ID through retries and edits, including ambiguous network failures.
+      const identity = documentRef.current ?? fresh;
+      const draft: StoredSplitSheetDocument = {
+        ...fresh,
+        id: identity.id,
+        documentNumber: identity.documentNumber,
+        createdAt: identity.createdAt,
+        serverRevision: identity.serverRevision,
+        storedAt: identity.storedAt,
+        auditTrail: identity.auditTrail,
+      };
+      documentRef.current = draft;
+      const actor = userProfile.legalName || userProfile.emailAddress || "SPLIT user";
+      const request = mode === "send"
+        ? queueContractDelivery({
+            ...draft,
+            status: draft.collaborators.length ? "Pending Collaborator Acceptance" : "Ready to Sign",
+          }, actor)
+        : addDocumentAuditTrail(draft, actor, "Stored draft in account");
+      const result = await (mode === "send" ? onSendDocument(request) : onStoreDocument(request));
+      if (mode === "send" && (!result.persisted || !result.document.sentAt || result.document.status === "Draft")) {
+        throw new Error("Invitations were not confirmed by the server. Your details are still here; please try again.");
+      }
+      documentRef.current = result.document;
+      setCompleted(true);
+      setConfirmSend(false);
+      if (mode === "send") {
+        toast.success(draft.collaborators.length ? "Split invitations sent" : "Split sheet ready to sign");
+      } else {
+        toast.success(result.persisted ? "Saved to Drafts" : "Draft saved on this device", {
+          description: result.persisted ? undefined : "Supabase has not confirmed this draft yet.",
+        });
+      }
+      if (onComplete) onComplete(result.document, mode);
+      else onBack();
     } catch (error) {
-      toast.error("Could not save this SPLIT Sheet draft", {
-        description: error instanceof Error ? error.message : "Check the split percentages and try again.",
-      });
+      const message = error instanceof Error ? error.message : "Please try again. Your details are still here.";
+      setSaveError(message);
+      toast.error(mode === "send" ? "Could not send split invitations" : "Could not save this draft", { description: message });
     } finally {
-      setSavingDocument(false);
+      inFlight.current = false;
+      setSaving(null);
     }
   };
-
-  const handleStoreGeneratedDocument = async () => {
-    if (!generatedDocument || savingDocument) return;
-
-    const storedDocument = addDocumentAuditTrail(
-      {
-        ...generatedDocument,
-        status: "Draft",
-        storedAt: generatedDocument.storedAt || new Date().toISOString(),
-      },
-      userProfile.emailAddress || userProfile.legalName || "SPLIT user",
-      "Stored in account",
-    );
-
-    setSavingDocument(true);
-    try {
-      const result = await onStoreDocument(storedDocument);
-      setGeneratedDocument(result.document);
-      setDocumentStored(true);
-      toast.success(result.persisted ? "SPLIT Sheet stored" : "SPLIT Sheet stored locally", {
-        description: result.persisted ? "The backend record is ready." : "The backend was unavailable, so this preview used local storage.",
-      });
-    } catch (error) {
-      toast.error("Could not store this SPLIT Sheet", {
-        description: error instanceof Error ? error.message : "Check the split percentages and try again.",
-      });
-    } finally {
-      setSavingDocument(false);
-    }
-  };
-
-  const handleSendGeneratedDocument = async () => {
-    if (!generatedDocument || savingDocument) return;
-
-    const actor = userProfile.emailAddress || userProfile.legalName || "SPLIT user";
-    const sentDocument = queueContractDelivery(addDocumentAuditTrail(
-      {
-        ...generatedDocument,
-        status: generatedDocument.collaborators.length ? "Pending Collaborator Acceptance" : "Verified and Stored",
-        storedAt: generatedDocument.storedAt || new Date().toISOString(),
-        sentAt: new Date().toISOString(),
-      },
-      actor,
-      generatedDocument.collaborators.length ? "Sent invitations to collaborators" : "Stored solo writer split",
-    ), actor);
-
-    setSavingDocument(true);
-    try {
-      const result = await onSendDocument(sentDocument);
-      setGeneratedDocument(result.document);
-      setDocumentStored(true);
-      setDocumentSent(true);
-      toast.success(
-        generatedDocument.collaborators.length
-          ? "Messages review started"
-          : "Solo SPLIT Sheet stored",
-        {
-          description: result.persisted
-            ? "Collaborators can now review, chat, counter, and sign in Messages."
-            : "Saved locally with a server-side delivery placeholder.",
-        },
-      );
-    } catch (error) {
-      toast.error("Could not send this SPLIT Sheet", {
-        description: error instanceof Error ? error.message : "Check the split percentages and try again.",
-      });
-    } finally {
-      setSavingDocument(false);
-    }
-  };
-
-  if (generatedDocument) {
-    return (
-      <SplitSheetDocumentPreview
-        document={generatedDocument}
-        viewerProfile={userProfile}
-        stored={documentStored}
-        sent={documentSent}
-        onBackToEdit={() => setGeneratedDocument(null)}
-        onStore={handleStoreGeneratedDocument}
-        onSend={handleSendGeneratedDocument}
-        onDone={onBack}
-      />
-    );
-  }
 
   return (
     <div className="min-h-screen bg-background flex flex-col safe-top safe-bottom">
@@ -202,6 +153,7 @@ export default function ContractBuilder({
         <button
           type="button"
           aria-label="Go to Dashboard"
+          disabled={savingDocument}
           onClick={onHome ?? onBack}
           className="hidden rounded-lg bg-[hsl(var(--sidebar-background))] px-2 py-1 transition-transform hover:scale-[1.02] focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30 md:inline-flex"
         >
@@ -209,15 +161,16 @@ export default function ContractBuilder({
         </button>
         <button
           onClick={onBack}
+          disabled={savingDocument}
           className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
         >
           <ArrowLeft className="h-3.5 w-3.5" />
           <span className="hidden md:inline">Back</span>
         </button>
         <div className="h-5 w-px bg-border hidden md:block" />
-        <span className="text-sm font-semibold">New SPLIT</span>
+        <span className="text-sm font-semibold">{initialDocument ? "Edit Draft" : "New SPLIT"}</span>
         <div className="ml-auto overflow-x-auto">
-          <ProgressTracker current={step} onNavigate={setStep} />
+          <ProgressTracker current={step} onNavigate={(nextStep) => { if (!inFlight.current && !deleting) setStep(nextStep); }} />
         </div>
       </header>
 
@@ -232,45 +185,72 @@ export default function ContractBuilder({
               : "max-w-4xl py-6 md:py-10"
           }`}
         >
-          {step === "metadata" && <StepMetadata data={data} signedInArtistName={signedInArtistName} onChange={update} />}
-          {step === "clauses" && <StepClauses data={data} onChange={update} />}
-          {step === "parties" && (
-            <StepParties
-              data={data}
-              onChange={update}
-              recentCollaborators={recentCollaborators}
-              currentProfile={userProfile}
-            />
+          {initialDocument && onDeleteDocument && (
+            <div className="mb-4 flex justify-end">
+              <DeleteDraftButton document={initialDocument} profile={userProfile} onDelete={onDeleteDocument}
+                disabled={saving !== null || completed} onPendingChange={setDeleting} />
+            </div>
           )}
-          {step === "review" && <StepReview data={data} />}
-
-          {/* Navigation */}
-          <div className="mt-8 md:mt-10 flex items-center justify-between border-t border-border pt-5 md:pt-6">
-            <button
-              onClick={stepIdx === 0 ? onBack : prev}
-              className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium"
-            >
-              ← {stepIdx === 0 ? "Cancel" : "Back"}
-            </button>
-
-            {step === "review" ? (
-              <button
-                onClick={handlePropose}
-                disabled={savingDocument}
-                className="bg-primary text-primary-foreground rounded-lg px-5 md:px-6 py-2.5 text-sm font-semibold hover:bg-primary/90 transition-colors disabled:cursor-not-allowed disabled:opacity-40 shadow-sm"
-              >
-                {savingDocument ? "Saving draft..." : "Create SPLIT Sheet"}
-              </button>
-            ) : (
-              <button
-                disabled={!canContinue()}
-                onClick={next}
-                className="bg-primary text-primary-foreground rounded-lg px-5 md:px-6 py-2.5 text-sm font-semibold hover:bg-primary/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed shadow-sm"
-              >
-                Continue →
-              </button>
+          <fieldset disabled={savingDocument || completed} className="min-w-0">
+            {step === "metadata" && <StepMetadata data={data} signedInArtistName={signedInArtistName} onChange={update} />}
+            {step === "clauses" && <StepClauses data={data} onChange={update} />}
+            {step === "parties" && (
+              <StepParties
+                data={data}
+                onChange={update}
+                recentCollaborators={recentCollaborators}
+                currentProfile={userProfile}
+              />
             )}
-          </div>
+            {step === "review" && <StepReview data={data} />}
+
+            {/* Navigation */}
+            {saveError && !confirmSend && <p role="alert" className="mt-4 text-sm text-destructive">{saveError}</p>}
+            <div className="mt-8 md:mt-10 flex flex-wrap items-center justify-between gap-4 border-t border-border pt-5 md:pt-6">
+              <button
+                onClick={stepIdx === 0 ? onBack : prev}
+                className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium"
+              >
+                ← {stepIdx === 0 ? "Cancel" : "Back"}
+              </button>
+
+              {step === "review" ? (
+                <div className="grid w-full grid-cols-2 gap-2 min-[480px]:w-auto">
+                  <Button variant="outline" onClick={() => void finishDocument("draft")} disabled={savingDocument || !canFinish} aria-busy={saving === "draft"} className="h-auto min-h-11 whitespace-normal px-3 py-2 text-xs sm:text-sm">
+                    {saving === "draft" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                    {saving === "draft" ? "Saving..." : "Save To Drafts"}
+                  </Button>
+                  <AlertDialog open={confirmSend} onOpenChange={(open) => { if (!inFlight.current) { setConfirmSend(open); setSaveError(""); } }}>
+                    <AlertDialogTrigger asChild>
+                      <Button disabled={savingDocument || !canFinish} className="h-auto min-h-11 whitespace-normal px-3 py-2 text-xs sm:text-sm"><Send className="h-4 w-4" />Send Split Invite</Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent className="w-[calc(100%-2rem)] max-w-md rounded-lg">
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Ready to send?</AlertDialogTitle>
+                        <AlertDialogDescription>Make sure all details, split percentages, and collaborator usernames are correct before sending.</AlertDialogDescription>
+                      </AlertDialogHeader>
+                      {saveError && <p role="alert" className="text-sm text-destructive">{saveError}</p>}
+                      <AlertDialogFooter className="gap-2 sm:space-x-0">
+                        <AlertDialogCancel disabled={savingDocument} className="mt-0">Review Details</AlertDialogCancel>
+                        <Button onClick={() => void finishDocument("send")} disabled={savingDocument || completed || !canFinish} aria-busy={saving === "send"}>
+                          {saving === "send" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                          {saving === "send" ? "Sending..." : "Send Split Invite"}
+                        </Button>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </div>
+              ) : (
+                <button
+                  disabled={!canContinue()}
+                  onClick={next}
+                  className="split-press bg-primary text-primary-foreground rounded-lg px-5 md:px-6 py-2.5 text-sm font-semibold hover:bg-primary/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed shadow-sm"
+                >
+                  Continue →
+                </button>
+              )}
+            </div>
+          </fieldset>
         </div>
       </div>
     </div>

@@ -4,6 +4,11 @@
 
 @layer base {
   :root {
+    --split-motion-press: 80ms;
+    --split-motion-feedback: 120ms;
+    --split-motion-enter: 160ms;
+    --split-motion-panel: 200ms;
+    --split-motion-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
     --background: 0 0% 100%;
     --foreground: 211 70% 15%;
 
@@ -165,3 +170,69 @@
 .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
 .safe-left { padding-left: env(safe-area-inset-left); }
 .safe-right { padding-right: env(safe-area-inset-right); }
+
+/* Keep feedback local to controls; never animate the surrounding layout. */
+:is(.split-press, .workspace-action, .workspace-icon-button, .workspace-profile-button) {
+  transition: scale var(--split-motion-feedback) var(--split-motion-ease),
+    background-color var(--split-motion-feedback), color var(--split-motion-feedback),
+    border-color var(--split-motion-feedback), opacity var(--split-motion-feedback);
+}
+:is(.split-press, .workspace-action, .workspace-icon-button, .workspace-profile-button):not(:disabled):not([aria-disabled="true"]):not([aria-busy="true"]):active {
+  scale: 0.975;
+  transition-duration: var(--split-motion-press);
+}
+.workspace-navigation button::after, .workspace-counts button::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+  left: 0;
+  right: 0;
+  bottom: -2px;
+  height: 2px;
+  background: hsl(var(--primary));
+  transform: scaleX(0);
+  opacity: 0;
+  transition: transform var(--split-motion-enter) var(--split-motion-ease), opacity var(--split-motion-feedback);
+}
+.workspace-navigation button.active::after, .workspace-counts button[aria-pressed="true"]::after {
+  transform: scaleX(1);
+  opacity: 1;
+}
+.workspace-navigation button > svg, .workspace-counts button > svg, .workspace-action > .lucide-arrow-right {
+  transition: transform var(--split-motion-feedback) var(--split-motion-ease);
+}
+.workspace-navigation button:active > svg, .workspace-counts button:active > svg { transform: scale(0.92); }
+@media (hover: hover) and (pointer: fine) {
+  .workspace-action:not(:disabled):not([aria-busy="true"]):hover > .lucide-arrow-right { transform: translateX(3px); }
+}
+:root [data-split-motion="popup"][data-state], :root [data-split-motion="overlay"][data-state] {
+  animation-duration: var(--split-motion-enter);
+  animation-timing-function: var(--split-motion-ease);
+}
+:root [data-split-motion="popup"][data-state] { --tw-enter-scale: 0.98; --tw-exit-scale: 0.98; }
+:root [data-split-motion="panel"][data-state] {
+  animation-duration: var(--split-motion-panel);
+  animation-timing-function: var(--split-motion-ease);
+}
+.split-confirmation, [data-sonner-toast][data-type="success"] [data-icon] {
+  color: hsl(var(--split-verified));
+  animation: split-confirm var(--split-motion-panel) var(--split-motion-ease);
+}
+@keyframes split-confirm {
+  from { opacity: 0.4; transform: scale(0.8); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+/* Include portalled menus/toasts and existing loading indicators, not just the dashboard. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    transition-delay: 0ms !important;
+    scroll-behavior: auto !important;
+  }
+  :is(.split-press, .workspace-action, .workspace-icon-button, .workspace-profile-button):active { scale: none !important; }
+  .workspace-navigation button:active > svg, .workspace-counts button:active > svg,
+  .workspace-action:hover > .lucide-arrow-right { transform: none !important; }
+}

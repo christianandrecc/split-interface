@@ -3,8 +3,7 @@
 .workspace-brand { width: 166px; flex-shrink: 0; }
 .workspace-brand img { display: block; width: 100%; height: 48px; object-fit: contain; }
 .workspace-navigation { align-self: stretch; display: flex; flex-shrink: 0; align-items: stretch; gap: 20px; }
-.workspace-navigation button { display: flex; align-items: center; gap: 9px; border-bottom: 2px solid transparent; padding: 0 3px; font-size: 14px; font-weight: 600; white-space: nowrap; }
-.workspace-navigation button.active { border-color: hsl(var(--primary)); }
+.workspace-navigation button { position: relative; display: flex; align-items: center; gap: 9px; border-bottom: 2px solid transparent; padding: 0 3px; font-size: 14px; font-weight: 600; white-space: nowrap; }
 .workspace-navigation button:hover { color: hsl(var(--muted-foreground)); }
 .workspace-header-search { flex: 1; min-width: 140px; }
 .workspace-header-tools { display: flex; flex-shrink: 0; align-items: center; gap: 12px; }
@@ -23,11 +22,11 @@
 .workspace-title-row h1 { min-width: 0; overflow-wrap: anywhere; font-size: 46px; line-height: 1.2; font-weight: 850; }
 .workspace-title-row time { font-size: 16px; color: hsl(var(--muted-foreground)); white-space: nowrap; }
 .workspace-counts { display: flex; flex-wrap: wrap; gap: 0; margin-top: 4px; border-bottom: 1px solid hsl(var(--border)); }
-.workspace-counts button { display: flex; align-items: center; gap: 9px; min-height: 48px; padding: 10px 20px; border-right: 1px solid hsl(var(--border)); border-bottom: 2px solid transparent; font-size: 15px; color: hsl(var(--muted-foreground)); text-align: left; }
+.workspace-counts button { position: relative; display: flex; align-items: center; gap: 9px; min-height: 48px; padding: 10px 20px; border-right: 1px solid hsl(var(--border)); border-bottom: 2px solid transparent; font-size: 15px; color: hsl(var(--muted-foreground)); text-align: left; }
 .workspace-counts button:first-child { padding-left: 4px; }
 .workspace-counts button:last-child { border-right: 0; }
 .workspace-counts button:hover { background: hsl(var(--secondary)); }
-.workspace-counts button[aria-pressed="true"] { border-bottom-color: hsl(var(--primary)); color: hsl(var(--foreground)); }
+.workspace-counts button[aria-pressed="true"] { color: hsl(var(--foreground)); }
 .workspace-counts strong { font-weight: 750; color: hsl(var(--foreground)); }
 .workspace-counts svg { width: 22px; height: 22px; color: hsl(var(--foreground)); flex-shrink: 0; }
 .workspace-counts .pending { color: hsl(var(--primary)); }

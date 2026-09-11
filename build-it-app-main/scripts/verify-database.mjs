@@ -31,6 +31,9 @@ async function load(id) {
 async function save(doc, mode = "send") {
   return (await db.query("select public.upsert_split_sheet_document($1,$2,'Untrusted actor') as doc", [doc, mode])).rows[0].doc;
 }
+async function deleteDraft(doc) {
+  return (await db.query("select public.delete_split_sheet_draft($1,$2) as id", [doc.id, doc.serverRevision ?? null])).rows[0].id;
+}
 async function action(doc, kind, notes = null, response = null) {
   return (await db.query("select public.apply_split_sheet_participant_update($1,$2,$3,'Untrusted actor',$4,$5) as doc",
     [doc.id, doc, kind, response, notes])).rows[0].doc;
@@ -91,7 +94,7 @@ try {
     p.proconfig from pg_proc p join pg_namespace n on n.oid=p.pronamespace
     where n.nspname='public' and p.prosecdef`)).rows;
   assert.equal(privileges.filter(row => row.anon_access).length, 0);
-  for (const name of ["load_my_split_sheets", "upsert_split_sheet_document", "apply_split_sheet_participant_update", "is_split_sheet_participant"]) {
+  for (const name of ["load_my_split_sheets", "upsert_split_sheet_document", "apply_split_sheet_participant_update", "is_split_sheet_participant", "delete_split_sheet_draft"]) {
     assert.equal(privileges.find(row => row.proname === name).user_access, true);
     assert.ok(privileges.find(row => row.proname === name).proconfig.some(value => value.startsWith("search_path=")));
   }
@@ -121,6 +124,9 @@ try {
   assert.equal(doc.auditTrail[0].actor, "QA Creator");
   assert.notEqual(doc.currentProposalId, maliciousDraft.currentProposalId);
   report.checks.push("Draft ignores forged final status, signatures, timestamps, actor and audit history");
+  assert.equal((await admin("select id from public.split_notifications where split_sheet_id=$1", [doc.id])).rows.length, 0);
+  assert.equal((await admin("select id from public.split_sheet_contract_deliveries where split_sheet_id=$1", [doc.id])).rows.length, 0);
+  report.checks.push("Saving a draft does not notify collaborators or queue invitations");
   await login(participant);
   assert.equal(await load(doc.id), undefined);
   assert.equal((await db.query("select id from public.split_sheets")).rows.length, 0);
@@ -135,6 +141,11 @@ try {
   doc = await save(doc);
   assert.equal(doc.status, "Pending Collaborator Acceptance");
   assert.equal(activeApprovals(doc).find(a => a.collaboratorId === "creator").status, "Approved");
+  const inviteRecipients = (await admin("select distinct recipient_user_id from public.split_notifications where split_sheet_id=$1 and event_type='split_invite'", [doc.id])).rows;
+  assert.deepEqual(inviteRecipients.map(row => row.recipient_user_id), [participant]);
+  assert.equal((await admin("select id from public.split_sheet_contract_deliveries where split_sheet_id=$1", [doc.id])).rows.length, 1);
+  assert.equal(doc.collaboratorInvites[0].status, "Pending");
+  report.checks.push("Sending queues invitations and notifies only the assigned collaborator, with no automatic acceptance");
   await rejectsWithoutWrites("Creator cannot replace sent state", () => save(doc, "update"), "55000", /Messages/);
   await rejectsWithoutWrites("Repeated send cannot requeue delivery", () => save(doc), "55000", /Messages/);
   await rejectsWithoutWrites("Creator cannot sign before approval", () => action(doc, "sign"), "55000", /Every party/);
@@ -187,10 +198,24 @@ try {
   assert.equal(doc.status, "Ready to Sign");
   await rejectsWithoutWrites("Wrong proposal cannot be signed even with a current revision", () => action({ ...doc, currentProposalId: "other-proposal" }, "sign"), "40001", /proposal changed/);
   const beforeCounter = doc;
+  const wrongParties = counter(doc, 50);
+  wrongParties.data.parties[1].id = "replacement-person";
+  await rejectsWithoutWrites("Counter cannot replace participants", () => action(wrongParties, "counter_offer"), "22023", /invalid/);
+  const badTotal = counter(doc, 50);
+  badTotal.data.parties[0].percent = 40;
+  await rejectsWithoutWrites("Counter total must equal 100", () => action(badTotal, "counter_offer"), "22023", /total exactly 100/);
   doc = await action(counter(doc, 45), "counter_offer", "Proposed shares");
   assert.equal(doc.version, 2);
   assert.notEqual(doc.currentProposalId, beforeCounter.currentProposalId);
   assert.equal(doc.splitProposalVersions.at(-1).proposedByUserId, participant);
+  assert.equal(doc.splitProposalVersions.at(-1).proposedByParticipantId, doc.collaboratorInvites[0].id);
+  for (const kind of ["split_accept", "split_reject", "counter_offer"]) {
+    const forgedAuthor = counter(doc, 50);
+    forgedAuthor.splitProposalVersions.at(-1).proposedByUserId = creator;
+    forgedAuthor.splitProposalVersions.at(-1).proposedByParticipantId = "creator";
+    await rejectsWithoutWrites(`Own counter response blocked despite forged attribution (${kind})`,
+      () => action({ ...forgedAuthor, currentProposalId: doc.currentProposalId }, kind), "55000", /own proposal/);
+  }
   assert.equal(activeApprovals(doc).find(a => a.collaboratorId === "creator").status, "Pending");
   assert.ok(activeSignatures(doc).every(s => s.status === "Pending"));
   assert.equal(doc.status, "Pending Split Approval");
@@ -223,6 +248,9 @@ try {
   assert.ok(activeSignatures(doc).every(s => s.status === "Pending"));
   const collaboratorRows = (await db.query("select signature_status, signed_at from public.split_sheet_collaborators where split_sheet_id=$1", [doc.id])).rows;
   assert.ok(collaboratorRows.every(row => row.signature_status === "Pending" && row.signed_at === null));
+  for (const kind of ["split_accept", "split_reject", "counter_offer"]) {
+    await rejectsWithoutWrites(`Creator cannot respond to own counter (${kind})`, () => action(doc, kind), "55000", /own proposal/);
+  }
   await login(participant);
   doc = await action(doc, "split_accept");
   await admin("update public.profiles set legal_name=null where user_id=$1", [participant]);
@@ -255,6 +283,7 @@ try {
   report.checks.push("Notifications still readable after signing");
   await login(creator);
   const duplicate = fixture();
+  await rejectsWithoutWrites("Final record cannot be deleted through draft RPC", () => deleteDraft(doc), "55000", /unsent, unsigned/);
   duplicate.data.parties[1].id = duplicate.data.parties[0].id;
   await rejectsWithoutWrites("Duplicate party ids rejected", () => save(duplicate), "22023", /unique ids/);
   const duplicateUser = fixture();
@@ -269,12 +298,6 @@ try {
   assert.equal(declined.status, "Disputed");
   await login(creator);
   await rejectsWithoutWrites("Declined party cannot be skipped", () => action(declined, "sign"), "55000", /Every party/);
-  const wrongParties = counter(declined, 50);
-  wrongParties.data.parties[1].id = "replacement-person";
-  await rejectsWithoutWrites("Counter cannot replace participants", () => action(wrongParties, "counter_offer"), "22023", /invalid/);
-  const badTotal = counter(declined, 50);
-  badTotal.data.parties[0].percent = 40;
-  await rejectsWithoutWrites("Counter total must equal 100", () => action(badTotal, "counter_offer"), "22023", /total exactly 100/);
   const oneParty = fixture();
   oneParty.data.parties = [oneParty.data.parties[0]];
   oneParty.data.parties[0].percent = 100;
@@ -300,6 +323,38 @@ try {
   legacy = await action(legacy, "sign");
   assert.equal(legacy.status, "Verified and Stored");
   report.checks.push("Unfinished legacy records request fresh authenticated signatures; existing finalized records remain untouched");
+  await login(creator);
+  let deletable = await save(fixture(), "draft");
+  for (const who of [participant, outsider]) {
+    await login(who);
+    await rejectsWithoutWrites("Non-owner cannot delete an unsent draft", () => deleteDraft(deletable), "42501", /Only the creator/);
+  }
+  await login(null);
+  await rejectsWithoutWrites("Anonymous draft deletion blocked", () => deleteDraft(deletable), "42501", /permission denied/);
+  await login(creator);
+  await rejectsWithoutWrites("Direct draft deletion blocked", () => db.query("delete from public.split_sheets where id=$1", [deletable.id]), "42501", /permission denied/);
+  await rejectsWithoutWrites("Draft deletion requires revision", () => deleteDraft({ ...deletable, serverRevision: undefined }), "40001", /Refresh/);
+  const oldDraft = deletable;
+  deletable = await save(deletable, "draft");
+  await rejectsWithoutWrites("Draft edited in another tab cannot be deleted from stale view", () => deleteDraft(oldDraft), "40001", /Refresh/);
+  assert.equal(await deleteDraft(deletable), deletable.id);
+  for (const table of tables) {
+    const key = table === "split_sheets" ? "id" : "split_sheet_id";
+    assert.equal((await admin(`select id from public.${table} where ${key}=$1`, [deletable.id])).rows.length, 0);
+  }
+  assert.equal(await deleteDraft(deletable), deletable.id);
+  assert.equal(await deleteDraft(fixture()) !== undefined, true);
+  report.checks.push("Owner deletion removes draft and dependent rows; retry and local-only deletion are idempotent");
+  await rejectsWithoutWrites("Deleted draft cannot be resurrected by a stale save", () => save(deletable, "draft"), "40001", /no longer exists/);
+  await rejectsWithoutWrites("Deleted draft cannot be sent from another tab", () => save(deletable, "send"), "40001", /no longer exists/);
+  const beforeSend = await save(fixture(), "draft");
+  const afterSend = await save(beforeSend, "send");
+  await rejectsWithoutWrites("Sending wins the race: old draft cannot be deleted", () => deleteDraft(beforeSend), "55000", /unsent, unsigned/);
+  await rejectsWithoutWrites("Sent records cannot be deleted even with current revision", () => deleteDraft(afterSend), "55000", /unsent, unsigned/);
+  const signedDraft = await save(fixture(), "draft");
+  signedDraft.splitSignatures[0].status = "Signed";
+  await admin("update public.split_sheets set document_payload=$1 where id=$2", [signedDraft, signedDraft.id]);
+  await rejectsWithoutWrites("Draft with a historical signature cannot be deleted", () => deleteDraft(signedDraft), "55000", /unsent, unsigned/);
   console.log(JSON.stringify(report, null, 2));
 } catch (error) {
   console.error(JSON.stringify({ message: error.message, code: error.code, detail: error.detail, where: error.where, stack: error.code ? undefined : error.stack }, null, 2));

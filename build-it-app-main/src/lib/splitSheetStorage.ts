@@ -286,6 +286,39 @@ export function documentBelongsToProfile(document: StoredSplitSheetDocument, pro
   );
 }
 
+export function canDeleteSplitSheetDraft(document: StoredSplitSheetDocument, profile: UserProfile) {
+  return document.status === "Draft" && !document.sentAt && !document.verifiedAt
+    && !document.splitSignatures.some((signature) => signature.status === "Signed" || signature.signedAt)
+    && documentBelongsToProfile(document, profile);
+}
+
+export async function deleteSplitSheetDraft(document: StoredSplitSheetDocument, profile: UserProfile): Promise<void> {
+  if (!canDeleteSplitSheetDraft(document, profile)) {
+    throw new Error("Only your own unsent drafts can be deleted.");
+  }
+
+  if (isSupabaseConfigured) {
+    const userId = await getActiveUserId();
+    if ((profile.authUserId && profile.authUserId !== userId)
+      || !canDeleteSplitSheetDraft(document, { ...profile, authUserId: userId })) {
+      throw new Error("Your account changed. Sign in to the draft owner's account and try again.");
+    }
+    const { data, error } = await supabase.rpc("delete_split_sheet_draft", {
+      p_split_sheet_id: document.id,
+      p_expected_revision: document.serverRevision ?? null,
+    });
+    if (error) throw new Error(`Could not delete this draft. ${explainSplitSheetPersistenceError(new Error(error.message))}`);
+    if (data !== document.id) throw new Error("Deletion was not confirmed. Your draft is still here; please try again.");
+    removeLocalDocument(document.id, splitSheetLocalStorageOwnerForAuthUser(userId));
+  } else if (document.serverRevision !== undefined || document.storedAt) {
+    throw new Error("Connect to Supabase before deleting a stored draft.");
+  }
+
+  // Remove only this owner's legacy copy, so it cannot reappear after a reload.
+  const legacy = loadLocalSplitSheetDocuments();
+  saveLocalSplitSheetDocuments(legacy.filter((item) => item.id !== document.id || !documentBelongsToProfile(item, profile)));
+}
+
 export function findInviteForProfile(document: StoredSplitSheetDocument, profile: UserProfile) {
   const profileUsername = normalizeIdentifier(profile.username);
   const profileEmail = normalizeIdentifier(profile.emailAddress);
@@ -439,6 +472,9 @@ export async function saveSplitSheetDocument(
   }
 
   if (!isSupabaseConfigured) {
+    if (mode === "send" || mode === "contract_delivery") {
+      throw new Error("Connect to Supabase before sending split invitations. You can save a draft instead.");
+    }
     upsertLocalDocument(document);
     return { document, persisted: false };
   }

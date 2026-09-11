@@ -520,6 +520,13 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      delete_split_sheet_draft: {
+        Args: {
+          p_split_sheet_id: string
+          p_expected_revision: number | null
+        }
+        Returns: string
+      }
       apply_split_sheet_participant_update: {
         Args: {
           p_action: string

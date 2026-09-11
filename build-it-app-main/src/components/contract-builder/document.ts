@@ -55,6 +55,7 @@ export type StoredSplitSheetDocument = {
     versionNumber: number;
     proposedBy: string;
     proposedByUserId?: string;
+    proposedByParticipantId?: string;
     notes: string;
     createdAt: string;
     allocations: {
@@ -73,6 +74,7 @@ export type StoredSplitSheetDocument = {
     status: "Pending" | "Approved" | "Rejected";
     notes?: string;
     respondedAt?: string;
+    responderUserId?: string;
   }[];
   splitSignatures: {
     id: string;
@@ -194,7 +196,7 @@ export function createSplitSheetDocument(data: ContractData, creatorProfile: Use
       {
         timestamp: now,
         actor: actorName(creatorProfile),
-        action: "SPLIT Sheet preview generated",
+        action: "Prepared split sheet",
       },
     ],
   };

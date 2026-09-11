@@ -1,5 +1,23 @@
 import type { StoredSplitSheetDocument } from "@/components/contract-builder/document";
 
+export function makeCounterDocument(): StoredSplitSheetDocument {
+  const document = makeDocument();
+  const createdAt = "2026-09-11T12:39:00.252753+00:00";
+  document.sentAt = document.createdAt;
+  document.serverRevision = 2;
+  document.version = 2;
+  document.currentProposalId = "proposal-2";
+  document.splitProposalVersions.push({
+    ...document.splitProposalVersions[0], id: "proposal-2", versionNumber: 2, createdAt,
+    proposedBy: "Maya Alexandra Rios", proposedByUserId: "maya-account", notes: "Revised shares",
+  });
+  document.splitApprovals.push(
+    { id: "v2-creator", proposalVersionId: "proposal-2", collaboratorId: "creator", collaboratorName: "Chori", status: "Pending" },
+    { id: "v2-maya", proposalVersionId: "proposal-2", collaboratorId: "maya-party", collaboratorName: "@mayarios", status: "Approved", responderUserId: "maya-account", respondedAt: createdAt },
+  );
+  return document;
+}
+
 export function makeDocument(): StoredSplitSheetDocument {
   const now = "2026-08-12T12:00:00.000Z";
 

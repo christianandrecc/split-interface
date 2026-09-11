@@ -72,6 +72,7 @@ export default function StepReview({ data }: Props) {
                 <div className="min-w-0">
                   <span className="block truncate text-sm font-medium">{partyDisplayName(party)}</span>
                   <span className="text-xs text-muted-foreground">{party.role}</span>
+                  {!party.isCurrentUser && <span className="block break-all text-xs text-muted-foreground">{party.inviteValue || party.email || party.phoneNumber}</span>}
                 </div>
                 <span className="text-sm font-bold tabular-nums">{party.percent}%</span>
               </div>

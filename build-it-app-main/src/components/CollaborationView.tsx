@@ -3,7 +3,6 @@ import {
   ArrowLeft,
   Check,
   CheckCircle2,
-  ChevronDown,
   FileSignature,
   GitBranch,
   Lightbulb,
@@ -13,7 +12,6 @@ import {
   PenLine,
   Send,
   Sparkles,
-  Split,
   X,
 } from "lucide-react";
 import splitLockup from "@/assets/split-navy-amber-lockup.png";
@@ -45,6 +43,7 @@ import {
   getProfileDisplayName,
   participantIdentityForProfile,
   participantMatchesViewer,
+  proposalResponsePermissions,
   type DealParticipant,
   type NegotiationDeal,
   type NegotiationMessage,
@@ -53,6 +52,9 @@ import {
   type SplitVersion,
 } from "@/lib/splitSheetNegotiation";
 import type { UserProfile } from "@/lib/userProfile";
+import CounterOfferDialog from "@/components/CounterOfferDialog";
+import DealSummary from "@/components/DealSummary";
+import { counterAllocationState } from "@/lib/counterOffer";
 import { toast } from "sonner";
 
 type PersistContext = SplitSheetUpdateContext & {
@@ -63,13 +65,14 @@ type CollaborationViewProps = {
   documents: StoredSplitSheetDocument[];
   userProfile: UserProfile;
   initialDealId?: string;
+  onOpenAgreement?: (id: string) => void;
   onUpdateDocument: (
     document: StoredSplitSheetDocument,
     context?: SplitSheetUpdateContext,
   ) => StoredSplitSheetDocument | void | Promise<StoredSplitSheetDocument | void>;
 };
 
-export default function CollaborationView({ documents, userProfile, initialDealId, onUpdateDocument }: CollaborationViewProps) {
+export default function CollaborationView({ documents, userProfile, initialDealId, onUpdateDocument, onOpenAgreement }: CollaborationViewProps) {
   const deals = useMemo(
     () => documents.map((document) => documentToNegotiationDeal(document, userProfile)).filter(Boolean) as NegotiationDeal[],
     [documents, userProfile],
@@ -79,6 +82,10 @@ export default function CollaborationView({ documents, userProfile, initialDealI
   const [counterPercents, setCounterPercents] = useState<Record<string, string>>({});
   const [counterNote, setCounterNote] = useState("");
   const [counterOpen, setCounterOpen] = useState(false);
+  const [counterSnapshot, setCounterSnapshot] = useState<{ dealId: string; version: SplitVersion } | null>(null);
+  const [counterSending, setCounterSending] = useState(false);
+  const [counterError, setCounterError] = useState("");
+  const counterInFlight = useRef(false);
   const [contextOpen, setContextOpen] = useState(true);
   const [mobileChatOpen, setMobileChatOpen] = useState(false);
   const lastInitialDealIdRef = useRef<string | undefined>();
@@ -92,6 +99,7 @@ export default function CollaborationView({ documents, userProfile, initialDealI
   const viewerIdentity = selectedDeal ? participantIdentityForProfile(selectedDeal.document, userProfile) : null;
   const viewerName = viewerIdentity?.name || getProfileDisplayName(userProfile);
   const viewerParticipantId = selectedDeal ? viewerIdentity?.id || firstViewerParticipantId(selectedDeal) : "";
+  const canCounter = Boolean(selectedDeal && proposalResponsePermissions(selectedDeal, currentVersion?.id).counter);
 
   useEffect(() => {
     const initialDealExists = Boolean(initialDealId && deals.some((deal) => deal.id === initialDealId));
@@ -119,10 +127,13 @@ export default function CollaborationView({ documents, userProfile, initialDealI
       if (context.successMessage) {
         toast.success(context.successMessage);
       }
+      return { ok: true as const };
     } catch (error) {
+      const message = error instanceof Error ? error.message : "Try again after checking your connection.";
       toast.error("Messages could not sync this update", {
-        description: error instanceof Error ? error.message : "Try again after checking your connection.",
+        description: message,
       });
+      return { ok: false as const, error: message };
     }
   };
 
@@ -223,8 +234,8 @@ export default function CollaborationView({ documents, userProfile, initialDealI
     });
   };
 
-  const rejectProposal = async () => {
-    if (!selectedDeal || !currentVersion) return;
+  const rejectProposal = async (proposalId: string) => {
+    if (!selectedDeal || !currentVersion || !proposalResponsePermissions(selectedDeal, proposalId).dispute) return;
 
     const currentProposal = selectedDeal.document.splitProposalVersions.find((proposal) => proposal.id === currentVersion.id);
     const currentApprovals = selectedDeal.document.splitApprovals.filter((approval) => approval.proposalVersionId === currentProposal?.id);
@@ -260,8 +271,8 @@ export default function CollaborationView({ documents, userProfile, initialDealI
     });
   };
 
-  const acceptProposal = async () => {
-    if (!selectedDeal || !currentVersion) return;
+  const acceptProposal = async (proposalId: string) => {
+    if (!selectedDeal || !currentVersion || !proposalResponsePermissions(selectedDeal, proposalId).accept) return;
 
     const currentProposal = selectedDeal.document.splitProposalVersions.find((proposal) => proposal.id === currentVersion.id);
     const currentApprovals = selectedDeal.document.splitApprovals.filter((approval) => approval.proposalVersionId === currentProposal?.id);
@@ -307,8 +318,8 @@ export default function CollaborationView({ documents, userProfile, initialDealI
     });
   };
 
-  const openCounterComposer = () => {
-    if (!selectedDeal || !currentVersion) return;
+  const openCounterComposer = (proposalId = currentVersion?.id) => {
+    if (!selectedDeal || !currentVersion || !proposalResponsePermissions(selectedDeal, proposalId).counter) return;
     if (FINAL_NEGOTIATION_DOCUMENT_STATUSES.has(selectedDeal.document.status)) {
       toast.info("This SPLIT is signed and locked", {
         description: "Locked SPLIT records cannot be renegotiated or changed.",
@@ -317,95 +328,124 @@ export default function CollaborationView({ documents, userProfile, initialDealI
     }
     setCounterPercents(Object.fromEntries(currentVersion.allocations.map((allocation) => [allocation.participantId, String(allocation.percent)])));
     setCounterNote("");
+    setCounterSnapshot({ dealId: selectedDeal.id, version: currentVersion });
+    setCounterError("");
     setCounterOpen(true);
   };
 
   const createCounterOffer = async () => {
-    if (!selectedDeal || !currentVersion) return;
+    if (!selectedDeal || !currentVersion || !counterSnapshot || counterInFlight.current) return;
     if (FINAL_NEGOTIATION_DOCUMENT_STATUSES.has(selectedDeal.document.status)) {
       toast.error("This SPLIT is signed and locked");
-      setCounterOpen(false);
+      return;
+    }
+    if (counterSnapshot.dealId !== selectedDeal.id || counterSnapshot.version.id !== currentVersion.id) {
+      setCounterError("The proposal changed. Reload its shares before sending.");
+      return;
+    }
+    if (!proposalResponsePermissions(selectedDeal, counterSnapshot.version.id).counter) {
+      setCounterError("You can only respond to another collaborator's current proposal.");
+      return;
+    }
+    const allocationState = counterAllocationState(currentVersion.allocations, counterPercents);
+    const partyIds = new Set(selectedDeal.document.data.parties.map((party) => party.id));
+    if (partyIds.size !== currentVersion.allocations.length || currentVersion.allocations.some((item) => !partyIds.has(item.participantId))) {
+      setCounterError("The collaborators changed. Reopen this record before sending.");
+      return;
+    }
+    if (!allocationState.valid) {
+      setCounterError("Shares must be between 0 and 100% and total exactly 100%.");
+      return;
+    }
+    if (!allocationState.changed && !counterNote.trim()) {
       return;
     }
 
-    const total = Object.values(counterPercents).reduce((sum, value) => sum + (Number(value) || 0), 0);
-    if (Math.abs(total - 100) > 0.01) {
-      toast.error("Counter must total 100%");
-      return;
-    }
-
-    const now = new Date().toISOString();
-    const proposalId = `${selectedDeal.document.id}-proposal-${Date.now()}`;
-    const versionNumber = (selectedDeal.document.splitProposalVersions.at(-1)?.versionNumber || selectedDeal.document.version || 1) + 1;
-    const allocations = selectedDeal.document.data.parties.map((party) => ({
-      partyId: party.id,
-      name: splitSheetPartyDisplayName(selectedDeal.document, party),
-      role: party.role || "Collaborator",
-      percentage: Number(counterPercents[party.id]) || 0,
-      notes: party.contributionDescription,
-    }));
-    const updatedParties = selectedDeal.document.data.parties.map((party) => ({
-      ...party,
-      percent: Number(counterPercents[party.id]) || 0,
-    }));
-    const creatorName = getProfileDisplayName(selectedDeal.document.creatorProfile);
-    const approvalRecords = selectedDeal.document.collaboratorInvites
-      .filter((invite) => invite.status === "Accepted")
-      .map((invite) => ({
-        id: `${proposalId}-${invite.id}`,
-        proposalVersionId: proposalId,
-        collaboratorId: invite.id,
-        collaboratorName: splitSheetParticipantDisplayName(selectedDeal.document, invite.id, invite.name),
-        status: participantMatchesViewer(selectedDeal, invite.id) ? "Approved" as const : "Pending" as const,
-        respondedAt: participantMatchesViewer(selectedDeal, invite.id) ? now : undefined,
+    counterInFlight.current = true;
+    setCounterSending(true);
+    setCounterError("");
+    try {
+      const now = new Date().toISOString();
+      const proposalId = `${selectedDeal.document.id}-proposal-${Date.now()}`;
+      const versionNumber = (selectedDeal.document.splitProposalVersions.at(-1)?.versionNumber || selectedDeal.document.version || 1) + 1;
+      const allocations = selectedDeal.document.data.parties.map((party) => ({
+        partyId: party.id,
+        name: splitSheetPartyDisplayName(selectedDeal.document, party),
+        role: party.role || "Collaborator",
+        percentage: Number(counterPercents[party.id]) || 0,
+        notes: party.contributionDescription,
       }));
-    const isCreator = documentBelongsToProfile(selectedDeal.document, userProfile);
-    const updatedDocument = addDocumentAuditTrail(
-      {
-        ...selectedDeal.document,
-        status: "Pending Split Approval",
-        version: versionNumber,
-        currentProposalId: proposalId,
-        data: {
-          ...selectedDeal.document.data,
-          parties: updatedParties,
+      const updatedParties = selectedDeal.document.data.parties.map((party) => ({
+        ...party,
+        percent: Number(counterPercents[party.id]) || 0,
+      }));
+      const creatorName = getProfileDisplayName(selectedDeal.document.creatorProfile);
+      const approvalRecords = selectedDeal.document.collaboratorInvites
+        .filter((invite) => invite.status === "Accepted")
+        .map((invite) => ({
+          id: `${proposalId}-${invite.id}`,
+          proposalVersionId: proposalId,
+          collaboratorId: invite.id,
+          collaboratorName: splitSheetParticipantDisplayName(selectedDeal.document, invite.id, invite.name),
+          status: participantMatchesViewer(selectedDeal, invite.id) ? "Approved" as const : "Pending" as const,
+          respondedAt: participantMatchesViewer(selectedDeal, invite.id) ? now : undefined,
+        }));
+      const isCreator = documentBelongsToProfile(selectedDeal.document, userProfile);
+      const updatedDocument = addDocumentAuditTrail(
+        {
+          ...selectedDeal.document,
+          status: "Pending Split Approval",
+          version: versionNumber,
+          currentProposalId: proposalId,
+          data: {
+            ...selectedDeal.document.data,
+            parties: updatedParties,
+          },
+          splitProposalVersions: [
+            ...selectedDeal.document.splitProposalVersions,
+            {
+              id: proposalId,
+              versionNumber,
+              proposedBy: viewerName,
+              proposedByUserId: userProfile.authUserId,
+              proposedByParticipantId: viewerParticipantId,
+              notes: counterNote.trim() || "Counter-offer from Messages",
+              createdAt: now,
+              allocations,
+            },
+          ],
+          splitApprovals: [
+            ...selectedDeal.document.splitApprovals,
+            {
+              id: `${proposalId}-creator`,
+              proposalVersionId: proposalId,
+              collaboratorId: "creator",
+              collaboratorName: creatorName,
+              status: isCreator ? "Approved" as const : "Pending" as const,
+              respondedAt: isCreator ? now : undefined,
+            },
+            ...approvalRecords,
+          ],
+          splitSignatures: selectedDeal.document.splitSignatures.filter((signature) => signature.proposalVersionId !== selectedDeal.document.currentProposalId),
         },
-        splitProposalVersions: [
-          ...selectedDeal.document.splitProposalVersions,
-          {
-            id: proposalId,
-            versionNumber,
-            proposedBy: viewerName,
-            notes: counterNote.trim() || "Counter-offer from Messages",
-            createdAt: now,
-            allocations,
-          },
-        ],
-        splitApprovals: [
-          ...selectedDeal.document.splitApprovals,
-          {
-            id: `${proposalId}-creator`,
-            proposalVersionId: proposalId,
-            collaboratorId: "creator",
-            collaboratorName: creatorName,
-            status: isCreator ? "Approved" as const : "Pending" as const,
-            respondedAt: isCreator ? now : undefined,
-          },
-          ...approvalRecords,
-        ],
-        splitSignatures: selectedDeal.document.splitSignatures.filter((signature) => signature.proposalVersionId !== selectedDeal.document.currentProposalId),
-      },
-      viewerName,
-      `Created split proposal v${versionNumber} from Messages`,
-    );
+        viewerName,
+        `Created split proposal v${versionNumber} from Messages`,
+      );
 
-    setCounterOpen(false);
-    await updateDocument(updatedDocument, {
-      action: "counter_offer",
-      responseType: "split_reject",
-      notes: counterNote.trim() || "Counter-offer from Messages",
-      successMessage: "Counter-offer sent",
-    });
+      const result = await updateDocument(updatedDocument, {
+        action: "counter_offer",
+        responseType: "split_reject",
+        notes: counterNote.trim() || "Counter-offer from Messages",
+        successMessage: "Counter-offer sent",
+      });
+      if (result.ok) setCounterOpen(false);
+      else setCounterError(result.error);
+    } catch (error) {
+      setCounterError(error instanceof Error ? error.message : "The counter could not be sent. Your changes are still here.");
+    } finally {
+      counterInFlight.current = false;
+      setCounterSending(false);
+    }
   };
 
   const signDeal = async () => {
@@ -453,7 +493,7 @@ export default function CollaborationView({ documents, userProfile, initialDealI
     await updateDocument(updatedDocument, {
       action: "sign",
       responseType: "signature",
-      successMessage: allSigned ? "Split sheet fully signed" : "Signature saved",
+      successMessage: allSigned ? "Split sheet signed" : "Signature saved",
     });
   };
 
@@ -498,10 +538,8 @@ export default function CollaborationView({ documents, userProfile, initialDealI
           onToggleContext={() => setContextOpen((open) => !open)}
           onSign={signDeal}
         />
-        {contextOpen && <MobileDealContext deal={selectedDeal} currentVersion={currentVersion} />}
-
-        <div className="flex min-h-0 flex-1">
-          <main className="flex min-w-0 flex-1 flex-col">
+        <div className="deal-conversation-layout">
+          <main className="flex min-h-0 min-w-0 flex-1 flex-col">
             <div className="flex-1 overflow-y-auto px-4 py-5 md:px-6 xl:px-8">
               <div className="mx-auto max-w-5xl space-y-4">
                 <InvitePrompt deal={selectedDeal} onAccept={acceptInvite} />
@@ -529,7 +567,7 @@ export default function CollaborationView({ documents, userProfile, initialDealI
                       <button
                         type="button"
                         onClick={signDeal}
-                        className="inline-flex items-center justify-center gap-2 rounded-lg bg-[hsl(var(--split-verified))] px-4 py-2 text-sm font-bold text-white hover:opacity-90"
+                        className="split-press inline-flex items-center justify-center gap-2 rounded-lg bg-[hsl(var(--split-verified))] px-4 py-2 text-sm font-bold text-white hover:opacity-90"
                       >
                         <FileSignature className="h-4 w-4" />
                         Sign
@@ -540,59 +578,14 @@ export default function CollaborationView({ documents, userProfile, initialDealI
               </div>
             </div>
 
-            {counterOpen && currentVersion && (
-              <div className="border-t border-border bg-card px-4 py-3 md:px-6 xl:px-8">
-                <div className="mx-auto max-w-5xl rounded-lg border border-border bg-background p-3">
-                  <div className="mb-3 flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
-                    <div>
-                      <div className="text-xs font-bold">Counter-offer split percentages</div>
-                      <p className="text-[11px] text-muted-foreground">Adjust shares. Total must equal exactly 100%.</p>
-                    </div>
-                    <span className={`text-xs font-bold tabular-nums ${counterTotal(counterPercents) === 100 ? "text-[hsl(var(--split-verified))]" : "text-destructive"}`}>
-                      {counterTotal(counterPercents)}%
-                    </span>
-                  </div>
-                  <div className="grid gap-2 md:grid-cols-2">
-                    {currentVersion.allocations.map((allocation) => (
-                      <label key={allocation.participantId} className="rounded-lg border border-border bg-card px-3 py-2 text-xs font-semibold text-muted-foreground">
-                        {allocation.name}
-                        <div className="mt-1 flex items-center gap-2">
-                          <input
-                            type="number"
-                            min="0"
-                            max="100"
-                            value={counterPercents[allocation.participantId] ?? allocation.percent}
-                            onChange={(event) =>
-                              setCounterPercents((current) => ({
-                                ...current,
-                                [allocation.participantId]: event.target.value,
-                              }))
-                            }
-                            className="h-9 w-24 rounded-lg border border-border bg-background px-3 text-sm font-bold tabular-nums outline-none focus:ring-2 focus:ring-ring/30"
-                          />
-                          <span className="text-sm font-bold text-foreground">%</span>
-                          <span className="text-[11px]">{allocation.role}</span>
-                        </div>
-                      </label>
-                    ))}
-                  </div>
-                  <textarea
-                    value={counterNote}
-                    onChange={(event) => setCounterNote(event.target.value)}
-                    placeholder="Optional note for the counter-offer..."
-                    className="mt-3 min-h-[70px] w-full resize-none rounded-lg border border-border bg-card px-3 py-2 text-sm outline-none placeholder:text-muted-foreground/60 focus:ring-2 focus:ring-ring/30"
-                  />
-                  <div className="mt-3 flex justify-end gap-2">
-                    <button type="button" onClick={() => setCounterOpen(false)} className="rounded-lg border border-border px-3 py-2 text-xs font-semibold text-muted-foreground hover:bg-secondary">
-                      Cancel
-                    </button>
-                    <button type="button" onClick={createCounterOffer} className="rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground hover:bg-primary/90">
-                      Send counter
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
+            {counterOpen && counterSnapshot && counterSnapshot.dealId === selectedDeal.id && <CounterOfferDialog
+              title={selectedDeal.title} version={counterSnapshot.version} values={counterPercents} note={counterNote}
+              sending={counterSending} error={counterError} finalized={isFinalRecord}
+              stale={counterSnapshot.version.id !== currentVersion?.id}
+              onValuesChange={(values) => { setCounterPercents(values); setCounterError(""); }}
+              onNoteChange={(note) => { setCounterNote(note); setCounterError(""); }}
+              onClose={() => { if (!counterInFlight.current) setCounterOpen(false); }}
+              onReload={() => { openCounterComposer(); setCounterNote(counterNote); }} onSubmit={() => void createCounterOffer()} />}
 
             <div className="border-t border-border bg-card px-4 py-3 md:px-6 xl:px-8">
               <div className="mx-auto flex max-w-5xl items-end gap-2">
@@ -610,8 +603,10 @@ export default function CollaborationView({ documents, userProfile, initialDealI
                 />
                 <button
                   type="button"
-                  onClick={openCounterComposer}
-                  disabled={isFinalRecord}
+                  onClick={() => openCounterComposer()}
+                  disabled={!canCounter}
+                  aria-label="Counter"
+                  title={canCounter ? "Counter the current proposal" : "Waiting for another collaborator's proposal"}
                   className="flex h-11 flex-shrink-0 items-center justify-center gap-2 rounded-xl border border-border px-3 text-xs font-bold text-muted-foreground hover:bg-secondary disabled:cursor-default disabled:opacity-40"
                 >
                   <GitBranch className="h-4 w-4" />
@@ -621,12 +616,13 @@ export default function CollaborationView({ documents, userProfile, initialDealI
                   key={selectedDeal.id}
                   deal={selectedDeal}
                   currentVersion={currentVersion}
-                  onOpenCounter={openCounterComposer}
+                  onOpenCounter={() => openCounterComposer()}
                 />
                 <button
                   type="button"
                   onClick={() => void sendTextMessage()}
-                  className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground hover:bg-primary/90"
+                  className="split-press flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground hover:bg-primary/90"
+                  aria-label="Send message"
                 >
                   <Send className="h-4 w-4" />
                 </button>
@@ -634,7 +630,7 @@ export default function CollaborationView({ documents, userProfile, initialDealI
             </div>
           </main>
 
-          {contextOpen && <DealContextPanel deal={selectedDeal} currentVersion={currentVersion} />}
+          {contextOpen && <DealSummary key={selectedDeal.id} deal={selectedDeal} currentVersion={currentVersion} onOpenAgreement={onOpenAgreement} />}
         </div>
       </section>
     </div>
@@ -748,6 +744,7 @@ function ChatHeader({
         <button
           type="button"
           onClick={onBack}
+          aria-label="Back to deal chats"
           className="inline-flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-secondary md:hidden"
         >
           <ArrowLeft className="h-4 w-4" />
@@ -767,7 +764,7 @@ function ChatHeader({
           <button
             type="button"
             onClick={onSign}
-            className="hidden items-center gap-2 rounded-lg bg-[hsl(var(--split-verified))] px-3 py-2 text-xs font-bold text-white hover:opacity-90 sm:flex"
+            className="split-press hidden items-center gap-2 rounded-lg bg-[hsl(var(--split-verified))] px-3 py-2 text-xs font-bold text-white hover:opacity-90 sm:flex"
           >
             <FileSignature className="h-3.5 w-3.5" />
             Sign
@@ -776,6 +773,9 @@ function ChatHeader({
         <button
           type="button"
           onClick={onToggleContext}
+          aria-label={contextOpen ? "Hide deal summary" : "Show deal summary"}
+          title={contextOpen ? "Hide deal summary" : "Show deal summary"}
+          aria-expanded={contextOpen}
           className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border text-muted-foreground hover:bg-secondary"
         >
           {contextOpen ? <PanelRightClose className="h-4 w-4" /> : <PanelRightOpen className="h-4 w-4" />}
@@ -801,31 +801,12 @@ function InvitePrompt({ deal, onAccept }: { deal: NegotiationDeal; onAccept: () 
         <button
           type="button"
           onClick={onAccept}
-          className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-bold text-primary-foreground hover:bg-primary/90"
+          className="split-press inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-bold text-primary-foreground hover:bg-primary/90"
         >
           <Check className="h-4 w-4" />
           Accept invite
         </button>
       </div>
-    </div>
-  );
-}
-
-function MobileDealContext({ deal, currentVersion }: { deal: NegotiationDeal; currentVersion?: SplitVersion }) {
-  if (!currentVersion) return null;
-
-  return (
-    <div className="border-b border-border bg-card p-4 xl:hidden">
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <div>
-          <div className="text-xs font-bold">Current terms v{currentVersion.version}</div>
-          <p className="mt-0.5 text-[11px] text-muted-foreground">{currentVersion.note}</p>
-        </div>
-        <span className="rounded-full bg-secondary px-2 py-1 text-[10px] font-bold text-muted-foreground">
-          {deal.acceptedBy.length}/{deal.requiredSignerIds.length} accepted
-        </span>
-      </div>
-      <SplitBars allocations={currentVersion.allocations} />
     </div>
   );
 }
@@ -839,17 +820,18 @@ function MessageRow({
 }: {
   message: NegotiationMessage;
   deal: NegotiationDeal;
-  onAccept: () => void;
-  onReject: () => void;
-  onCounter: () => void;
+  onAccept: (proposalId: string) => void;
+  onReject: (proposalId: string) => void;
+  onCounter: (proposalId: string) => void;
 }) {
-  const sender = deal.participants.find((participant) => participant.id === message.senderId) ?? deal.participants[0];
-  const fromMe = deal.viewerParticipantIds.has(sender.id);
+  const sender = deal.participants.find((participant) => participant.id === message.senderId)
+    ?? { id: "unknown", name: "Unknown collaborator", initials: "?", handle: "", role: "" };
+  const fromMe = participantMatchesViewer(deal, sender.id);
   const version = message.proposedSplitId ? deal.splitVersions.find((item) => item.id === message.proposedSplitId) : undefined;
 
   if (message.type !== "text") {
     return (
-      <div className={`flex gap-3 ${fromMe ? "justify-end" : ""}`}>
+      <div data-message-id={message.id} className={`flex gap-3 ${fromMe ? "justify-end" : ""}`}>
         {!fromMe && <Avatar participant={sender} />}
         <div className={`max-w-[860px] ${fromMe ? "order-first" : ""}`}>
           <MessageMeta sender={sender} createdAt={message.createdAt} fromMe={fromMe} />
@@ -858,11 +840,10 @@ function MessageRow({
             version={version}
             fromMe={fromMe}
             alreadyAccepted={deal.acceptedBy.some((participantId) => deal.viewerParticipantIds.has(participantId))}
-            signed={deal.signedBy.some((participantId) => deal.viewerParticipantIds.has(participantId))}
             deal={deal}
-            onAccept={onAccept}
-            onReject={onReject}
-            onCounter={onCounter}
+            onAccept={() => { if (version) onAccept(version.id); }}
+            onReject={() => { if (version) onReject(version.id); }}
+            onCounter={() => { if (version) onCounter(version.id); }}
           />
         </div>
         {fromMe && <Avatar participant={sender} />}
@@ -895,6 +876,7 @@ function ElephantAssistantButton({
 }) {
   const [open, setOpen] = useState(false);
   const isLocked = deal.status === "signed" || FINAL_NEGOTIATION_DOCUMENT_STATUSES.has(deal.document.status);
+  const canCounter = proposalResponsePermissions(deal, currentVersion?.id).counter;
   const total = currentVersion?.allocations.reduce((sum, allocation) => sum + allocation.percent, 0) ?? 0;
 
   return (
@@ -960,15 +942,16 @@ function ElephantAssistantButton({
                   {currentVersion && <SplitBars allocations={currentVersion.allocations} />}
                 </div>
                 <p className="mt-3 text-xs leading-5 text-muted-foreground">
-                  If the room feels aligned, keep moving toward signing. If the shares still feel off, use Counter before this SPLIT becomes locked.
+                  {canCounter ? "The current proposal is ready for your review." : "Waiting for the other collaborators to respond."}
                 </p>
                 <button
                   type="button"
+                  disabled={!canCounter}
                   onClick={() => {
                     setOpen(false);
                     onOpenCounter();
                   }}
-                  className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-3 py-2.5 text-xs font-bold text-primary-foreground hover:bg-primary/90"
+                  className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-3 py-2.5 text-xs font-bold text-primary-foreground hover:bg-primary/90 disabled:cursor-default disabled:opacity-40"
                 >
                   <GitBranch className="h-4 w-4" />
                   Suggest a counter
@@ -997,7 +980,6 @@ function StructuredMessageCard({
   version,
   fromMe,
   alreadyAccepted,
-  signed,
   deal,
   onAccept,
   onReject,
@@ -1007,7 +989,6 @@ function StructuredMessageCard({
   version?: SplitVersion;
   fromMe: boolean;
   alreadyAccepted: boolean;
-  signed: boolean;
   deal: NegotiationDeal;
   onAccept: () => void;
   onReject: () => void;
@@ -1029,7 +1010,9 @@ function StructuredMessageCard({
       : message.type === "counter"
         ? GitBranch
         : PenLine;
-  const actionable = (message.type === "proposal" || message.type === "counter") && !FINAL_NEGOTIATION_DOCUMENT_STATUSES.has(deal.document.status);
+  const isProposal = message.type === "proposal" || message.type === "counter";
+  const permissions = proposalResponsePermissions(deal, version?.id);
+  const actionable = isProposal && permissions.counter;
 
   return (
     <div className={`rounded-xl border p-4 shadow-sm ${tone}`}>
@@ -1043,7 +1026,7 @@ function StructuredMessageCard({
             <div className="mt-3 rounded-lg border border-border bg-background p-3">
               <div className="mb-2 flex items-center justify-between gap-3">
                 <div className="text-xs font-bold">Version {version.version}: {version.title}</div>
-                <span className="text-[10px] font-semibold text-muted-foreground">{version.createdAt}</span>
+                <time dateTime={version.createdAt} title={version.createdAt} className="text-[10px] font-semibold text-muted-foreground">{formatNegotiationDateTime(version.createdAt)}</time>
               </div>
               <SplitBars allocations={version.allocations} />
               <p className="mt-3 text-xs leading-5 text-muted-foreground">{version.note}</p>
@@ -1054,108 +1037,28 @@ function StructuredMessageCard({
               <button
                 type="button"
                 onClick={onAccept}
-                disabled={alreadyAccepted}
+                disabled={!permissions.accept}
                 className="inline-flex items-center gap-1.5 rounded-lg bg-[hsl(var(--split-verified))] px-3 py-2 text-xs font-bold text-white disabled:cursor-default disabled:opacity-50"
               >
                 <Check className="h-3.5 w-3.5" />
                 {alreadyAccepted ? "Accepted" : "Accept"}
               </button>
-              <button type="button" onClick={onCounter} disabled={signed} className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-2 text-xs font-bold text-foreground hover:bg-secondary disabled:cursor-default disabled:opacity-50">
+              <button type="button" onClick={onCounter} className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-2 text-xs font-bold text-foreground hover:bg-secondary disabled:cursor-default disabled:opacity-50">
                 <GitBranch className="h-3.5 w-3.5" />
                 Counter
               </button>
-              <button type="button" onClick={onReject} disabled={signed} className="inline-flex items-center gap-1.5 rounded-lg border border-destructive/25 bg-destructive/5 px-3 py-2 text-xs font-bold text-destructive hover:bg-destructive/10 disabled:cursor-default disabled:opacity-50">
+              <button type="button" onClick={onReject} disabled={!permissions.dispute} className="inline-flex items-center gap-1.5 rounded-lg border border-destructive/25 bg-destructive/5 px-3 py-2 text-xs font-bold text-destructive hover:bg-destructive/10 disabled:cursor-default disabled:opacity-50">
                 <X className="h-3.5 w-3.5" />
                 Dispute
               </button>
             </div>
           )}
+          {isProposal && fromMe && version?.id === deal.currentVersionId && deal.status === "negotiating" && (
+            <p className="mt-3 text-xs text-muted-foreground">Your proposal. Awaiting collaborators.</p>
+          )}
         </div>
       </div>
     </div>
-  );
-}
-
-function DealContextPanel({ deal, currentVersion }: { deal: NegotiationDeal; currentVersion?: SplitVersion }) {
-  const [historyOpen, setHistoryOpen] = useState(true);
-
-  return (
-    <aside className="hidden w-[420px] flex-shrink-0 overflow-y-auto border-l border-border bg-card p-5 xl:block 2xl:w-[460px]">
-      <div className="mb-4">
-        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">Deal terms</p>
-        <h2 className="mt-1 text-lg font-bold">{deal.title}</h2>
-        <p className="mt-1 text-xs text-muted-foreground">{deal.artist}</p>
-      </div>
-
-      {currentVersion && (
-        <div className="space-y-4">
-          <section className="rounded-lg border border-border bg-background p-3">
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <div>
-                <div className="text-xs font-bold">Current split v{currentVersion.version}</div>
-                <div className="text-[11px] text-muted-foreground">{currentVersion.title}</div>
-              </div>
-              <Split className="h-4 w-4 text-primary" />
-            </div>
-            <SplitBars allocations={currentVersion.allocations} />
-          </section>
-
-          <section className="rounded-lg border border-border bg-background p-3">
-            <div className="mb-2 text-xs font-bold">Collaborators</div>
-            <div className="space-y-2">
-              {deal.participants.map((participant) => (
-                <div key={participant.id} className="flex items-center justify-between gap-3">
-                  <div className="flex min-w-0 items-center gap-2">
-                    <Avatar participant={participant} small />
-                    <div className="min-w-0">
-                      <div className="truncate text-xs font-bold">{participant.name}</div>
-                      <div className="truncate text-[11px] text-muted-foreground">{participant.handle}</div>
-                    </div>
-                  </div>
-                  <span className="text-[11px] font-semibold text-muted-foreground">{participant.role}</span>
-                </div>
-              ))}
-            </div>
-          </section>
-
-          <section className="rounded-lg border border-border bg-background p-3">
-            <div className="mb-2 text-xs font-bold">Revenue streams</div>
-            <div className="space-y-2">
-              {currentVersion.revenueStreams.map((stream) => (
-                <div key={stream.id} className="flex items-center justify-between gap-3 rounded-md bg-secondary/50 px-2.5 py-2">
-                  <span className="text-xs font-semibold">{stream.label}</span>
-                  <span className="text-[10px] font-bold text-muted-foreground">{stream.status}</span>
-                </div>
-              ))}
-            </div>
-          </section>
-
-          <section className="rounded-lg border border-border bg-background">
-            <button
-              type="button"
-              onClick={() => setHistoryOpen((open) => !open)}
-              className="flex w-full items-center justify-between gap-3 px-3 py-3 text-left"
-            >
-              <span className="text-xs font-bold">Version history</span>
-              <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${historyOpen ? "rotate-180" : ""}`} />
-            </button>
-            {historyOpen && (
-              <div className="space-y-2 border-t border-border p-3">
-                {deal.splitVersions.slice().reverse().map((version) => (
-                  <div key={version.id} className={`rounded-lg border px-3 py-2 ${version.id === deal.currentVersionId ? "border-primary/30 bg-primary/5" : "border-border bg-card"}`}>
-                    <div className="flex items-center justify-between gap-3">
-                      <span className="text-xs font-bold">v{version.version}</span>
-                      <span className="text-[10px] text-muted-foreground">{version.createdAt}</span>
-                    </div>
-                    <p className="mt-1 text-[11px] leading-4 text-muted-foreground">{version.note}</p>
-                  </div>
-                ))}
-              </div>
-            )}
-          </section>
-        </div>
-      )}
-    </aside>
   );
 }
 
@@ -1218,8 +1121,4 @@ function DealStatus({ status }: { status: NegotiationStatus }) {
 
 function makeId(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-}
-
-function counterTotal(values: Record<string, string>) {
-  return Math.round(Object.values(values).reduce((sum, value) => sum + (Number(value) || 0), 0) * 100) / 100;
 }
