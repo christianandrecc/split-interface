@@ -2,6 +2,7 @@ import { isSupabaseConfigured, supabase } from "@/integrations/supabase/client";
 import type { Json, Tables, TablesInsert } from "@/integrations/supabase/types";
 import { formatNationalPhoneNumber } from "@/lib/phone";
 import { normalizeUserProfile, type UserProfile } from "@/lib/userProfile";
+import { monitorRequest } from "@/lib/monitoring";
 
 type ProfileRow = Tables<"profiles">;
 type ProfileInsert = TablesInsert<"profiles">;
@@ -21,10 +22,11 @@ export type ProfileStorageResult = {
 export type ActiveProfileSession = {
   userId: string;
   profile: UserProfile;
+  passwordRecovery?: boolean;
 };
 
 export type PasswordResetResult = {
-  sent: boolean;
+  requested: boolean;
 };
 
 const DEFAULT_AUTH_REDIRECT_URL = "https://split-interface.vercel.app/";
@@ -474,22 +476,22 @@ function explainStorageError(error: { message?: string }) {
 }
 
 async function upsertProfileForUser(userId: string, profile: UserProfile) {
-  const { data, error } = await supabase
+  const { data, error } = await monitorRequest("profile_save_failure", () => supabase
     .from("profiles")
     .upsert(profileToRow(userId, profile), { onConflict: "user_id" })
     .select("*")
-    .single();
+    .single());
 
   if (error) throw new Error(explainStorageError(error));
   return rowToProfile(data);
 }
 
 async function loadProfileForUser(userId: string) {
-  const { data, error } = await supabase
+  const { data, error } = await monitorRequest("profile_load_failure", () => supabase
     .from("profiles")
     .select("*")
     .eq("user_id", userId)
-    .maybeSingle();
+    .maybeSingle());
 
   if (error) throw new Error(explainStorageError(error));
   return data ? rowToProfile(data) : null;
@@ -497,13 +499,16 @@ async function loadProfileForUser(userId: string) {
 
 export async function loadProfileSessionForActiveSession(): Promise<ActiveProfileSession | null> {
   requireSupabaseConfig();
-  await consumeSupabaseAuthCallbackFromUrl();
+  const callback = await consumeSupabaseAuthCallbackFromUrl();
 
   const { data, error } = await supabase.auth.getUser();
   if (error || !data.user) return null;
+  if (callback && callback.userId !== data.user.id) {
+    throw new Error("Your account changed while opening this link. Please request a new link.");
+  }
 
   const profile = await loadProfileForAuthUser(data.user);
-  return profile ? { userId: data.user.id, profile } : null;
+  return profile ? { userId: data.user.id, profile, passwordRecovery: Boolean(callback && callback.passwordRecovery) } : null;
 }
 
 export async function loadProfileForActiveSession() {
@@ -526,10 +531,12 @@ function hasAuthCallbackUrl() {
     url.searchParams.get("code") ||
       url.searchParams.get("error") ||
       url.searchParams.get("error_description") ||
+      url.searchParams.get("error_code") ||
       hashParams.get("access_token") ||
       hashParams.get("refresh_token") ||
       hashParams.get("error") ||
-      hashParams.get("error_description"),
+      hashParams.get("error_description") ||
+      hashParams.get("error_code"),
   );
 }
 
@@ -544,33 +551,33 @@ export async function consumeSupabaseAuthCallbackFromUrl() {
   const url = new URL(window.location.href);
   const hashParams = authHashParams();
   const callbackError = url.searchParams.get("error_description") || hashParams.get("error_description")
-    || url.searchParams.get("error") || hashParams.get("error");
+    || url.searchParams.get("error") || hashParams.get("error")
+    || url.searchParams.get("error_code") || hashParams.get("error_code");
   if (callbackError) {
     clearSupabaseAuthUrl();
     throw new Error(callbackError);
   }
 
-  const authCode = url.searchParams.get("code");
-  if (authCode) {
-    const { error } = await supabase.auth.exchangeCodeForSession(authCode);
-    clearSupabaseAuthUrl();
+  try {
+    const authCode = url.searchParams.get("code");
+    const accessToken = hashParams.get("access_token");
+    const refreshToken = hashParams.get("refresh_token");
+    if (!authCode && (!accessToken || !refreshToken)) {
+      throw new Error("This sign-in link is incomplete. Please request a new link.");
+    }
+    const { data, error } = authCode
+      ? await supabase.auth.exchangeCodeForSession(authCode)
+      : await supabase.auth.setSession({ access_token: accessToken!, refresh_token: refreshToken! });
     if (error) throw new Error(error.message);
-    return true;
-  }
-
-  const accessToken = hashParams.get("access_token");
-  const refreshToken = hashParams.get("refresh_token");
-  if (accessToken && refreshToken) {
-    const { error } = await supabase.auth.setSession({
-      access_token: accessToken,
-      refresh_token: refreshToken,
-    });
+    if (!data.session || !data.user) throw new Error("This sign-in link could not be verified. Please request a new link.");
+    const passwordRecovery = authCode
+      ? "redirectType" in data && data.redirectType === "recovery"
+      : hashParams.get("type") === "recovery";
+    return { userId: data.user.id, passwordRecovery };
+  } finally {
+    // Never leave credentials behind, including when the network call throws.
     clearSupabaseAuthUrl();
-    if (error) throw new Error(error.message);
-    return true;
   }
-
-  return false;
 }
 
 export async function createSupabaseAccountProfile(profile: UserProfile, password: string): Promise<ProfileStorageResult> {
@@ -582,14 +589,14 @@ export async function createSupabaseAccountProfile(profile: UserProfile, passwor
   if (!isValidEmailAddress(email)) throw new Error("Enter a valid email address.");
   if (password.length < 8) throw new Error("Use at least 8 characters for your password.");
 
-  const { data, error } = await supabase.auth.signUp({
+  const { data, error } = await monitorRequest("auth_signup_failure", () => supabase.auth.signUp({
     email,
     password,
     options: {
       emailRedirectTo: getSupabaseAuthRedirectUrl(),
       data: profileSignupMetadata(normalized),
     },
-  });
+  }));
 
   if (error) throw new Error(explainStorageError(error));
 
@@ -616,10 +623,10 @@ export async function signInAndLoadSupabaseProfile(emailAddress: string, passwor
   if (!email) throw new Error("Enter the email address for this SPLIT account.");
   if (!isValidEmailAddress(email)) throw new Error("Enter a valid email address.");
 
-  const { data, error } = await supabase.auth.signInWithPassword({
+  const { data, error } = await monitorRequest("auth_signin_failure", () => supabase.auth.signInWithPassword({
     email,
     password,
-  });
+  }));
 
   if (error) throw new Error(error.message);
   if (!data.user) throw new Error("Supabase did not return a signed-in user.");
@@ -660,26 +667,37 @@ export async function requestSupabasePasswordReset(emailAddress: string): Promis
   requireSupabaseConfig();
 
   const email = clean(normalizeEmailAddress(emailAddress));
-  if (!email || !isValidEmailAddress(email)) {
+  if (!email || !isValidEmailAddress(email) || email.length > 254) {
     throw new Error("Enter a valid email address.");
   }
 
-  const { error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: getSupabaseAuthRedirectUrl(),
-  });
+  let result;
+  try {
+    result = await monitorRequest("auth_recovery_failure", () => supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: getSupabaseAuthRedirectUrl(),
+    }));
+  } catch {
+    throw new Error("Could not request a reset email. Check your connection and try again.");
+  }
+  if (result.error?.code === "over_email_send_rate_limit" || result.error?.code === "over_request_rate_limit" || result.error?.status === 429) {
+    throw new Error("Please wait a minute before requesting another reset email.");
+  }
+  if (result.error?.code === "email_address_not_authorized") {
+    throw new Error("Password reset email delivery is unavailable. Please contact SPLIT support.");
+  }
+  if (result.error) throw new Error("Could not request a reset email. Please try again later or contact SPLIT support.");
 
-  if (error) throw new Error("If this account can receive reset emails, Supabase will send one shortly.");
-
-  return { sent: true };
+  // Acceptance by Auth is not proof of delivery or of an existing account.
+  return { requested: true };
 }
 
 export async function requestSignupConfirmation(emailAddress: string) {
   requireSupabaseConfig();
   const email = normalizeEmailAddress(emailAddress);
   if (!isValidEmailAddress(email) || email.length > 254) throw new Error("Enter a valid email address.");
-  const { error } = await supabase.auth.resend({
+  const { error } = await monitorRequest("auth_confirmation_failure", () => supabase.auth.resend({
     type: "signup", email, options: { emailRedirectTo: getSupabaseAuthRedirectUrl() },
-  });
+  }));
   if (error?.code === "over_email_send_rate_limit" || error?.code === "over_request_rate_limit") {
     throw new Error("Please wait a minute before requesting another confirmation email.");
   }
@@ -696,6 +714,6 @@ export async function updateSupabasePassword(password: string) {
 
   if (password.length < 8) throw new Error("Use at least 8 characters for your password.");
 
-  const { error } = await supabase.auth.updateUser({ password });
+  const { error } = await monitorRequest("auth_password_failure", () => supabase.auth.updateUser({ password }));
   if (error) throw new Error(error.message);
 }

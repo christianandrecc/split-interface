@@ -167,6 +167,7 @@ export default function AgreementDetail({
   const canEditDraft = isDraft && document && documentBelongsToProfile(document, viewerProfile) && onEditDraft;
   const isFinalRecord = FINAL_STATUSES.includes(agreement.status);
   const invites = document?.collaboratorInvites ?? [];
+  const inviteDeclined = !isFinalRecord && invites.some((invite) => invite.status === "Declined");
   const currentProposal = document?.splitProposalVersions.find((proposal) => proposal.id === document.currentProposalId) ?? document?.splitProposalVersions.at(-1);
   const currentApprovals = document?.splitApprovals.filter((approval) => approval.proposalVersionId === currentProposal?.id) ?? [];
   const currentSignatures = document?.splitSignatures.filter((signature) => signature.proposalVersionId === currentProposal?.id) ?? [];
@@ -212,7 +213,7 @@ export default function AgreementDetail({
             {agreement.title}
           </h1>
           <div className="mt-3 flex flex-wrap items-center gap-2">
-            <RecordStatusPill status={agreement.status} />
+            <RecordStatusPill status={agreement.status} inviteDeclined={inviteDeclined} />
             <Chip tone="neutral">SPLIT</Chip>
             {isFinalRecord && (
               <Chip tone="lock">
@@ -245,7 +246,7 @@ export default function AgreementDetail({
         </div>
       </div>
 
-      {!isFinalRecord && <VerificationBanner status={agreement.status} />}
+      {!isFinalRecord && <VerificationBanner status={agreement.status} inviteDeclined={inviteDeclined} />}
 
       <div className="mt-4 space-y-4">
         <SummaryStrip
@@ -284,7 +285,7 @@ export default function AgreementDetail({
                 <div className="flex flex-wrap justify-start gap-2 md:justify-end">
                   {isDraft ? (
                     <Chip tone="neutral">{participant.participantId === "creator" ? "Creator" : "Not invited"}</Chip>
-                  ) : <>
+                  ) : participant.inviteStatus === "Declined" && !isFinalRecord ? <Chip tone="neutral">Invite declined</Chip> : <>
                     {(participant.approvalStatus || participant.inviteStatus || isFinalRecord) && (
                       <ApprovalStatus
                         status={participant.approvalStatus ?? (participant.inviteStatus === "Accepted" ? "Approved" : participant.inviteStatus === "Declined" ? "Rejected" : "Pending")}
@@ -673,8 +674,8 @@ function SummaryStat({
   );
 }
 
-function RecordStatusPill({ status }: { status: Agreement["status"] }) {
-  const label = getSplitWorkflowLabel(status);
+function RecordStatusPill({ status, inviteDeclined }: { status: Agreement["status"]; inviteDeclined?: boolean }) {
+  const label = inviteDeclined ? "Invite declined" : getSplitWorkflowLabel(status);
   const verified = VERIFIED_SPLIT_STATUSES.includes(status);
 
   if (verified) {
@@ -694,7 +695,14 @@ function RecordStatusPill({ status }: { status: Agreement["status"] }) {
   );
 }
 
-function VerificationBanner({ status }: { status: Agreement["status"] }) {
+function VerificationBanner({ status, inviteDeclined }: { status: Agreement["status"]; inviteDeclined?: boolean }) {
+  if (inviteDeclined) {
+    return (
+      <AlertBanner icon={AlertCircle} tone="neutral" title="Invitation declined">
+        A collaborator declined to join. This split cannot be finalized with a declined invitation. The existing record is preserved.
+      </AlertBanner>
+    );
+  }
   if (status === "Pending Collaborator Acceptance") {
     return (
       <AlertBanner icon={AlertCircle} tone="pending" title={getSplitWorkflowLabel(status)}>

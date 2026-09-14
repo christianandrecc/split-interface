@@ -64,6 +64,7 @@ describe("split creation completion", () => {
     trigger.focus();
     const { dialog } = confirm();
     expect(within(dialog).getByText(/all details, split percentages, and collaborator usernames/)).toBeInTheDocument();
+    expect(dialog).toHaveTextContent("Invitations appear inside SPLIT. No email or SMS is sent.");
     fireEvent.click(within(dialog).getByRole("button", { name: "Review Details" }));
     await waitFor(() => expect(trigger).toHaveFocus());
     expect(onStoreDocument).not.toHaveBeenCalled();

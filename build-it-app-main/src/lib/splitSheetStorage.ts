@@ -6,6 +6,7 @@ import { isSupabaseConfigured, supabase } from "@/integrations/supabase/client";
 import type { Json } from "@/integrations/supabase/types";
 import { validateDocumentSplit } from "@/lib/splitSheetWorkflow";
 import type { UserProfile } from "@/lib/userProfile";
+import { monitorRequest, reportFailure } from "@/lib/monitoring";
 
 const LOCAL_DOCUMENTS_KEY = "split.generatedDocuments.v3";
 const LOCAL_DOCUMENTS_BY_OWNER_KEY = "split.generatedDocuments.byOwner.v1";
@@ -40,7 +41,7 @@ export type SplitSheetSaveResult = {
 
 function ensureBrowserStorage() {
   if (typeof window === "undefined") return null;
-  return window.localStorage;
+  try { return window.localStorage; } catch { return null; }
 }
 
 export function splitSheetLocalStorageOwnerForAuthUser(userId?: string | null) {
@@ -68,17 +69,14 @@ function readOwnedLocalDocuments(ownerKey: string) {
 
 function writeOwnedLocalDocuments(ownerKey: string, documents: StoredSplitSheetDocument[]) {
   const storage = ensureBrowserStorage();
-  if (!storage) return;
+  if (!storage) throw new Error("Device storage is unavailable.");
 
-  try {
-    const stored = storage.getItem(LOCAL_DOCUMENTS_BY_OWNER_KEY);
-    const parsed = stored ? JSON.parse(stored) : {};
-    const next = parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
-    next[ownerKey] = documents;
-    storage.setItem(LOCAL_DOCUMENTS_BY_OWNER_KEY, JSON.stringify(next));
-  } catch {
-    storage.setItem(LOCAL_DOCUMENTS_BY_OWNER_KEY, JSON.stringify({ [ownerKey]: documents }));
-  }
+  const stored = storage.getItem(LOCAL_DOCUMENTS_BY_OWNER_KEY);
+  const parsed = stored ? JSON.parse(stored) : {};
+  const next = parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+  next[ownerKey] = documents;
+  // Storage failures must not replace other accounts' drafts with a smaller map.
+  storage.setItem(LOCAL_DOCUMENTS_BY_OWNER_KEY, JSON.stringify(next));
 }
 
 function documentVisibleToProfile(document: StoredSplitSheetDocument, profile?: UserProfile) {
@@ -118,9 +116,18 @@ export function saveLocalSplitSheetDocuments(documents: StoredSplitSheetDocument
   }
 
   const storage = ensureBrowserStorage();
-  if (!storage) return;
+  if (!storage) throw new Error("Device storage is unavailable.");
 
   storage.setItem(LOCAL_DOCUMENTS_KEY, JSON.stringify(documents));
+}
+
+export function cacheLocalSplitSheetDocuments(documents: StoredSplitSheetDocument[], ownerKey?: string) {
+  try {
+    saveLocalSplitSheetDocuments(documents, ownerKey);
+  } catch {
+    console.warn("SPLIT draft cache is unavailable. Confirmed server records are unaffected.");
+    reportFailure("draft_cache_failure");
+  }
 }
 
 function upsertLocalDocument(document: StoredSplitSheetDocument, ownerKey?: string) {
@@ -134,7 +141,7 @@ function upsertLocalDocument(document: StoredSplitSheetDocument, ownerKey?: stri
 
 function removeLocalDocument(documentId: string, ownerKey?: string) {
   const next = loadLocalSplitSheetDocuments(undefined, ownerKey).filter((document) => document.id !== documentId);
-  saveLocalSplitSheetDocuments(next, ownerKey);
+  cacheLocalSplitSheetDocuments(next, ownerKey);
 }
 
 export function splitSheetCanUseLocalDraftFallback(document: StoredSplitSheetDocument) {
@@ -226,11 +233,18 @@ function inferCreatorName(profile: UserProfile) {
   return profile.displayName || profile.legalName || profile.emailAddress || profile.username || "SPLIT user";
 }
 
-async function getActiveUserId() {
+async function getActiveUserId(expectedUserId?: string) {
   requireSupabaseConfig();
 
   const { data, error } = await supabase.auth.getUser();
-  if (error || !data.user) throw new Error("Sign in before saving split sheets to Supabase.");
+  if (error || !data.user) {
+    throw Object.assign(new Error("Sign in before saving split sheets to Supabase."), {
+      code: expectedUserId ? "42501" : undefined,
+    });
+  }
+  if (expectedUserId && data.user.id !== expectedUserId) {
+    throw Object.assign(new Error("Your account changed. Refresh SPLIT before continuing."), { code: "42501" });
+  }
   return data.user.id;
 }
 
@@ -303,20 +317,22 @@ export async function deleteSplitSheetDraft(document: StoredSplitSheetDocument, 
       || !canDeleteSplitSheetDraft(document, { ...profile, authUserId: userId })) {
       throw new Error("Your account changed. Sign in to the draft owner's account and try again.");
     }
-    const { data, error } = await supabase.rpc("delete_split_sheet_draft", {
+    const { data, error } = await monitorRequest("draft_delete_failure", () => supabase.rpc("delete_split_sheet_draft", {
       p_split_sheet_id: document.id,
       p_expected_revision: document.serverRevision ?? null,
-    });
+    }));
     if (error) throw new Error(`Could not delete this draft. ${explainSplitSheetPersistenceError(new Error(error.message))}`);
     if (data !== document.id) throw new Error("Deletion was not confirmed. Your draft is still here; please try again.");
-    removeLocalDocument(document.id, splitSheetLocalStorageOwnerForAuthUser(userId));
+    const ownerKey = splitSheetLocalStorageOwnerForAuthUser(userId);
+    saveLocalSplitSheetDocuments(loadLocalSplitSheetDocuments(undefined, ownerKey).filter(item => item.id !== document.id), ownerKey);
   } else if (document.serverRevision !== undefined || document.storedAt) {
     throw new Error("Connect to Supabase before deleting a stored draft.");
   }
 
   // Remove only this owner's legacy copy, so it cannot reappear after a reload.
   const legacy = loadLocalSplitSheetDocuments();
-  saveLocalSplitSheetDocuments(legacy.filter((item) => item.id !== document.id || !documentBelongsToProfile(item, profile)));
+  const remaining = legacy.filter((item) => item.id !== document.id || !documentBelongsToProfile(item, profile));
+  saveLocalSplitSheetDocuments(remaining);
 }
 
 export function findInviteForProfile(document: StoredSplitSheetDocument, profile: UserProfile) {
@@ -422,12 +438,14 @@ export async function loadSplitSheetDocuments(profile?: UserProfile, onLoadError
   let authenticatedUserLoaded = false;
 
   try {
-    const userId = await getActiveUserId();
+    const userId = await getActiveUserId(profile?.authUserId);
     authenticatedUserLoaded = true;
     const ownerKey = splitSheetLocalStorageOwnerForAuthUser(userId);
     scopedLocalDrafts = localDraftResults(loadLocalSplitSheetDocuments(profile, ownerKey));
-    const { data, error } = await supabase.rpc("load_my_split_sheets");
+    const { data, error } = await monitorRequest("split_load_failure", () => supabase.rpc("load_my_split_sheets"));
     if (error) throw new Error(error.message);
+    // A read started in another session must not publish or rewrite draft caches.
+    await getActiveUserId(userId);
 
     const remoteDocuments = ((data ?? []) as SplitSheetRpcRow[])
       .map(rpcRowToDocument)
@@ -438,16 +456,18 @@ export async function loadSplitSheetDocuments(profile?: UserProfile, onLoadError
       .filter((document) => !remoteDocumentIds.has(document.id));
     const mergedDocuments = dedupeDocuments([...remoteDocuments, ...scopedLocalOnlyDocuments]);
 
-    saveLocalSplitSheetDocuments(scopedLocalOnlyDocuments, ownerKey);
-    saveLocalSplitSheetDocuments([]);
+    cacheLocalSplitSheetDocuments(scopedLocalOnlyDocuments, ownerKey);
+    cacheLocalSplitSheetDocuments([]);
 
     return mergedDocuments.map((document) => ({
       document,
       persisted: remoteDocumentIds.has(document.id),
     }));
   } catch (error) {
-    console.warn("SPLIT could not load split sheets from Supabase.", error);
+    reportFailure("split_load_failure", error);
+    console.warn("SPLIT could not load split sheets from Supabase.");
     onLoadError?.(error);
+    if (error instanceof Error && "code" in error && error.code === "42501") return [];
     return authenticatedUserLoaded ? scopedLocalDrafts : legacyLocalDrafts;
   }
 }
@@ -469,6 +489,9 @@ export async function saveSplitSheetDocument(
   mode: SplitSheetSaveMode,
   profile: UserProfile,
 ): Promise<SplitSheetSaveResult> {
+  if (mode === "contract_delivery") {
+    throw new Error("External delivery is unavailable. Send an in-app invitation or download the PDF.");
+  }
   const actor = inferCreatorName(profile);
   const splitValidation = validateDocumentSplit(document);
   if (!splitValidation.valid) {
@@ -476,27 +499,30 @@ export async function saveSplitSheetDocument(
   }
 
   if (!isSupabaseConfigured) {
-    if (mode === "send" || mode === "contract_delivery") {
+    if (mode === "send") {
       throw new Error("Connect to Supabase before sending split invitations. You can save a draft instead.");
     }
     upsertLocalDocument(document);
     return { document, persisted: false };
   }
 
+  let fallbackDocument: StoredSplitSheetDocument | undefined;
+  let fallbackOwner: string | undefined;
   try {
-    const userId = await getActiveUserId();
+    const userId = await getActiveUserId(profile.authUserId);
     const ownerKey = splitSheetLocalStorageOwnerForAuthUser(userId);
     const canUseLocalDraftFallback = splitSheetCanUseLocalDraftFallback(document);
     const documentForSave = documentWithServerIdentity(document, userId);
-    if (canUseLocalDraftFallback && mode !== "send" && mode !== "contract_delivery") {
-      upsertLocalDocument(documentForSave, ownerKey);
+    if (canUseLocalDraftFallback && mode !== "send") {
+      fallbackDocument = documentForSave;
+      fallbackOwner = ownerKey;
     }
 
-    const { data, error } = await supabase.rpc("upsert_split_sheet_document", {
+    const { data, error } = await monitorRequest(mode === "send" ? "split_send_failure" : "split_save_failure", () => supabase.rpc("upsert_split_sheet_document", {
       p_document_payload: documentForSave as unknown as Json,
       p_mode: mode,
       p_actor_label: actor,
-    });
+    }));
 
     if (error) throw Object.assign(new Error(error.message), { code: error.code });
 
@@ -511,18 +537,23 @@ export async function saveSplitSheetDocument(
       persisted: true,
     };
   } catch (error) {
-    console.warn("SPLIT could not save this split sheet to Supabase.", error);
-    if (mode === "send" || mode === "contract_delivery") {
+    reportFailure(mode === "send" ? "split_send_failure" : "split_save_failure", error);
+    console.warn("SPLIT could not save this split sheet to Supabase.");
+    if (mode === "send") {
       throw new Error(`Could not send this split sheet. ${explainSplitSheetPersistenceError(error)}`);
     }
     const rejectedByDatabase = error instanceof Error && "code" in error &&
       ["40001", "42501", "22023", "55000"].includes(String(error.code));
-    if (!splitSheetCanUseLocalDraftFallback(document) || rejectedByDatabase) {
+    if (!fallbackDocument || !fallbackOwner || rejectedByDatabase) {
       throw new Error(`Could not save this split sheet. ${explainSplitSheetPersistenceError(error)}`);
     }
-
+    try {
+      upsertLocalDocument(fallbackDocument, fallbackOwner);
+    } catch {
+      throw new Error("This draft could not be saved to Supabase or this device. Keep this form open and try again.");
+    }
     return {
-      document,
+      document: fallbackDocument,
       persisted: false,
     };
   }
@@ -552,17 +583,17 @@ export async function saveSplitSheetParticipantAction(
   }
 
   try {
-    const userId = await getActiveUserId();
+    const userId = await getActiveUserId(profile.authUserId);
     const ownerKey = splitSheetLocalStorageOwnerForAuthUser(userId);
 
-    const { data, error } = await supabase.rpc("apply_split_sheet_participant_update", {
+    const { data, error } = await monitorRequest(context.action === "sign" ? "split_sign_failure" : "split_action_failure", () => supabase.rpc("apply_split_sheet_participant_update", {
       p_split_sheet_id: document.id,
       p_document_payload: document as unknown as Json,
       p_action: context.action,
       p_actor_label: actor,
       p_response_type: context.responseType ?? null,
       p_notes: context.notes ?? null,
-    });
+    }));
 
     if (error) throw new Error(error.message);
 
@@ -577,7 +608,8 @@ export async function saveSplitSheetParticipantAction(
       persisted: true,
     };
   } catch (error) {
-    console.warn("SPLIT could not save this participant action to Supabase.", error);
+    reportFailure(context.action === "sign" ? "split_sign_failure" : "split_action_failure", error);
+    console.warn("SPLIT could not save this participant action to Supabase.");
     throw new Error(`Could not save this Messages update. ${explainSplitSheetPersistenceError(error)}`);
   }
 }

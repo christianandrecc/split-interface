@@ -25,6 +25,46 @@ async function setup() {
 }
 
 describe("account Settings", () => {
+  it("keeps manual closure requests available if preferences fail to load", async () => {
+    mocks.load.mockRejectedValueOnce(new Error("Offline"));
+    render(<SettingsPage userProfile={profile} />);
+    await screen.findByRole("alert");
+    openCategory("Privacy & sharing");
+    fireEvent.click(screen.getByRole("button", { name: "Request account closure" }));
+    expect(screen.getByRole("link", { name: "Open email" })).toHaveAttribute("href", expect.stringContaining("mailto:xtiancarrera@gmail.com?"));
+    expect(mocks.save).not.toHaveBeenCalled();
+  });
+  it("replays onboarding from Settings without saving preferences", async () => {
+    const onViewOnboardingAgain = vi.fn();
+    render(<SettingsPage userProfile={profile} onViewOnboardingAgain={onViewOnboardingAgain} />);
+    await waitFor(() => expect(screen.getByRole("radio", { name: "Equal" })).toBeEnabled());
+    fireEvent.click(screen.getByRole("button", { name: "View onboarding again" }));
+    expect(onViewOnboardingAgain).toHaveBeenCalledOnce();
+    expect(mocks.save).not.toHaveBeenCalled();
+  });
+  it("requires saving or discarding edits before replaying onboarding", async () => {
+    const onViewOnboardingAgain = vi.fn();
+    render(<SettingsPage userProfile={profile} onViewOnboardingAgain={onViewOnboardingAgain} />);
+    await waitFor(() => expect(screen.getByRole("radio", { name: "Equal" })).toBeEnabled());
+    fireEvent.click(screen.getByRole("radio", { name: "Equal" }));
+    const replay = screen.getByRole("button", { name: "View onboarding again" });
+    expect(replay).toBeDisabled();
+    expect(replay).toHaveAccessibleDescription("Save or discard your changes first.");
+    fireEvent.click(replay);
+    expect(onViewOnboardingAgain).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Discard changes" }));
+    expect(replay).toBeEnabled();
+    fireEvent.click(replay);
+    expect(onViewOnboardingAgain).toHaveBeenCalledOnce();
+  });
+  it("can replay onboarding even if account settings fail to load", async () => {
+    const onViewOnboardingAgain = vi.fn();
+    mocks.load.mockRejectedValueOnce(new Error("Offline"));
+    render(<SettingsPage userProfile={profile} onViewOnboardingAgain={onViewOnboardingAgain} />);
+    await screen.findByRole("alert");
+    fireEvent.click(screen.getByRole("button", { name: "View onboarding again" }));
+    expect(onViewOnboardingAgain).toHaveBeenCalledOnce();
+  });
   it("loads composition defaults, not general signup roles, with only Equal and Custom", async () => {
     await setup();
     expect(mocks.load).toHaveBeenCalledWith("account-a");

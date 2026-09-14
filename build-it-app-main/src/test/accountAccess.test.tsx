@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { type ComponentProps } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -7,7 +7,11 @@ import { createEmptyProfile } from "@/lib/userProfile";
 import { profileSignupMetadata } from "@/lib/profileStorage";
 import * as profileStorage from "@/lib/profileStorage";
 
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.useRealTimers();
+  window.history.replaceState({}, "", "/");
+});
 
 function renderAccountAccess(
   onCreateAccount = vi.fn(),
@@ -71,20 +75,16 @@ describe("AccountAccess registration flow", () => {
     });
   });
 
-  it("lets an existing account replay the new-user onboarding", () => {
-    const onViewOnboardingAgain = vi.fn();
+  it("keeps onboarding replay out of account setup", () => {
     renderAccountAccess(vi.fn(), vi.fn(), {
       initialProfile: {
         ...createEmptyProfile(),
         username: "chori",
         emailAddress: "chori@example.com",
       },
-      onViewOnboardingAgain,
     });
 
-    fireEvent.click(screen.getByRole("button", { name: /view onboarding again/i }));
-
-    expect(onViewOnboardingAgain).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("button", { name: /view onboarding again/i })).not.toBeInTheDocument();
   });
 
   it("shows the required personal information fields in the requested order", () => {
@@ -206,5 +206,88 @@ describe("AccountAccess registration flow", () => {
     fireEvent.click(screen.getByRole("button", { name: /go to sign in/i }));
     expect(screen.getByRole("heading", { name: /sign in to split/i })).toBeInTheDocument();
     expect(screen.getByDisplayValue("chori@example.com")).toBeInTheDocument();
+  });
+});
+
+describe("password recovery request UI", () => {
+  function openResetForm() {
+    renderAccountAccess();
+    fireEvent.click(screen.getByRole("button", { name: "Sign In" }));
+    fireEvent.change(screen.getByRole("textbox", { name: /email address/i }), { target: { value: "Test@Example.test" } });
+    fireEvent.click(screen.getByRole("button", { name: /forgot password/i }));
+    expect(screen.getByDisplayValue("test@example.test")).toBeInTheDocument();
+  }
+
+  it.each([false, true])("keeps request failures distinct from conditional success (failure: %s)", async failure => {
+    const request = vi.spyOn(profileStorage, "requestSupabasePasswordReset");
+    if (failure) request.mockRejectedValue(new Error("Password reset email delivery is unavailable."));
+    else request.mockResolvedValue({ requested: true });
+    openResetForm();
+    fireEvent.click(screen.getByRole("button", { name: "Send Reset Email" }));
+    expect(await screen.findByRole("button", { name: /request again in \d+s/i })).toBeDisabled();
+    expect(request).toHaveBeenCalledExactlyOnceWith("test@example.test");
+    if (failure) {
+      expect(screen.getByRole("alert")).toHaveTextContent("delivery is unavailable");
+      expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    } else {
+      expect(screen.getByRole("status")).toHaveTextContent(/If an account can receive/);
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    }
+  });
+
+  it("blocks duplicate submissions during a request and its cooldown, then allows retry", async () => {
+    vi.useFakeTimers();
+    let finish!: (result: { requested: boolean }) => void;
+    const request = vi.spyOn(profileStorage, "requestSupabasePasswordReset")
+      .mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }))
+      .mockResolvedValue({ requested: true });
+    openResetForm();
+    const form = screen.getByRole("button", { name: "Send Reset Email" }).closest("form")!;
+    fireEvent.submit(form);
+    fireEvent.submit(form);
+    expect(request).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("button", { name: "Requesting..." })).toBeDisabled();
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    await act(async () => finish({ requested: true }));
+    fireEvent.submit(form);
+    expect(request).toHaveBeenCalledTimes(1);
+    await act(async () => vi.advanceTimersByTime(60_000));
+    expect(screen.getByRole("button", { name: "Send Reset Email" })).toBeEnabled();
+    await act(async () => fireEvent.submit(form));
+    expect(request).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not put a late request error onto the sign-in form", async () => {
+    let reject!: (error: Error) => void;
+    vi.spyOn(profileStorage, "requestSupabasePasswordReset").mockImplementation(() => new Promise((_, fail) => { reject = fail; }));
+    openResetForm();
+    fireEvent.click(screen.getByRole("button", { name: "Send Reset Email" }));
+    fireEvent.click(screen.getByRole("button", { name: "Back to Sign In" }));
+    await act(async () => reject(new Error("Request failed")));
+    expect(screen.getByRole("heading", { name: "Sign in to SPLIT" })).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("does not open a password form just because a URL says recovery", () => {
+    window.history.replaceState({}, "", "/?type=recovery");
+    renderAccountAccess();
+    expect(screen.getByRole("heading", { name: "Personal information" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Create a new password" })).not.toBeInTheDocument();
+  });
+
+  it("only completes a verified recovery after the password update succeeds", async () => {
+    const update = vi.spyOn(profileStorage, "updateSupabasePassword")
+      .mockRejectedValueOnce(new Error("Session expired. Please request a new reset link."))
+      .mockResolvedValueOnce(undefined);
+    const complete = vi.fn();
+    renderAccountAccess(vi.fn(), vi.fn(), { forcePasswordReset: true, onPasswordResetComplete: complete });
+    fireEvent.change(screen.getByLabelText(/^New Password/), { target: { value: "New-test-password" } });
+    fireEvent.change(screen.getByLabelText(/^Confirm New Password/), { target: { value: "New-test-password" } });
+    fireEvent.click(screen.getByRole("button", { name: "Update Password" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Session expired");
+    expect(complete).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Update Password" }));
+    await waitFor(() => expect(complete).toHaveBeenCalledTimes(1));
+    expect(update).toHaveBeenCalledTimes(2);
   });
 });

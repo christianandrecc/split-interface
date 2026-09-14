@@ -17,10 +17,10 @@ export function workspaceInitials(name: string) {
 export function workspaceRecord(agreement: Agreement, viewer: UserProfile) {
   const document = agreement.document;
   const signed = VERIFIED_SPLIT_STATUSES.includes(agreement.status);
-  const pending = PENDING_SPLIT_STATUSES.includes(agreement.status);
   const invite = document && findInviteForProfile(document, viewer);
+  const pending = PENDING_SPLIT_STATUSES.includes(agreement.status) && invite?.status !== "Declined";
   const reviewInvite = pending && invite?.status === "Pending";
-  const messagesAvailable = Boolean(document?.sentAt) && pending;
+  const messagesAvailable = Boolean(document?.sentAt) && PENDING_SPLIT_STATUSES.includes(agreement.status);
   const proposal = document?.splitProposalVersions.find((item) => item.id === document.currentProposalId)
     ?? document?.splitProposalVersions.at(-1);
   const viewerIds = document ? documentParticipantIdsForProfile(document, viewer) : new Set<string>();
@@ -28,7 +28,7 @@ export function workspaceRecord(agreement: Agreement, viewer: UserProfile) {
     && signature.status === "Pending"
     && viewerIds.has(normalizeSplitSheetParticipantId(document, signature.collaboratorId) || signature.collaboratorId));
   const readyToSign = ["Ready to Sign", "Pending Signatures"].includes(agreement.status)
-    && !document?.collaboratorInvites.some((item) => item.status === "Pending");
+    && !document?.collaboratorInvites.some((item) => item.status !== "Accepted");
   // The table reflects the current proposal, not the original party percentages.
   const allocations = proposal && document
     ? proposal.allocations.map((allocation) => ({
@@ -43,7 +43,7 @@ export function workspaceRecord(agreement: Agreement, viewer: UserProfile) {
     reviewInvite,
     allocations,
     artist: document?.data.artistProjectName || document?.creatorProfile.displayName || agreement.parties[0] || "",
-    label: signed ? "Signed" : getSplitWorkflowLabel(agreement.status),
+    label: signed ? "Signed" : document?.collaboratorInvites.some((item) => item.status === "Declined") ? "Invite declined" : getSplitWorkflowLabel(agreement.status),
     action: messagesAvailable ? "messages" as const : "agreement" as const,
     actionLabel: messagesAvailable
       ? reviewInvite ? "Review invite" : viewerNeedsSignature && readyToSign ? "Review & sign" : "Open messages"

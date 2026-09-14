@@ -85,7 +85,8 @@ describe("dashboard global search", () => {
     fireEvent.click(screen.getByRole("button", { name: "Open in Messages" }));
 
     expect(screen.getByRole("button", { name: "Accept" })).not.toBeDisabled();
-    expect(screen.getByRole("button", { name: "Dispute" })).not.toBeDisabled();
+    expect(screen.getAllByRole("button", { name: "Counter" }).every(button => !button.hasAttribute("disabled"))).toBe(true);
+    expect(screen.queryByRole("button", { name: "Dispute" })).not.toBeInTheDocument();
   });
 
   it("lets a collaborator sign a ready split when Supabase records point at their party id", async () => {

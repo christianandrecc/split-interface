@@ -22,6 +22,19 @@ function profile(overrides: Partial<UserProfile> = {}): UserProfile {
 }
 
 describe("split sheet negotiation mapping", () => {
+  it.each(["Pending", "Declined"] as const)("keeps %s invites in the required count and blocks signing even with stale ready state", status => {
+    const doc = makeDocument();
+    doc.sentAt = doc.createdAt;
+    doc.status = "Ready to Sign";
+    doc.collaboratorInvites[0].status = status;
+    doc.splitApprovals.forEach(approval => { approval.status = "Approved"; });
+    const deal = documentToNegotiationDeal(doc, profile())!;
+    expect(deal.requiredSignerIds).toEqual(["creator", "maya-invite"]);
+    expect(deal.status).toBe(status === "Declined" ? "invite_declined" : "awaiting_invites");
+    expect(dealReadyToSign(deal)).toBe(false);
+    expect(proposalResponsePermissions(deal, deal.currentVersionId)).toEqual({ accept: false, counter: false });
+    if (status === "Declined") expect(deal.pendingActionCount).toBe(0);
+  });
   it("hides draft, unsent, and unrelated split sheets from Messages", () => {
     const document = makeDocument();
     const collaborator = profile();
@@ -50,7 +63,7 @@ describe("split sheet negotiation mapping", () => {
       id: document.id,
       title: "Night Swim",
       status: "negotiating",
-      unreadCount: 1,
+      pendingActionCount: 1,
       currentVersionId: "proposal-1",
     });
     expect(deal?.viewerParticipantIds.has("maya-invite")).toBe(true);
@@ -185,14 +198,14 @@ describe("split sheet negotiation mapping", () => {
       expect.objectContaining({ type: "counter", senderId: "maya-invite" }),
     ]);
     expect(deal.acceptedBy).toEqual(["maya-invite"]);
-    expect(proposalResponsePermissions(deal, "proposal-2")).toEqual({ accept: false, counter: false, dispute: false });
+    expect(proposalResponsePermissions(deal, "proposal-2")).toEqual({ accept: false, counter: false });
   });
 
   it("allows only accepted recipients to respond to the latest proposal", () => {
     const document = makeCounterDocument();
     const deal = documentToNegotiationDeal(document, document.creatorProfile)!;
-    expect(proposalResponsePermissions(deal, "proposal-2")).toEqual({ accept: true, counter: true, dispute: true });
-    expect(proposalResponsePermissions(deal, "proposal-1")).toEqual({ accept: false, counter: false, dispute: false });
+    expect(proposalResponsePermissions(deal, "proposal-2")).toEqual({ accept: true, counter: true });
+    expect(proposalResponsePermissions(deal, "proposal-1")).toEqual({ accept: false, counter: false });
     document.collaboratorInvites[0].status = "Pending";
     const invitee = documentToNegotiationDeal(document, profile())!;
     expect(proposalResponsePermissions(invitee, "proposal-1").counter).toBe(false);
@@ -222,7 +235,7 @@ describe("split sheet negotiation mapping", () => {
   it("keeps signing independent while preventing acceptance changes after a signature", () => {
     const document = makeCounterDocument();
     document.splitSignatures.push({ id: "signed", proposalVersionId: "proposal-2", collaboratorId: "maya-party", collaboratorName: "Maya", status: "Signed", signedAt: document.updatedAt });
-    expect(proposalResponsePermissions(documentToNegotiationDeal(document, document.creatorProfile)!, "proposal-2")).toEqual({ accept: false, dispute: false, counter: true });
+    expect(proposalResponsePermissions(documentToNegotiationDeal(document, document.creatorProfile)!, "proposal-2")).toEqual({ accept: false, counter: true });
     document.status = "Verified and Stored";
     expect(proposalResponsePermissions(documentToNegotiationDeal(document, document.creatorProfile)!, "proposal-2").counter).toBe(false);
   });

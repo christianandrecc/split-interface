@@ -33,6 +33,22 @@ describe("dashboard workspace", () => {
     window.localStorage.clear();
   });
 
+  it("offers sign out in the profile dropdown and disables account actions while it runs", async () => {
+    const profile = makeProfile();
+    const signOut = vi.fn().mockResolvedValue(undefined);
+    const props = { userProfile: profile, onUpdateProfile: vi.fn(), onOpenAccountCreation: vi.fn(), onSignOut: signOut };
+    const { rerender } = render(<Dashboard {...props} />);
+    fireEvent.click(screen.getByRole("button", { name: "Open account menu" }));
+    fireEvent.click(screen.getByRole("button", { name: "Sign out" }));
+    expect(signOut).toHaveBeenCalledOnce();
+    rerender(<Dashboard {...props} signingOut />);
+    expect(screen.getByRole("button", { name: "Signing out..." })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Your Profile" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Account Setup" })).toBeDisabled();
+    rerender(<Dashboard {...props} />);
+    expect(screen.getByRole("button", { name: "Sign out" })).toBeEnabled();
+  });
+
   it("deletes a confirmed draft from the preview, list, counts, and local storage", async () => {
     const document = makeDocument();
     document.status = "Draft";

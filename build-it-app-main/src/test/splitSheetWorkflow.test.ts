@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { makeDocument } from "@/test/fixtures/splitSheet";
 import {
   getCollaboratorStatusSummary,
-  queueContractDelivery,
+  prepareSplitInvite,
   splitPercentTotal,
   validateDocumentSplit,
   validateSplitPercentages,
@@ -46,11 +46,13 @@ describe("split sheet workflow validation", () => {
     ]);
   });
 
-  it("records contract delivery as a server-side queue action", () => {
-    const queued = queueContractDelivery(makeDocument(), "Chori");
+  it("prepares an in-app invitation without claiming external delivery", () => {
+    const source = makeDocument();
+    const before = structuredClone(source);
+    const queued = prepareSplitInvite(source, "Chori");
 
     expect(queued.sentAt).toBeTruthy();
-    expect(queued.auditTrail.at(-1)?.action).toContain("Started Messages review");
-    expect(queued.auditTrail.at(-1)?.action).toContain("server contract delivery pending");
+    expect(queued.auditTrail.at(-1)?.action).toBe("Sent the split sheet for review in SPLIT");
+    expect(source).toEqual(before);
   });
 });

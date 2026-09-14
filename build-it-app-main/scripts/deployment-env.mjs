@@ -52,6 +52,8 @@ export function validateDeploymentEnv(env) {
     if (!name.startsWith("VITE_") || !value) continue;
     if (
       /SECRET|SERVICE_ROLE|PRIVATE_KEY/i.test(name) ||
+      /SENTRY.*TOKEN|TOKEN.*SENTRY/i.test(name) ||
+      value.startsWith("sntrys_") ||
       value.startsWith("sb_secret_") ||
       jwtPayload(value)?.role === "service_role"
     ) {
@@ -84,6 +86,23 @@ export function validateDeploymentEnv(env) {
         `${name} must be the deployed HTTPS app origin, without query parameters or a fragment.`,
       );
     }
+  }
+  const sentryEnabled = env.VITE_SENTRY_ENABLED?.trim();
+  if (sentryEnabled && sentryEnabled !== "true" && sentryEnabled !== "false") {
+    issues.push("VITE_SENTRY_ENABLED must be true or false.");
+  }
+  if (sentryEnabled === "true" || env.VITE_SENTRY_DSN?.trim()) {
+    try {
+      const dsn = new URL(env.VITE_SENTRY_DSN);
+      if (dsn.protocol !== "https:" || !/^o\d+\.ingest(?:\.[a-z]+)?\.sentry\.io$/.test(dsn.hostname)
+        || !/^[a-f0-9]{32}$/.test(dsn.username) || !/^\/\d+$/.test(dsn.pathname)
+        || dsn.password || dsn.port || dsn.search || dsn.hash) throw new Error("Invalid DSN");
+    } catch {
+      issues.push("VITE_SENTRY_DSN must be a Sentry cloud project DSN, not an API token or dashboard URL.");
+    }
+  }
+  if (sentryEnabled === "true" && !["production", "preview", "development"].includes(env.VITE_SENTRY_ENVIRONMENT)) {
+    issues.push("Set VITE_SENTRY_ENVIRONMENT to production, preview, or development before enabling reports.");
   }
   return issues;
 }

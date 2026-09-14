@@ -23,7 +23,7 @@ export function normalizeSplitSheetParticipantId(document: StoredSplitSheetDocum
 export function getSplitSheetRequiredParticipantIds(document: StoredSplitSheetDocument) {
   return uniqueParticipantIds([
     "creator",
-    ...document.collaboratorInvites.filter((invite) => invite.status === "Accepted").map((invite) => invite.id),
+    ...document.collaboratorInvites.map((invite) => invite.id),
   ]);
 }
 
@@ -91,6 +91,7 @@ export function getSplitSheetAcceptedParticipantIds(
 }
 
 export function allSplitSheetRequiredParticipantsAccepted(document: StoredSplitSheetDocument, proposalId: string) {
+  if (document.collaboratorInvites.some((invite) => invite.status !== "Accepted")) return false;
   const acceptedParticipants = new Set(getSplitSheetAcceptedParticipantIds(document, proposalId));
   const requiredSigners = getSplitSheetRequiredParticipantIds(document);
 

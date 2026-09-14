@@ -99,11 +99,11 @@ const phoneCountries = [
 
 type AccountAccessProps = {
   initialProfile?: UserProfile | null;
+  initialMode?: "create" | "signin";
   forcePasswordReset?: boolean;
   onCreateAccount: (profile: UserProfile, password: string) => Promise<AccountCreationResult | void>;
   onSignIn: (emailAddress: string, password: string) => Promise<void>;
   onPasswordResetComplete?: () => void;
-  onViewOnboardingAgain?: () => void;
 };
 
 type AccountCreationResult = {
@@ -113,21 +113,20 @@ type AccountCreationResult = {
 
 export default function AccountAccess({
   initialProfile,
+  initialMode = "create",
   forcePasswordReset = false,
   onCreateAccount,
   onSignIn,
   onPasswordResetComplete,
-  onViewOnboardingAgain,
 }: AccountAccessProps) {
   const [mode, setMode] = useState<"create" | "signin" | "forgot" | "reset" | "confirm">(
-    forcePasswordReset || hasRecoveryUrl() ? "reset" : "create",
+    forcePasswordReset ? "reset" : initialMode,
   );
   const [profile, setProfile] = useState<UserProfile>(() =>
     initialProfile ? normalizeUserProfile(initialProfile) : createEmptyProfile()
   );
   const [signInEmail, setSignInEmail] = useState("");
   const [signInPassword, setSignInPassword] = useState("");
-  const [resetEmail, setResetEmail] = useState("");
   const [accountPassword, setAccountPassword] = useState("");
   const [accountPasswordConfirm, setAccountPasswordConfirm] = useState("");
   const [resetPassword, setResetPassword] = useState("");
@@ -221,22 +220,6 @@ export default function AccountAccess({
     }
   };
 
-  const handleForgotPassword = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setFormError("");
-    setFormNotice("");
-
-    try {
-      setSubmitting(true);
-      await requestSupabasePasswordReset(resetEmail);
-      setFormNotice("If this email can receive reset messages, Supabase will send password reset instructions shortly.");
-    } catch (error) {
-      setFormNotice(error instanceof Error ? error.message : "If this email can receive reset messages, Supabase will send password reset instructions shortly.");
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
   const handleResetPassword = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setFormError("");
@@ -292,24 +275,6 @@ export default function AccountAccess({
             <div className="hidden rounded-lg border border-border bg-secondary/50 p-4 text-xs leading-5 text-muted-foreground lg:block">
               Passwords are handled only by Supabase Auth. SPLIT stores profile, role, consent, and split-sheet data in protected profile tables.
             </div>
-            {initialProfile && onViewOnboardingAgain && (
-              <button
-                type="button"
-                onClick={onViewOnboardingAgain}
-                className="group flex w-full items-center gap-3 rounded-lg border border-primary/15 bg-background/80 p-3 text-left shadow-sm transition-colors hover:border-primary/30 hover:bg-primary/5"
-              >
-                <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
-                  <RotateCcw className="h-4 w-4" />
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block text-sm font-bold text-foreground">View onboarding again</span>
-                  <span className="mt-0.5 block text-xs leading-5 text-muted-foreground">
-                    Replay the six-step SPLIT walkthrough.
-                  </span>
-                </span>
-                <ArrowRight className="h-4 w-4 flex-shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />
-              </button>
-            )}
           </div>
         </section>
 
@@ -485,7 +450,6 @@ export default function AccountAccess({
                     setMode("forgot");
                     setFormError("");
                     setFormNotice("");
-                    setResetEmail(signInEmail);
                   }}
                 >
                   Forgot Password?
@@ -494,44 +458,7 @@ export default function AccountAccess({
             )}
 
             {mode === "forgot" && (
-              <form onSubmit={handleForgotPassword} className="rounded-lg border border-border bg-card p-4 shadow-sm md:p-6">
-                <div className="mb-5">
-                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">Password reset</p>
-                  <h2 className="mt-3 text-2xl font-bold tracking-tight">Request reset email</h2>
-                  <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                    Enter your SPLIT account email. For privacy, we show the same message whether or not the email exists.
-                  </p>
-                </div>
-                <Field label="Email Address" htmlFor="resetEmail" required>
-                  <Input
-                    id="resetEmail"
-                    type="email"
-                    inputMode="email"
-                    autoComplete="email"
-                    value={resetEmail}
-                    onChange={(event) => setResetEmail(normalizeEmailAddress(event.target.value))}
-                    placeholder="name@example.com"
-                    required
-                  />
-                </Field>
-
-                <FeedbackMessage error={formError} notice={formNotice} />
-
-                <Button type="submit" disabled={submitting} className="mt-6 h-11 w-full">
-                  {submitting ? "Sending..." : "Send Reset Email"}
-                </Button>
-                <button
-                  type="button"
-                  className="mt-4 w-full text-center text-xs font-semibold text-primary hover:underline"
-                  onClick={() => {
-                    setMode("signin");
-                    setFormError("");
-                    setFormNotice("");
-                  }}
-                >
-                  Back to Sign In
-                </button>
-              </form>
+              <PasswordResetRequest emailAddress={signInEmail} onBack={() => setMode("signin")} />
             )}
 
             {mode === "reset" && (
@@ -581,6 +508,74 @@ export default function AccountAccess({
         </section>
       </div>
     </main>
+  );
+}
+
+function PasswordResetRequest({ emailAddress, onBack }: { emailAddress: string; onBack: () => void }) {
+  const [email, setEmail] = useState(emailAddress);
+  const [requesting, setRequesting] = useState(false);
+  const [retryAt, setRetryAt] = useState(0);
+  const [remaining, setRemaining] = useState(0);
+  const [notice, setNotice] = useState("");
+  const [error, setError] = useState("");
+  const pending = useRef(false);
+
+  useEffect(() => {
+    if (!retryAt) return;
+    const tick = () => {
+      const seconds = Math.max(0, Math.ceil((retryAt - Date.now()) / 1000));
+      setRemaining(seconds);
+      if (!seconds) setRetryAt(0);
+    };
+    tick();
+    const timer = window.setInterval(tick, 1000);
+    return () => window.clearInterval(timer);
+  }, [retryAt]);
+
+  const requestReset = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (pending.current || Date.now() < retryAt) return;
+    setError("");
+    setNotice("");
+    const normalized = normalizeEmailAddress(email);
+    if (!isValidEmailAddress(normalized) || normalized.length > 254) {
+      setError("Enter a valid email address.");
+      return;
+    }
+    pending.current = true;
+    setRequesting(true);
+    try {
+      await requestSupabasePasswordReset(normalized);
+      setNotice("If an account can receive reset emails at this address, you will receive a link. Check your spam or junk folder too.");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not request a reset email. Please try again.");
+    } finally {
+      setRetryAt(Date.now() + 60_000);
+      setRemaining(60);
+      setRequesting(false);
+      pending.current = false;
+    }
+  };
+
+  return (
+    <form onSubmit={requestReset} className="rounded-lg border border-border bg-card p-4 shadow-sm md:p-6">
+      <div className="mb-5">
+        <p className="text-xs font-semibold uppercase text-primary">Password reset</p>
+        <h2 className="mt-3 text-2xl font-bold">Request reset email</h2>
+      </div>
+      <Field label="Email Address" htmlFor="resetEmail" required>
+        <Input id="resetEmail" type="email" inputMode="email" autoComplete="email" value={email}
+          onChange={event => setEmail(normalizeEmailAddress(event.target.value))}
+          placeholder="name@example.com" maxLength={254} disabled={requesting} required />
+      </Field>
+      <FeedbackMessage error={error} notice={notice} />
+      <Button type="submit" disabled={requesting || remaining > 0} className="mt-6 h-11 w-full">
+        {requesting ? "Requesting..." : remaining ? `Request again in ${remaining}s` : "Send Reset Email"}
+      </Button>
+      <button type="button" className="mt-4 w-full text-center text-xs font-semibold text-primary hover:underline" onClick={onBack}>
+        Back to Sign In
+      </button>
+    </form>
   );
 }
 
@@ -1049,7 +1044,7 @@ function FeedbackMessage({ error, notice }: { error: string; notice: string }) {
   if (!error && !notice) return null;
 
   return (
-    <div className={`mt-5 rounded-lg border px-3 py-2 text-xs leading-5 ${
+    <div role={error ? "alert" : "status"} className={`mt-5 rounded-lg border px-3 py-2 text-xs leading-5 ${
       error
         ? "border-destructive/20 bg-destructive/5 text-destructive"
         : "border-primary/20 bg-primary/5 text-primary"
@@ -1147,9 +1142,4 @@ function HelpTip({ label, content }: { label: string; content: string }) {
       </span>
     </span>
   );
-}
-
-function hasRecoveryUrl() {
-  if (typeof window === "undefined") return false;
-  return window.location.hash.includes("type=recovery") || window.location.search.includes("type=recovery");
 }

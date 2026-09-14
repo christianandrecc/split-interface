@@ -37,8 +37,8 @@ export default function DealSummary({ deal, currentVersion, onOpenAgreement }: {
   const invited = people.filter((person) => person.state === "Invited").length;
   const total = Math.round(people.reduce((sum, person) => sum + person.percent, 0) * 100) / 100;
   const versions = deal.splitVersions.slice().sort((a, b) => a.version - b.version);
-  const status = deal.status === "signed" ? "Signed" : invited ? "Awaiting invites" : deal.status === "ready_to_sign" ? "Ready to sign" : "Negotiating";
-  const StatusIcon = deal.status === "signed" ? Lock : deal.status === "ready_to_sign" ? PenLine : Clock3;
+  const status = deal.status === "signed" ? "Signed" : deal.status === "invite_declined" ? "Invite declined" : invited ? "Awaiting invites" : deal.status === "ready_to_sign" ? "Ready to sign" : "Negotiating";
+  const StatusIcon = deal.status === "signed" ? Lock : deal.status === "invite_declined" ? XCircle : deal.status === "ready_to_sign" ? PenLine : Clock3;
 
   return <aside className="deal-summary" aria-label="Deal summary" data-expanded={expanded}>
     <button type="button" className="deal-summary-mobile-toggle" aria-expanded={expanded} aria-controls={`${id}-body`} onClick={() => setExpanded((open) => !open)}>

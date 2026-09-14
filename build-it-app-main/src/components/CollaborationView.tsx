@@ -56,6 +56,10 @@ import CounterOfferDialog from "@/components/CounterOfferDialog";
 import DealSummary from "@/components/DealSummary";
 import { counterAllocationState } from "@/lib/counterOffer";
 import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+
+type InviteResponseResult = { ok: true } | { ok: false; error: string };
 
 type PersistContext = SplitSheetUpdateContext & {
   successMessage?: string;
@@ -66,19 +70,26 @@ type CollaborationViewProps = {
   userProfile: UserProfile;
   initialDealId?: string;
   onOpenAgreement?: (id: string) => void;
+  onReloadDocuments?: () => void;
+  reloading?: boolean;
   onUpdateDocument: (
     document: StoredSplitSheetDocument,
     context?: SplitSheetUpdateContext,
   ) => StoredSplitSheetDocument | void | Promise<StoredSplitSheetDocument | void>;
 };
 
-export default function CollaborationView({ documents, userProfile, initialDealId, onUpdateDocument, onOpenAgreement }: CollaborationViewProps) {
+export default function CollaborationView({ documents, userProfile, initialDealId, onUpdateDocument, onOpenAgreement, onReloadDocuments, reloading = false }: CollaborationViewProps) {
   const deals = useMemo(
     () => documents.map((document) => documentToNegotiationDeal(document, userProfile)).filter(Boolean) as NegotiationDeal[],
     [documents, userProfile],
   );
   const [selectedDealId, setSelectedDealId] = useState("");
-  const [composerText, setComposerText] = useState("");
+  const [composerDrafts, setComposerDrafts] = useState<Record<string, string>>({});
+  const [retryReviewDealId, setRetryReviewDealId] = useState<string | null>(null);
+  const chatAttempts = useRef(new Map<string, { body: string; document: StoredSplitSheetDocument }>());
+  const writeInFlight = useRef(false);
+  const [savingWrite, setSavingWrite] = useState(false);
+  const [writeFailure, setWriteFailure] = useState<{ dealId: string; message: string } | null>(null);
   const [counterPercents, setCounterPercents] = useState<Record<string, string>>({});
   const [counterNote, setCounterNote] = useState("");
   const [counterOpen, setCounterOpen] = useState(false);
@@ -93,6 +104,7 @@ export default function CollaborationView({ documents, userProfile, initialDealI
   const selectedDeal = selectedDealId
     ? deals.find((deal) => deal.id === selectedDealId) ?? null
     : deals[0] ?? null;
+  const composerText = composerDrafts[selectedDeal?.id ?? ""] ?? "";
   const currentVersion = selectedDeal?.splitVersions.find((version) => version.id === selectedDeal.currentVersionId) ?? selectedDeal?.splitVersions.at(-1);
   const readyToSign = Boolean(selectedDeal && dealReadyToSign(selectedDeal));
   const isFinalRecord = Boolean(selectedDeal && FINAL_NEGOTIATION_DOCUMENT_STATUSES.has(selectedDeal.document.status));
@@ -100,6 +112,8 @@ export default function CollaborationView({ documents, userProfile, initialDealI
   const viewerName = viewerIdentity?.name || getProfileDisplayName(userProfile);
   const viewerParticipantId = selectedDeal ? viewerIdentity?.id || firstViewerParticipantId(selectedDeal) : "";
   const canCounter = Boolean(selectedDeal && proposalResponsePermissions(selectedDeal, currentVersion?.id).counter);
+  const viewerInvite = selectedDeal && findInviteForProfile(selectedDeal.document, userProfile);
+  const canMessage = Boolean(selectedDeal && !isFinalRecord && viewerInvite?.status !== "Declined");
 
   useEffect(() => {
     const initialDealExists = Boolean(initialDealId && deals.some((deal) => deal.id === initialDealId));
@@ -119,10 +133,14 @@ export default function CollaborationView({ documents, userProfile, initialDealI
   }, [deals, initialDealId, selectedDealId]);
 
   const updateDocument = async (document: StoredSplitSheetDocument, context: PersistContext) => {
+    if (writeInFlight.current) return { ok: false as const, error: "Wait for the current update to finish." };
+    writeInFlight.current = true;
+    setSavingWrite(true);
+    setWriteFailure(null);
     try {
       const persistedDocument = await onUpdateDocument(document, context);
       if (persistedDocument && persistedDocument.id) {
-        setSelectedDealId(persistedDocument.id);
+        setSelectedDealId((current) => current === document.id ? persistedDocument.id : current);
       }
       if (context.successMessage) {
         toast.success(context.successMessage);
@@ -130,15 +148,21 @@ export default function CollaborationView({ documents, userProfile, initialDealI
       return { ok: true as const };
     } catch (error) {
       const message = error instanceof Error ? error.message : "Try again after checking your connection.";
+      if (!["invite_accept", "invite_decline", "counter_offer"].includes(context.action ?? "")) {
+        setWriteFailure({ dealId: document.id, message });
+      }
       toast.error("Messages could not sync this update", {
         description: message,
       });
       return { ok: false as const, error: message };
+    } finally {
+      writeInFlight.current = false;
+      setSavingWrite(false);
     }
   };
 
-  const sendTextMessage = async () => {
-    if (!selectedDeal) return;
+  const sendTextMessage = async (reviewedRetry = false) => {
+    if (!selectedDeal || !canMessage || writeInFlight.current) return;
 
     const body = composerText.trim();
     if (!body) return;
@@ -151,25 +175,36 @@ export default function CollaborationView({ documents, userProfile, initialDealI
       body,
       createdAt: now,
     };
-    const updatedDocument = addDocumentAuditTrail(
+    const previousAttempt = chatAttempts.current.get(selectedDeal.id);
+    const retrying = previousAttempt?.body === body;
+    if (retrying && !reviewedRetry && previousAttempt.document.serverRevision !== selectedDeal.document.serverRevision) {
+      setRetryReviewDealId(selectedDeal.id);
+      return;
+    }
+    const updatedDocument = retrying && !reviewedRetry ? previousAttempt.document : addDocumentAuditTrail(
       appendSplitSheetChatMessage(selectedDeal.document, message),
       viewerName,
       "Sent a negotiation message",
     );
 
-    setComposerText("");
-    await updateDocument(updatedDocument, {
+    // Keep the original revision unless the user explicitly reviews a retry against newer state.
+    chatAttempts.current.set(selectedDeal.id, { body, document: updatedDocument });
+    const result = await updateDocument(updatedDocument, {
       action: "local_chat",
       notes: body,
       successMessage: "Message sent",
     });
+    if (result.ok) {
+      chatAttempts.current.delete(selectedDeal.id);
+      setComposerDrafts(current => current[selectedDeal.id] === composerText ? { ...current, [selectedDeal.id]: "" } : current);
+    }
   };
 
-  const acceptInvite = async () => {
-    if (!selectedDeal) return;
+  const acceptInvite = async (): Promise<InviteResponseResult> => {
+    if (!selectedDeal || isFinalRecord) return { ok: false, error: "This invitation is no longer available." };
 
     const invite = findInviteForProfile(selectedDeal.document, userProfile);
-    if (!invite || invite.status !== "Pending") return;
+    if (!invite || invite.status !== "Pending") return { ok: false, error: "This invitation already has a response. Refresh to see it." };
 
     const now = new Date().toISOString();
     const collaboratorInvites = selectedDeal.document.collaboratorInvites.map((item) =>
@@ -227,47 +262,27 @@ export default function CollaborationView({ documents, userProfile, initialDealI
       `${viewerName} accepted the collaboration invite`,
     );
 
-    await updateDocument(updatedDocument, {
+    return updateDocument(updatedDocument, {
       action: "invite_accept",
       responseType: "invite_accept",
       successMessage: "Invite accepted",
     });
   };
 
-  const rejectProposal = async (proposalId: string) => {
-    if (!selectedDeal || !currentVersion || !proposalResponsePermissions(selectedDeal, proposalId).dispute) return;
-
-    const currentProposal = selectedDeal.document.splitProposalVersions.find((proposal) => proposal.id === currentVersion.id);
-    const currentApprovals = selectedDeal.document.splitApprovals.filter((approval) => approval.proposalVersionId === currentProposal?.id);
-    const viewerApproval = currentApprovals.find((approval) => participantMatchesViewer(selectedDeal, approval.collaboratorId));
-    if (!viewerApproval) return;
-
-    const now = new Date().toISOString();
-    const splitApprovals = selectedDeal.document.splitApprovals.map((approval) =>
-      approval.id === viewerApproval.id
-        ? {
-            ...approval,
-            status: "Rejected" as const,
-            respondedAt: now,
-            notes: counterNote.trim() || "Needs changes",
-          }
-        : approval,
-    );
-    const updatedDocument = addDocumentAuditTrail(
-      {
-        ...selectedDeal.document,
-        status: "Disputed",
-        splitApprovals,
-      },
-      viewerName,
-      "Disputed the current split proposal",
-    );
-
-    await updateDocument(updatedDocument, {
-      action: "split_reject",
-      responseType: "split_reject",
-      notes: counterNote.trim() || "Needs changes",
-      successMessage: "Proposal disputed",
+  const declineInvite = async (): Promise<InviteResponseResult> => {
+    if (!selectedDeal || isFinalRecord) return { ok: false, error: "This invitation is no longer available." };
+    const invite = findInviteForProfile(selectedDeal.document, userProfile);
+    if (!invite || invite.status !== "Pending") return { ok: false, error: "This invitation already has a response. Refresh to see it." };
+    const updatedDocument = addDocumentAuditTrail({
+      ...selectedDeal.document,
+      status: "Disputed",
+      collaboratorInvites: selectedDeal.document.collaboratorInvites.map((item) => item.id === invite.id
+        ? { ...item, status: "Declined" as const, respondedAt: new Date().toISOString() } : item),
+    }, viewerName, `${viewerName} declined the collaboration invite`);
+    return updateDocument(updatedDocument, {
+      action: "invite_decline",
+      responseType: "invite_reject",
+      successMessage: "Invite declined",
     });
   };
 
@@ -319,7 +334,7 @@ export default function CollaborationView({ documents, userProfile, initialDealI
   };
 
   const openCounterComposer = (proposalId = currentVersion?.id) => {
-    if (!selectedDeal || !currentVersion || !proposalResponsePermissions(selectedDeal, proposalId).counter) return;
+    if (writeInFlight.current || !selectedDeal || !currentVersion || !proposalResponsePermissions(selectedDeal, proposalId).counter) return;
     if (FINAL_NEGOTIATION_DOCUMENT_STATUSES.has(selectedDeal.document.status)) {
       toast.info("This SPLIT is signed and locked", {
         description: "Locked SPLIT records cannot be renegotiated or changed.",
@@ -537,12 +552,13 @@ export default function CollaborationView({ documents, userProfile, initialDealI
           onBack={() => setMobileChatOpen(false)}
           onToggleContext={() => setContextOpen((open) => !open)}
           onSign={signDeal}
+          saving={savingWrite}
         />
         <div className="deal-conversation-layout">
           <main className="flex min-h-0 min-w-0 flex-1 flex-col">
             <div className="flex-1 overflow-y-auto px-4 py-5 md:px-6 xl:px-8">
               <div className="mx-auto max-w-5xl space-y-4">
-                <InvitePrompt deal={selectedDeal} onAccept={acceptInvite} />
+                <InvitePrompt key={`${selectedDeal.id}-${viewerParticipantId}`} deal={selectedDeal} onAccept={acceptInvite} onDecline={declineInvite} busy={savingWrite} />
 
                 {selectedDeal.messages.map((message) => (
                   <MessageRow
@@ -550,8 +566,8 @@ export default function CollaborationView({ documents, userProfile, initialDealI
                     message={message}
                     deal={selectedDeal}
                     onAccept={acceptProposal}
-                    onReject={rejectProposal}
                     onCounter={openCounterComposer}
+                    busy={savingWrite}
                   />
                 ))}
 
@@ -567,6 +583,8 @@ export default function CollaborationView({ documents, userProfile, initialDealI
                       <button
                         type="button"
                         onClick={signDeal}
+                        disabled={savingWrite}
+                        aria-busy={savingWrite}
                         className="split-press inline-flex items-center justify-center gap-2 rounded-lg bg-[hsl(var(--split-verified))] px-4 py-2 text-sm font-bold text-white hover:opacity-90"
                       >
                         <FileSignature className="h-4 w-4" />
@@ -588,23 +606,47 @@ export default function CollaborationView({ documents, userProfile, initialDealI
               onReload={() => { openCounterComposer(); setCounterNote(counterNote); }} onSubmit={() => void createCounterOffer()} />}
 
             <div className="border-t border-border bg-card px-4 py-3 md:px-6 xl:px-8">
+              <AlertDialog open={retryReviewDealId === selectedDeal.id} onOpenChange={(open) => { if (!open) setRetryReviewDealId(null); }}>
+                <AlertDialogContent className="w-[calc(100%-2rem)] max-w-md rounded-lg">
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Send this message again?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This split changed since your last attempt. Check the latest messages first: your previous send may have succeeded even though its confirmation did not arrive.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <p className="max-h-40 overflow-y-auto whitespace-pre-wrap break-words text-sm">{composerText}</p>
+                  <AlertDialogFooter className="gap-2 sm:space-x-0">
+                    <AlertDialogCancel>Keep message</AlertDialogCancel>
+                    <Button disabled={savingWrite} onClick={() => { setRetryReviewDealId(null); void sendTextMessage(true); }}>Send again</Button>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+              {writeFailure?.dealId === selectedDeal.id && <div role="alert" className="mx-auto mb-3 flex max-w-5xl flex-wrap items-center justify-between gap-2 text-sm text-destructive">
+                <p className="min-w-0 break-words">{writeFailure.message}</p>
+                {onReloadDocuments && <Button type="button" variant="outline" disabled={reloading || savingWrite} onClick={onReloadDocuments}>Reload latest</Button>}
+              </div>}
               <div className="mx-auto flex max-w-5xl items-end gap-2">
                 <textarea
                   value={composerText}
-                  onChange={(event) => setComposerText(event.target.value)}
+                  disabled={!canMessage}
+                  onChange={(event) => {
+                    const value = event.target.value;
+                    setComposerDrafts(current => ({ ...current, [selectedDeal.id]: value }));
+                    chatAttempts.current.delete(selectedDeal.id);
+                  }}
                   onKeyDown={(event) => {
                     if (event.key === "Enter" && !event.shiftKey) {
                       event.preventDefault();
                       void sendTextMessage();
                     }
                   }}
-                  placeholder="Message the collaborators..."
+                  placeholder={canMessage ? "Message the collaborators..." : "This conversation is read-only"}
                   className="min-h-[44px] flex-1 resize-none rounded-xl border border-border bg-background px-3 py-3 text-sm outline-none placeholder:text-muted-foreground/60 focus:ring-2 focus:ring-ring/30"
                 />
                 <button
                   type="button"
                   onClick={() => openCounterComposer()}
-                  disabled={!canCounter}
+                  disabled={!canCounter || savingWrite}
                   aria-label="Counter"
                   title={canCounter ? "Counter the current proposal" : "Waiting for another collaborator's proposal"}
                   className="flex h-11 flex-shrink-0 items-center justify-center gap-2 rounded-xl border border-border px-3 text-xs font-bold text-muted-foreground hover:bg-secondary disabled:cursor-default disabled:opacity-40"
@@ -621,7 +663,9 @@ export default function CollaborationView({ documents, userProfile, initialDealI
                 <button
                   type="button"
                   onClick={() => void sendTextMessage()}
-                  className="split-press flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground hover:bg-primary/90"
+                  disabled={!canMessage || !composerText.trim() || savingWrite}
+                  aria-busy={savingWrite}
+                  className="split-press flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-40"
                   aria-label="Send message"
                 >
                   <Send className="h-4 w-4" />
@@ -684,14 +728,14 @@ function ChatListSidebar({
                 <div className="min-w-0 flex-1 pt-0.5">
                   <div className="flex items-center justify-between gap-2">
                     <div className="truncate text-sm font-bold">{primaryParticipant.name}</div>
-                    <span className={`text-[10px] font-semibold ${deal.unreadCount > 0 ? "text-primary" : "text-muted-foreground"}`}>{deal.updatedAt}</span>
+                    <span className={`text-[10px] font-semibold ${deal.pendingActionCount > 0 ? "text-primary" : "text-muted-foreground"}`}>{deal.updatedAt}</span>
                   </div>
                   <div className="mt-0.5 truncate text-xs font-semibold text-foreground/80">{deal.title}</div>
                   <div className="mt-1 flex items-center justify-between gap-2">
                     <p className="min-w-0 truncate text-xs text-muted-foreground">{latestMessage?.body ?? "No messages yet"}</p>
-                    {deal.unreadCount > 0 && (
-                      <span className="flex h-5 min-w-5 flex-shrink-0 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-bold text-primary-foreground">
-                        {deal.unreadCount}
+                    {deal.pendingActionCount > 0 && (
+                      <span aria-label="Action needed from you" title="Action needed from you" className="flex h-5 min-w-5 flex-shrink-0 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-bold text-primary-foreground">
+                        {deal.pendingActionCount}
                       </span>
                     )}
                   </div>
@@ -729,6 +773,7 @@ function ChatHeader({
   onBack,
   onToggleContext,
   onSign,
+  saving,
 }: {
   deal: NegotiationDeal;
   currentVersion?: SplitVersion;
@@ -737,6 +782,7 @@ function ChatHeader({
   onBack: () => void;
   onToggleContext: () => void;
   onSign: () => void;
+  saving: boolean;
 }) {
   return (
     <header className="flex min-h-[68px] items-center justify-between gap-3 border-b border-border bg-background px-4 py-3 md:px-6">
@@ -764,6 +810,8 @@ function ChatHeader({
           <button
             type="button"
             onClick={onSign}
+            disabled={saving}
+            aria-busy={saving}
             className="split-press hidden items-center gap-2 rounded-lg bg-[hsl(var(--split-verified))] px-3 py-2 text-xs font-bold text-white hover:opacity-90 sm:flex"
           >
             <FileSignature className="h-3.5 w-3.5" />
@@ -785,29 +833,88 @@ function ChatHeader({
   );
 }
 
-function InvitePrompt({ deal, onAccept }: { deal: NegotiationDeal; onAccept: () => void }) {
+function InvitePrompt({ deal, onAccept, onDecline, busy }: {
+  deal: NegotiationDeal;
+  onAccept: () => Promise<InviteResponseResult>;
+  onDecline: () => Promise<InviteResponseResult>;
+  busy: boolean;
+}) {
+  const [confirmDecline, setConfirmDecline] = useState(false);
+  const [saving, setSaving] = useState<"accept" | "decline" | null>(null);
+  const [error, setError] = useState("");
+  const inFlight = useRef(false);
   const invite = deal.document.collaboratorInvites.find((item) => item.status === "Pending" && deal.viewerParticipantIds.has(item.id));
-  if (!invite) return null;
+  const declined = deal.document.collaboratorInvites.filter((item) => item.status === "Declined");
+  const viewerDeclined = declined.some((item) => deal.viewerParticipantIds.has(item.id));
+  const respond = async (choice: "accept" | "decline") => {
+    if (inFlight.current || !invite) return;
+    inFlight.current = true;
+    setSaving(choice);
+    setError("");
+    try {
+      const result = await (choice === "accept" ? onAccept() : onDecline());
+      if (result.ok) setConfirmDecline(false);
+      else if ("error" in result) setError(result.error);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Your response could not be saved. Try again.");
+    } finally {
+      inFlight.current = false;
+      setSaving(null);
+    }
+  };
+  if (FINAL_NEGOTIATION_DOCUMENT_STATUSES.has(deal.document.status)) return null;
+  const declineNotice = declined.length > 0 && (
+    <div className="rounded-lg border border-border bg-secondary/40 p-4" role="status">
+      <p className="text-sm font-bold">{viewerDeclined ? "You declined this invitation" : "Invitation declined"}</p>
+      <p className="mt-1 text-xs leading-5 text-muted-foreground">
+        {viewerDeclined ? "Your response is saved. This conversation is now read-only."
+          : `${declined.map((item) => splitSheetParticipantDisplayName(deal.document, item.id, item.name)).join(", ")} declined. This split cannot be finalized with a declined invitation.`}
+      </p>
+    </div>
+  );
+  if (!invite) return declineNotice || null;
 
   return (
-    <div className="rounded-lg border border-primary/20 bg-primary/5 p-4">
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div>
-          <div className="text-sm font-bold text-primary">New split-sheet invite</div>
-          <p className="mt-1 text-xs leading-5 text-muted-foreground">
-            Accept the invite to enter the negotiation and review your proposed split.
-          </p>
+    <>
+      {declineNotice}
+      <div className="rounded-lg border border-primary/20 bg-primary/5 p-4">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+          <div className="min-w-0">
+            <div className="text-sm font-bold text-primary">New split-sheet invite</div>
+            <p className="mt-1 text-xs leading-5 text-muted-foreground">
+              Accept to join the discussion, or decline this invitation. Accepting does not approve the split percentages.
+            </p>
+          </div>
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            <AlertDialog open={confirmDecline} onOpenChange={(open) => { if (!inFlight.current) { setConfirmDecline(open); setError(""); } }}>
+              <AlertDialogTrigger asChild>
+                <Button variant="outline" disabled={saving !== null || busy} className="flex-1 gap-2 xl:flex-none"><X className="h-4 w-4" />Decline invite</Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent className="w-[calc(100%-2rem)] max-w-md rounded-lg">
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Decline this invitation?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    You will not join {deal.title}. Your response will be shared with the collaborators, and you will not be able to negotiate or sign this split. You can still view its history.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+                <AlertDialogFooter className="gap-2 sm:space-x-0">
+                  <AlertDialogCancel disabled={saving !== null}>Keep invitation</AlertDialogCancel>
+                  <Button variant="destructive" disabled={saving !== null || busy} onClick={() => void respond("decline")} className="gap-2">
+                    <X className="h-4 w-4" />{saving === "decline" ? "Declining..." : "Decline invite"}
+                  </Button>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+            <Button onClick={() => void respond("accept")} disabled={saving !== null || busy} className="flex-1 gap-2 xl:flex-none">
+              <Check className="h-4 w-4" />
+              {saving === "accept" ? "Accepting..." : "Accept invite"}
+            </Button>
+          </div>
         </div>
-        <button
-          type="button"
-          onClick={onAccept}
-          className="split-press inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-bold text-primary-foreground hover:bg-primary/90"
-        >
-          <Check className="h-4 w-4" />
-          Accept invite
-        </button>
+        {error && !confirmDecline && <p role="alert" className="mt-3 text-sm text-destructive">{error}</p>}
       </div>
-    </div>
+    </>
   );
 }
 
@@ -815,14 +922,14 @@ function MessageRow({
   message,
   deal,
   onAccept,
-  onReject,
   onCounter,
+  busy,
 }: {
   message: NegotiationMessage;
   deal: NegotiationDeal;
   onAccept: (proposalId: string) => void;
-  onReject: (proposalId: string) => void;
   onCounter: (proposalId: string) => void;
+  busy: boolean;
 }) {
   const sender = deal.participants.find((participant) => participant.id === message.senderId)
     ?? { id: "unknown", name: "Unknown collaborator", initials: "?", handle: "", role: "" };
@@ -841,8 +948,8 @@ function MessageRow({
             fromMe={fromMe}
             alreadyAccepted={deal.acceptedBy.some((participantId) => deal.viewerParticipantIds.has(participantId))}
             deal={deal}
+            busy={busy}
             onAccept={() => { if (version) onAccept(version.id); }}
-            onReject={() => { if (version) onReject(version.id); }}
             onCounter={() => { if (version) onCounter(version.id); }}
           />
         </div>
@@ -982,8 +1089,8 @@ function StructuredMessageCard({
   alreadyAccepted,
   deal,
   onAccept,
-  onReject,
   onCounter,
+  busy,
 }: {
   message: NegotiationMessage;
   version?: SplitVersion;
@@ -991,8 +1098,8 @@ function StructuredMessageCard({
   alreadyAccepted: boolean;
   deal: NegotiationDeal;
   onAccept: () => void;
-  onReject: () => void;
   onCounter: () => void;
+  busy: boolean;
 }) {
   const tone = {
     proposal: "border-primary/25 bg-primary/5",
@@ -1037,19 +1144,15 @@ function StructuredMessageCard({
               <button
                 type="button"
                 onClick={onAccept}
-                disabled={!permissions.accept}
+                disabled={!permissions.accept || busy}
                 className="inline-flex items-center gap-1.5 rounded-lg bg-[hsl(var(--split-verified))] px-3 py-2 text-xs font-bold text-white disabled:cursor-default disabled:opacity-50"
               >
                 <Check className="h-3.5 w-3.5" />
                 {alreadyAccepted ? "Accepted" : "Accept"}
               </button>
-              <button type="button" onClick={onCounter} className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-2 text-xs font-bold text-foreground hover:bg-secondary disabled:cursor-default disabled:opacity-50">
+              <button type="button" onClick={onCounter} disabled={busy} className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-2 text-xs font-bold text-foreground hover:bg-secondary disabled:cursor-default disabled:opacity-50">
                 <GitBranch className="h-3.5 w-3.5" />
                 Counter
-              </button>
-              <button type="button" onClick={onReject} disabled={!permissions.dispute} className="inline-flex items-center gap-1.5 rounded-lg border border-destructive/25 bg-destructive/5 px-3 py-2 text-xs font-bold text-destructive hover:bg-destructive/10 disabled:cursor-default disabled:opacity-50">
-                <X className="h-3.5 w-3.5" />
-                Dispute
               </button>
             </div>
           )}
@@ -1106,11 +1209,15 @@ function MessageMeta({ sender, createdAt, fromMe }: { sender: DealParticipant; c
 
 function DealStatus({ status }: { status: NegotiationStatus }) {
   const styles = {
+    awaiting_invites: "bg-primary/10 text-primary border-primary/20",
+    invite_declined: "bg-secondary text-muted-foreground border-border",
     negotiating: "bg-[hsl(var(--split-pending)/0.12)] text-[hsl(var(--split-pending))] border-[hsl(var(--split-pending)/0.25)]",
     ready_to_sign: "bg-primary/10 text-primary border-primary/20",
     signed: "bg-[hsl(var(--split-verified)/0.12)] text-[hsl(var(--split-verified))] border-[hsl(var(--split-verified)/0.25)]",
   };
   const labels = {
+    awaiting_invites: "Awaiting invites",
+    invite_declined: "Invite declined",
     negotiating: "Negotiating",
     ready_to_sign: "Ready to sign",
     signed: "Signed",

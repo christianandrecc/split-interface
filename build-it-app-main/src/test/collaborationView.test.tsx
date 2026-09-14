@@ -37,6 +37,133 @@ function makeSecondDocument() {
 }
 
 describe("CollaborationView document-backed negotiation", () => {
+  it.each(["initial", "counter"])("offers only Accept and Counter on an incoming %s proposal", (kind) => {
+    const document = kind === "initial" ? makeDocument() : makeCounterDocument();
+    document.sentAt = document.createdAt;
+    render(<CollaborationView documents={[document]}
+      userProfile={kind === "initial" ? makeCollaboratorProfile() : makeCreatorProfile()}
+      onUpdateDocument={vi.fn()} />);
+    const accept = screen.getByRole("button", { name: "Accept" });
+    const message = accept.closest("[data-message-id]") as HTMLElement;
+    expect(within(message).getAllByRole("button").map(button => button.textContent?.trim())).toEqual(["Accept", "Counter"]);
+    expect(accept).toBeEnabled();
+    expect(within(message).getByRole("button", { name: "Counter" })).toBeEnabled();
+    expect(screen.queryByRole("button", { name: "Dispute" })).not.toBeInTheDocument();
+  });
+
+  it.each(["Accept", "Counter"])("keeps a previously disputed proposal readable and able to %s", async (choice) => {
+    const document = makeDocument();
+    document.sentAt = document.createdAt;
+    document.status = "Disputed";
+    document.splitApprovals[1] = { ...document.splitApprovals[1], status: "Rejected",
+      respondedAt: document.updatedAt, notes: "Earlier feedback" };
+    const onUpdateDocument = vi.fn().mockResolvedValue(undefined);
+    render(<CollaborationView documents={[document]} userProfile={makeCollaboratorProfile()} onUpdateDocument={onUpdateDocument} />);
+    expect(screen.getAllByText(/disputed this split version/).find(element => element.closest("[data-message-id]"))).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Dispute" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole("button", { name: choice })[0]);
+    if (choice === "Counter") {
+      fireEvent.click(screen.getByRole("button", { name: "Split equally" }));
+      fireEvent.click(screen.getByRole("button", { name: "Send counter" }));
+    }
+    await waitFor(() => expect(onUpdateDocument).toHaveBeenCalledOnce());
+    const [updated, context] = onUpdateDocument.mock.calls[0];
+    expect(context.action).toBe(choice === "Accept" ? "split_accept" : "counter_offer");
+    expect(updated.collaboratorInvites).toEqual(document.collaboratorInvites);
+    expect(document.splitApprovals[1].status).toBe("Rejected");
+  });
+
+  it("retries unchanged state with the exact original chat payload", async () => {
+    const onUpdateDocument = vi.fn().mockRejectedValueOnce(new Error("Network interrupted")).mockResolvedValueOnce(undefined);
+    render(<CollaborationView documents={[makeCounterDocument()]} userProfile={makeCreatorProfile()} onUpdateDocument={onUpdateDocument} />);
+    const composer = screen.getByPlaceholderText(/message the collaborators/i);
+    fireEvent.change(composer, { target: { value: "Please review" } });
+    fireEvent.keyDown(composer, { key: "Enter" });
+    await screen.findByRole("alert");
+    fireEvent.keyDown(composer, { key: "Enter" });
+    await waitFor(() => expect(composer).toHaveValue(""));
+    expect(onUpdateDocument.mock.calls[1][0]).toBe(onUpdateDocument.mock.calls[0][0]);
+  });
+
+  it("blocks both signature controls until the pending signature is confirmed", async () => {
+    const document = makeDocument();
+    document.sentAt = document.createdAt;
+    document.splitApprovals = document.splitApprovals.map(item => ({ ...item, status: "Approved" as const }));
+    let resolveSave!: () => void;
+    const onUpdateDocument = vi.fn(() => new Promise<void>(resolve => { resolveSave = resolve; }));
+    render(<CollaborationView documents={[document]} userProfile={makeCreatorProfile()} onUpdateDocument={onUpdateDocument} />);
+    const buttons = screen.getAllByRole("button", { name: "Sign" });
+    expect(buttons).toHaveLength(2);
+    fireEvent.click(buttons[0]);
+    fireEvent.click(buttons[1]);
+    expect(onUpdateDocument).toHaveBeenCalledOnce();
+    buttons.forEach(button => expect(button).toBeDisabled());
+    await act(async () => resolveSave());
+  });
+
+  it("retains failed text and requires review before retrying against a newer server revision", async () => {
+    const document = makeCounterDocument();
+    const onUpdateDocument = vi.fn().mockRejectedValueOnce(new Error("Connection interrupted."))
+      .mockResolvedValueOnce(undefined);
+    const onReloadDocuments = vi.fn();
+    const props = { userProfile: makeCreatorProfile(), onUpdateDocument, onReloadDocuments };
+    const view = render(<CollaborationView documents={[document]} {...props} />);
+    const composer = screen.getByPlaceholderText(/message the collaborators/i);
+    fireEvent.change(composer, { target: { value: "My unsent message" } });
+    fireEvent.keyDown(composer, { key: "Enter" });
+    expect(await screen.findByRole("alert")).toHaveTextContent("Connection interrupted.");
+    expect(composer).toHaveValue("My unsent message");
+    fireEvent.click(screen.getByRole("button", { name: "Reload latest" }));
+    expect(onReloadDocuments).toHaveBeenCalledOnce();
+    expect(onUpdateDocument).toHaveBeenCalledOnce();
+    view.rerender(<CollaborationView documents={[{ ...document, serverRevision: 3 }]} {...props} />);
+    fireEvent.keyDown(composer, { key: "Enter" });
+    expect(await screen.findByRole("alertdialog")).toHaveTextContent("your previous send may have succeeded");
+    expect(onUpdateDocument).toHaveBeenCalledOnce();
+    fireEvent.click(screen.getByRole("button", { name: "Keep message" }));
+    expect(composer).toHaveValue("My unsent message");
+    fireEvent.keyDown(composer, { key: "Enter" });
+    fireEvent.click(screen.getByRole("button", { name: "Send again" }));
+    await waitFor(() => expect(composer).toHaveValue(""));
+    expect(onUpdateDocument).toHaveBeenCalledTimes(2);
+    expect(onUpdateDocument.mock.calls[0][0].serverRevision).toBe(2);
+    expect(onUpdateDocument.mock.calls[1][0].serverRevision).toBe(3);
+  });
+
+  it("blocks duplicate sends and preserves newer typing until its own save succeeds", async () => {
+    let resolveSave!: () => void;
+    const onUpdateDocument = vi.fn().mockImplementationOnce(() => new Promise<void>(resolve => { resolveSave = resolve; }))
+      .mockResolvedValue(undefined);
+    render(<CollaborationView documents={[makeCounterDocument()]} userProfile={makeCreatorProfile()} onUpdateDocument={onUpdateDocument} />);
+    const composer = screen.getByPlaceholderText(/message the collaborators/i);
+    fireEvent.change(composer, { target: { value: "First message" } });
+    fireEvent.keyDown(composer, { key: "Enter" });
+    fireEvent.keyDown(composer, { key: "Enter" });
+    expect(onUpdateDocument).toHaveBeenCalledOnce();
+    fireEvent.change(composer, { target: { value: "Next message" } });
+    await act(async () => resolveSave());
+    expect(composer).toHaveValue("Next message");
+    fireEvent.keyDown(composer, { key: "Enter" });
+    await waitFor(() => expect(composer).toHaveValue(""));
+    expect(onUpdateDocument).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps separate unsent text when switching conversations", async () => {
+    const secondDocument = makeSecondDocument();
+    secondDocument.sentAt = secondDocument.createdAt;
+    const documents = [makeCounterDocument(), secondDocument];
+    const view = render(<CollaborationView documents={documents} initialDealId={makeCounterDocument().id}
+      userProfile={makeCreatorProfile()} onUpdateDocument={vi.fn()} />);
+    fireEvent.change(screen.getByPlaceholderText(/message the collaborators/i), { target: { value: "For Night Swim" } });
+    view.rerender(<CollaborationView documents={documents} initialDealId={secondDocument.id}
+      userProfile={makeCreatorProfile()} onUpdateDocument={vi.fn()} />);
+    await waitFor(() => expect(screen.getByPlaceholderText(/message the collaborators/i)).toHaveValue(""));
+    fireEvent.change(screen.getByPlaceholderText(/message the collaborators/i), { target: { value: "For Glasshouse" } });
+    view.rerender(<CollaborationView documents={documents} initialDealId={makeCounterDocument().id}
+      userProfile={makeCreatorProfile()} onUpdateDocument={vi.fn()} />);
+    await waitFor(() => expect(screen.getByPlaceholderText(/message the collaborators/i)).toHaveValue("For Night Swim"));
+  });
+
   it("renders a counter under its real author without self-response actions or an automatic reply", () => {
     const document = makeCounterDocument();
     const onUpdateDocument = vi.fn();

@@ -176,7 +176,7 @@ export default function AgreementsList({
                             </div>
                           </div>
                         </td>
-                        <td className="library-status"><StatusBadge status={agreement.status} /></td>
+                        <td className="library-status"><StatusBadge status={agreement.status} inviteDeclined={agreement.status === "Disputed" && agreement.document?.collaboratorInvites.some((invite) => invite.status === "Declined")} /></td>
                         <td className="library-updated"><time dateTime={libraryUpdatedAt(agreement)}>{workspaceDate(libraryUpdatedAt(agreement))}</time></td>
                         <td className="library-chevron"><ChevronRight size={17} aria-hidden="true" /></td>
                       </tr>

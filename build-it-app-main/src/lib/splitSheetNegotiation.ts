@@ -11,6 +11,7 @@ import {
   splitSheetPartyDisplayName,
 } from "@/lib/splitSheetDisplay";
 import {
+  allSplitSheetRequiredParticipantsAccepted,
   buildSplitSheetSignatureRecords,
   getSplitSheetAcceptedParticipantIds,
   getSplitSheetRequiredParticipantIds,
@@ -19,7 +20,7 @@ import {
 import { readSplitSheetChatMessages } from "@/lib/splitSheetMessages";
 import type { UserProfile } from "@/lib/userProfile";
 
-export type NegotiationStatus = "negotiating" | "ready_to_sign" | "signed";
+export type NegotiationStatus = "awaiting_invites" | "invite_declined" | "negotiating" | "ready_to_sign" | "signed";
 export type NegotiationMessageType = "text" | "proposal" | "counter" | "accept" | "reject" | "sign" | "system";
 
 export type DealParticipant = {
@@ -68,7 +69,7 @@ export type NegotiationDeal = {
   artist: string;
   status: NegotiationStatus;
   updatedAt: string;
-  unreadCount: number;
+  pendingActionCount: number;
   document: StoredSplitSheetDocument;
   participants: DealParticipant[];
   requiredSignerIds: string[];
@@ -136,6 +137,8 @@ export function documentToNegotiationDeal(document: StoredSplitSheetDocument, us
   const hasPendingInvites = document.collaboratorInvites.some((invite) => invite.status === "Pending");
   const status: NegotiationStatus = FINAL_NEGOTIATION_DOCUMENT_STATUSES.has(document.status)
     ? "signed"
+    : document.collaboratorInvites.some((invite) => invite.status === "Declined") ? "invite_declined"
+    : hasPendingInvites ? "awaiting_invites"
     : ["Ready to Sign", "Pending Signatures"].includes(document.status) || (!hasPendingInvites && everyRequiredSignerAccepted)
       ? "ready_to_sign"
       : "negotiating";
@@ -146,7 +149,7 @@ export function documentToNegotiationDeal(document: StoredSplitSheetDocument, us
     artist: document.data.artistProjectName || document.creatorProfile.displayName || "SPLIT",
     status,
     updatedAt: relativeTime(document.updatedAt || document.createdAt),
-    unreadCount: documentBelongsToProfile(document, userProfile) ? 0 : actionableCount(document, viewerParticipantIds),
+    pendingActionCount: actionableCount(document, viewerParticipantIds),
     document,
     participants,
     requiredSignerIds,
@@ -253,7 +256,7 @@ export function buildNegotiationMessages(document: StoredSplitSheetDocument, cur
 
 export function dealReadyToSign(deal: NegotiationDeal) {
   if (FINAL_NEGOTIATION_DOCUMENT_STATUSES.has(deal.document.status)) return false;
-  if (deal.document.collaboratorInvites.some((invite) => invite.status === "Pending")) return false;
+  if (deal.document.collaboratorInvites.some((invite) => invite.status !== "Accepted")) return false;
   if (deal.status === "ready_to_sign") return true;
 
   const acceptedParticipants = new Set(deal.acceptedBy);
@@ -271,6 +274,7 @@ export function proposalResponsePermissions(deal: NegotiationDeal, proposalId?: 
   const eligible = Boolean(proposal && authorId && proposal.id === deal.currentVersionId
     && !participantMatchesViewer(deal, authorId)
     && !FINAL_NEGOTIATION_DOCUMENT_STATUSES.has(deal.document.status)
+    && !deal.document.collaboratorInvites.some((invite) => invite.status !== "Accepted" && participantMatchesViewer(deal, invite.id))
     && deal.requiredSignerIds.some((id) => participantMatchesViewer(deal, id)));
   const approval = deal.document.splitApprovals.find((item) => item.proposalVersionId === proposalId
     && participantMatchesViewer(deal, item.collaboratorId));
@@ -278,7 +282,6 @@ export function proposalResponsePermissions(deal: NegotiationDeal, proposalId?: 
   return {
     counter: eligible,
     accept: eligible && !signaturesStarted && approval?.status !== "Approved",
-    dispute: eligible && !signaturesStarted && approval?.status !== "Rejected",
   };
 }
 
@@ -381,22 +384,31 @@ function participantIdForActor(document: StoredSplitSheetDocument, actor: string
 }
 
 function actionableCount(document: StoredSplitSheetDocument, viewerParticipantIds: Set<string>) {
-  const currentProposalId = document.currentProposalId || document.splitProposalVersions.at(-1)?.id || "";
-  const pendingApproval = document.splitApprovals.some(
-    (approval) =>
-      approval.proposalVersionId === currentProposalId &&
-      approval.status === "Pending" &&
-      viewerParticipantIds.has(normalizeSplitSheetParticipantId(document, approval.collaboratorId) ?? approval.collaboratorId),
-  );
-  const pendingInvite = document.collaboratorInvites.some((invite) => invite.status === "Pending" && viewerParticipantIds.has(invite.id));
-  const pendingSignature = document.splitSignatures.some(
-    (signature) =>
-      signature.proposalVersionId === currentProposalId &&
-      signature.status === "Pending" &&
-      viewerParticipantIds.has(normalizeSplitSheetParticipantId(document, signature.collaboratorId) ?? signature.collaboratorId),
-  );
+  if (FINAL_NEGOTIATION_DOCUMENT_STATUSES.has(document.status)) return 0;
+  const matchesViewer = (id: string) => viewerParticipantIds.has(normalizeSplitSheetParticipantId(document, id) ?? id);
+  const invite = document.collaboratorInvites.find((item) => matchesViewer(item.id));
+  if (invite?.status === "Declined") return 0;
+  if (invite?.status === "Pending") return 1;
+  if (document.collaboratorInvites.some((item) => item.status === "Declined")) return 0;
+  if (!getSplitSheetRequiredParticipantIds(document).some(matchesViewer)) return 0;
 
-  return [pendingInvite, pendingApproval, pendingSignature].filter(Boolean).length;
+  const proposal = document.currentProposalId
+    ? document.splitProposalVersions.find((item) => item.id === document.currentProposalId)
+    : document.splitProposalVersions.at(-1);
+  if (!proposal) return 0;
+  const signatures = buildSplitSheetSignatureRecords(document, proposal.id)
+    .filter((signature) => signature.proposalVersionId === proposal.id);
+
+  // These badges show the viewer's next action, not unread messages or future signing steps.
+  if (allSplitSheetRequiredParticipantsAccepted(document, proposal.id)) {
+    return signatures.some((signature) => signature.status === "Pending" && matchesViewer(signature.collaboratorId)) ? 1 : 0;
+  }
+  if (signatures.some((signature) => signature.status === "Signed")) return 0;
+  const authorId = proposalAuthorParticipantId(document, proposal);
+  if (!authorId || matchesViewer(authorId)) return 0;
+  const approval = document.splitApprovals.find((item) => item.proposalVersionId === proposal.id && matchesViewer(item.collaboratorId));
+
+  return !approval || approval.status === "Pending" ? 1 : 0;
 }
 
 function relativeTime(value: string) {

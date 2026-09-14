@@ -1,11 +1,139 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createEmptyProfile } from "@/lib/userProfile";
 import { makeDocument } from "@/test/fixtures/splitSheet";
 
 describe("split sheet Supabase isolation", () => {
+  afterEach(() => vi.restoreAllMocks());
   beforeEach(() => {
     vi.resetModules();
     window.localStorage.clear();
+  });
+
+  it("confirms a server save even when the device cache is full", async () => {
+    const document = { ...makeDocument(), status: "Draft" as const };
+    const rpc = vi.fn(async () => ({ data: { ...document, serverRevision: 2 }, error: null }));
+    vi.doMock("@/integrations/supabase/client", () => ({ isSupabaseConfigured: true, supabase: {
+      auth: { getUser: async () => ({ data: { user: { id: "account-a" } }, error: null }) }, rpc,
+    } }));
+    const { saveSplitSheetDocument } = await import("@/lib/splitSheetStorage");
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => { throw new DOMException("Full", "QuotaExceededError"); });
+    const result = await saveSplitSheetDocument(document, "draft", { ...createEmptyProfile(), authUserId: "account-a" });
+    expect(result).toMatchObject({ persisted: true, document: { serverRevision: 2 } });
+    expect(rpc).toHaveBeenCalledOnce();
+  });
+
+  it("does not claim a local save when both Supabase and device storage fail", async () => {
+    vi.doMock("@/integrations/supabase/client", () => ({ isSupabaseConfigured: true, supabase: {
+      auth: { getUser: async () => ({ data: { user: { id: "account-a" } }, error: null }) },
+      rpc: async () => ({ data: null, error: { message: "Network unavailable" } }),
+    } }));
+    const { saveSplitSheetDocument, saveLocalSplitSheetDocuments } = await import("@/lib/splitSheetStorage");
+    saveLocalSplitSheetDocuments([makeDocument()], "account-b");
+    const before = JSON.stringify(window.localStorage);
+    const setItem = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => { throw new DOMException("Full", "QuotaExceededError"); });
+    await expect(saveSplitSheetDocument({ ...makeDocument(), status: "Draft" }, "draft", { ...createEmptyProfile(), authUserId: "account-a" }))
+      .rejects.toThrow("Keep this form open and try again");
+    expect(setItem).toHaveBeenCalledOnce();
+    expect(JSON.stringify(window.localStorage)).toBe(before);
+  });
+
+  it("returns confirmed remote records despite cache write failures", async () => {
+    const document = makeDocument();
+    vi.doMock("@/integrations/supabase/client", () => ({ isSupabaseConfigured: true, supabase: {
+      auth: { getUser: async () => ({ data: { user: { id: "account-a" } }, error: null }) },
+      rpc: async () => ({ data: [{ document_payload: document }], error: null }),
+    } }));
+    const { loadSplitSheetDocuments } = await import("@/lib/splitSheetStorage");
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => { throw new Error("Storage blocked"); });
+    const onError = vi.fn();
+    expect(await loadSplitSheetDocuments({ ...createEmptyProfile(), authUserId: "account-a" }, onError))
+      .toEqual([{ document, persisted: true }]);
+    expect(onError).not.toHaveBeenCalled();
+  });
+
+  it("rejects an offline draft save when device storage is unavailable", async () => {
+    vi.doMock("@/integrations/supabase/client", () => ({ isSupabaseConfigured: false, supabase: {} }));
+    const { saveSplitSheetDocument } = await import("@/lib/splitSheetStorage");
+    vi.spyOn(window, "localStorage", "get").mockImplementation(() => { throw new Error("Storage disabled"); });
+    await expect(saveSplitSheetDocument({ ...makeDocument(), status: "Draft" }, "draft", createEmptyProfile()))
+      .rejects.toThrow("Device storage is unavailable");
+  });
+
+  it("discards a split read that completes after switching accounts", async () => {
+    const getUser = vi.fn()
+      .mockResolvedValueOnce({ data: { user: { id: "account-a" } }, error: null })
+      .mockResolvedValueOnce({ data: { user: { id: "account-b" } }, error: null });
+    const rpc = vi.fn(async () => ({ data: [{ document_payload: makeDocument() }], error: null }));
+    vi.doMock("@/integrations/supabase/client", () => ({ isSupabaseConfigured: true, supabase: { auth: { getUser }, rpc } }));
+    const { loadSplitSheetDocuments } = await import("@/lib/splitSheetStorage");
+    const onError = vi.fn();
+    expect(await loadSplitSheetDocuments({ ...createEmptyProfile(), authUserId: "account-a" }, onError)).toEqual([]);
+    expect(rpc).toHaveBeenCalledOnce();
+    expect(onError).toHaveBeenCalledWith(expect.objectContaining({ code: "42501" }));
+    expect(window.localStorage.length).toBe(0);
+  });
+
+  it("does not return local drafts for a signed-out authenticated profile", async () => {
+    const rpc = vi.fn();
+    vi.doMock("@/integrations/supabase/client", () => ({ isSupabaseConfigured: true, supabase: {
+      auth: { getUser: async () => ({ data: { user: null }, error: null }) }, rpc,
+    } }));
+    const { loadSplitSheetDocuments, saveLocalSplitSheetDocuments } = await import("@/lib/splitSheetStorage");
+    const draft = { ...makeDocument(), status: "Draft" as const, creatorUserId: "account-a", sentAt: undefined };
+    saveLocalSplitSheetDocuments([draft]);
+    expect(await loadSplitSheetDocuments({ ...createEmptyProfile(), authUserId: "account-a" })).toEqual([]);
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it("does not report a draft as saved after the author signs out", async () => {
+    const rpc = vi.fn();
+    vi.doMock("@/integrations/supabase/client", () => ({ isSupabaseConfigured: true, supabase: {
+      auth: { getUser: async () => ({ data: { user: null }, error: null }) }, rpc,
+    } }));
+    const { saveSplitSheetDocument } = await import("@/lib/splitSheetStorage");
+    const draft = { ...makeDocument(), status: "Draft" as const, sentAt: undefined };
+    await expect(saveSplitSheetDocument(draft, "draft", { ...createEmptyProfile(), authUserId: "account-a" })).rejects.toThrow(/sign in/i);
+    expect(rpc).not.toHaveBeenCalled();
+    expect(window.localStorage.length).toBe(0);
+  });
+
+  it.each(["sign", "invite_accept", "invite_decline", "counter_offer", "local_chat"])("blocks a stale account's %s before calling the RPC", async action => {
+    const rpc = vi.fn(async () => ({ data: makeDocument(), error: null }));
+    vi.doMock("@/integrations/supabase/client", () => ({ isSupabaseConfigured: true, supabase: {
+      auth: { getUser: async () => ({ data: { user: { id: "account-b" } }, error: null }) }, rpc,
+    } }));
+    const { saveSplitSheetParticipantAction } = await import("@/lib/splitSheetStorage");
+    await expect(saveSplitSheetParticipantAction(makeDocument(), { action: action as "sign" }, {
+      ...createEmptyProfile(), authUserId: "account-a",
+    })).rejects.toThrow(/account changed/i);
+    expect(rpc).not.toHaveBeenCalled();
+    expect(window.localStorage.length).toBe(0);
+  });
+
+  it.each(["draft", "send"])("does not save an old account's form under a new account (%s)", async mode => {
+    const rpc = vi.fn(async () => ({ data: makeDocument(), error: null }));
+    vi.doMock("@/integrations/supabase/client", () => ({ isSupabaseConfigured: true, supabase: {
+      auth: { getUser: async () => ({ data: { user: { id: "account-b" } }, error: null }) }, rpc,
+    } }));
+    const { saveSplitSheetDocument } = await import("@/lib/splitSheetStorage");
+    await expect(saveSplitSheetDocument(makeDocument(), mode as "draft" | "send", {
+      ...createEmptyProfile(), authUserId: "account-a",
+    })).rejects.toThrow(/account changed/i);
+    expect(rpc).not.toHaveBeenCalled();
+    expect(window.localStorage.length).toBe(0);
+  });
+
+  it("does not load another account's splits or reuse local drafts for a stale profile", async () => {
+    const rpc = vi.fn(async () => ({ data: [], error: null }));
+    vi.doMock("@/integrations/supabase/client", () => ({ isSupabaseConfigured: true, supabase: {
+      auth: { getUser: async () => ({ data: { user: { id: "account-b" } }, error: null }) }, rpc,
+    } }));
+    const { loadSplitSheetDocuments, saveLocalSplitSheetDocuments } = await import("@/lib/splitSheetStorage");
+    saveLocalSplitSheetDocuments([makeDocument()]);
+    const onError = vi.fn();
+    expect(await loadSplitSheetDocuments({ ...createEmptyProfile(), authUserId: "account-a" }, onError)).toEqual([]);
+    expect(onError).toHaveBeenCalled();
+    expect(rpc).not.toHaveBeenCalled();
   });
 
   it("does not create a local sent record when Supabase is unconfigured", async () => {
@@ -16,6 +144,19 @@ describe("split sheet Supabase isolation", () => {
     document.sentAt = document.createdAt;
     await expect(saveSplitSheetDocument(document, "send", document.creatorProfile)).rejects.toThrow(/Connect to Supabase/);
     expect(loadLocalSplitSheetDocuments()).toEqual([]);
+  });
+
+  it.each([true, false])("rejects external delivery without network or local writes (configured: %s)", async isSupabaseConfigured => {
+    const rpc = vi.fn(), getUser = vi.fn();
+    vi.doMock("@/integrations/supabase/client", () => ({ isSupabaseConfigured, supabase: { rpc, auth: { getUser } } }));
+    const { saveSplitSheetDocument } = await import("@/lib/splitSheetStorage");
+    const document = makeDocument();
+    const before = structuredClone(document);
+    await expect(saveSplitSheetDocument(document, "contract_delivery", document.creatorProfile)).rejects.toThrow(/External delivery is unavailable/);
+    expect(rpc).not.toHaveBeenCalled();
+    expect(getUser).not.toHaveBeenCalled();
+    expect(window.localStorage.length).toBe(0);
+    expect(document).toEqual(before);
   });
 
   it("uses canonical server state after signing instead of optimistic document fields", async () => {

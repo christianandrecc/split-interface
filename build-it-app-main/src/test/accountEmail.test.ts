@@ -130,15 +130,15 @@ describe("signup confirmation requests", () => {
 describe("Auth email confirmation callbacks", () => {
   it("consumes PKCE callbacks and removes the code from the URL", async () => {
     window.history.replaceState({}, "", "/?code=confirmation-code");
-    mocks.exchangeCodeForSession.mockResolvedValue({ error: null });
-    expect(await consumeSupabaseAuthCallbackFromUrl()).toBe(true);
+    mocks.exchangeCodeForSession.mockResolvedValue({ data: { user, session: { user }, redirectType: null }, error: null });
+    expect(await consumeSupabaseAuthCallbackFromUrl()).toEqual({ userId: user.id, passwordRecovery: false });
     expect(mocks.exchangeCodeForSession).toHaveBeenCalledWith("confirmation-code");
     expect(window.location.search).toBe("");
   });
   it("consumes implicit email-change callbacks", async () => {
     window.history.replaceState({}, "", "/#access_token=access&refresh_token=refresh&type=email_change");
-    mocks.setSession.mockResolvedValue({ error: null });
-    expect(await consumeSupabaseAuthCallbackFromUrl()).toBe(true);
+    mocks.setSession.mockResolvedValue({ data: { user, session: { user } }, error: null });
+    expect(await consumeSupabaseAuthCallbackFromUrl()).toEqual({ userId: user.id, passwordRecovery: false });
     expect(mocks.setSession).toHaveBeenCalledWith({ access_token: "access", refresh_token: "refresh" });
     expect(window.location.hash).toBe("");
   });
@@ -147,5 +147,82 @@ describe("Auth email confirmation callbacks", () => {
     await expect(consumeSupabaseAuthCallbackFromUrl()).rejects.toThrow(/access_denied|Link expired/);
     expect(mocks.setSession).not.toHaveBeenCalled();
     expect(window.location.search + window.location.hash).toBe("");
+  });
+});
+
+describe("password reset delivery requests", () => {
+  it("reports request acceptance, not proof of delivery", async () => {
+    expect(await requestSupabasePasswordReset(" Current@Example.test ")).toEqual({ requested: true });
+    expect(mocks.resetPasswordForEmail).toHaveBeenCalledExactlyOnceWith(user.email, { redirectTo: "https://split-interface.vercel.app/" });
+    expect(mocks.from).not.toHaveBeenCalled();
+    expect(mocks.updateUser).not.toHaveBeenCalled();
+  });
+  it.each(["", "invalid", "a b@example.test", "a".repeat(255) + "@example.test"])("validates %s before sending", async email => {
+    await expect(requestSupabasePasswordReset(email)).rejects.toThrow(/valid email/);
+    expect(mocks.resetPasswordForEmail).not.toHaveBeenCalled();
+  });
+  it.each([
+    ["over_email_send_rate_limit", /wait a minute/],
+    ["over_request_rate_limit", /wait a minute/],
+    ["email_address_not_authorized", /delivery is unavailable/],
+    ["unexpected_failure", /Could not request/],
+    ["user_not_found", /Could not request/],
+  ])("does not disguise %s as success or expose a raw account error", async (code, message) => {
+    mocks.resetPasswordForEmail.mockResolvedValue({ error: { code, message: "Private provider diagnostic" } });
+    await expect(requestSupabasePasswordReset(user.email)).rejects.toThrow(message);
+    expect(mocks.updateUser).not.toHaveBeenCalled();
+  });
+  it("handles HTTP 429 and thrown network failures", async () => {
+    mocks.resetPasswordForEmail.mockResolvedValueOnce({ error: { status: 429 } });
+    await expect(requestSupabasePasswordReset(user.email)).rejects.toThrow(/wait a minute/);
+    mocks.resetPasswordForEmail.mockRejectedValueOnce(new Error("Private network diagnostic"));
+    await expect(requestSupabasePasswordReset(user.email)).rejects.toThrow(/Check your connection/);
+  });
+});
+
+describe("verified recovery routing", () => {
+  it.each(["#access_token=access&refresh_token=refresh&type=recovery", "?code=recovery-code"])("opens recovery only after consuming %s and verifying the same Auth user", async suffix => {
+    window.history.replaceState({}, "", "/" + suffix);
+    mocks.setSession.mockResolvedValue({ data: { user, session: { user } }, error: null });
+    mocks.exchangeCodeForSession.mockResolvedValue({ data: { user, session: { user }, redirectType: "recovery" }, error: null });
+    expect(await loadProfileSessionForActiveSession()).toMatchObject({ userId: user.id, passwordRecovery: true });
+    expect(window.location.search + window.location.hash).toBe("");
+    expect(mocks.updateUser).not.toHaveBeenCalled();
+  });
+  it.each(["?type=recovery", "?note=type=recovery", "#type=recovery", "#access_token=access&refresh_token=refresh&type=recovery-extra"])("does not trust a recovery marker alone: %s", async suffix => {
+    window.history.replaceState({}, "", "/" + suffix);
+    mocks.setSession.mockResolvedValue({ data: { user, session: { user } }, error: null });
+    expect((await loadProfileSessionForActiveSession())?.passwordRecovery).toBe(false);
+  });
+  it.each(["?code=expired&type=recovery", "#access_token=expired&refresh_token=expired&type=recovery"])("does not fall through to an existing session after failure: %s", async suffix => {
+    window.history.replaceState({}, "", "/" + suffix);
+    mocks.setSession.mockResolvedValue({ error: { message: "Expired link" } });
+    mocks.exchangeCodeForSession.mockRejectedValue(new Error("Expired link"));
+    await expect(loadProfileSessionForActiveSession()).rejects.toThrow(/Expired link/);
+    expect(mocks.getUser).not.toHaveBeenCalled();
+    expect(window.location.search + window.location.hash).toBe("");
+  });
+  it.each(["#access_token=partial&type=recovery", "#refresh_token=partial&type=recovery"])("clears incomplete credentials without borrowing an active session: %s", async suffix => {
+    window.history.replaceState({}, "", "/" + suffix);
+    await expect(loadProfileSessionForActiveSession()).rejects.toThrow(/incomplete/);
+    expect(mocks.getUser).not.toHaveBeenCalled();
+    expect(mocks.setSession).not.toHaveBeenCalled();
+    expect(window.location.hash).toBe("");
+  });
+  it("requires a verified session response and matching account", async () => {
+    window.history.replaceState({}, "", "/#access_token=access&refresh_token=refresh&type=recovery");
+    mocks.setSession.mockResolvedValueOnce({ data: { user: null, session: null }, error: null });
+    await expect(loadProfileSessionForActiveSession()).rejects.toThrow(/could not be verified/);
+    window.history.replaceState({}, "", "/#access_token=access&refresh_token=refresh&type=recovery");
+    mocks.setSession.mockResolvedValueOnce({ data: { user: { ...user, id: "other-user" }, session: {} }, error: null });
+    await expect(loadProfileSessionForActiveSession()).rejects.toThrow(/account changed/);
+    expect(mocks.from).not.toHaveBeenCalled();
+  });
+  it("does not create a recovery session if getUser fails", async () => {
+    window.history.replaceState({}, "", "/#access_token=access&refresh_token=refresh&type=recovery");
+    mocks.setSession.mockResolvedValue({ data: { user, session: { user } }, error: null });
+    mocks.getUser.mockResolvedValue({ data: { user: null }, error: { message: "Expired session" } });
+    expect(await loadProfileSessionForActiveSession()).toBeNull();
+    expect(mocks.from).not.toHaveBeenCalled();
   });
 });

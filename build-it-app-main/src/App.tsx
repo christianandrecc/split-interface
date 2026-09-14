@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -19,6 +19,7 @@ import {
 import { isSupabaseConfigured, supabase } from "@/integrations/supabase/client";
 import type { CachedProfileSession } from "@/lib/profileSessionCache";
 import { toast } from "sonner";
+import { monitorRequest } from "@/lib/monitoring";
 
 const queryClient = new QueryClient();
 const PROFILE_STORAGE_KEY = "split.userProfile.v6";
@@ -70,11 +71,6 @@ function clearProfileCache() {
   }
 }
 
-function hasPasswordRecoveryUrl() {
-  if (typeof window === "undefined") return false;
-  return window.location.hash.includes("type=recovery") || window.location.search.includes("type=recovery");
-}
-
 function getNewUserOnboardingStorageKey(authUserId: string | null, profile: UserProfile | null) {
   if (!profile) return "";
   const profileIdentity = authUserId || profile.authUserId || profile.emailAddress || profile.username || "local-profile";
@@ -87,17 +83,75 @@ const App = () => {
   const [showAccountCreation, setShowAccountCreation] = useState(false);
   const [showNewUserOnboarding, setShowNewUserOnboarding] = useState(false);
   const [loadingProfile, setLoadingProfile] = useState(true);
-  const [passwordRecoveryActive, setPasswordRecoveryActive] = useState(() => hasPasswordRecoveryUrl());
+  const [passwordRecoveryActive, setPasswordRecoveryActive] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
+  const signOutPending = useRef(false);
+  const recoveryUserId = useRef<string | null>(null);
+  const authIdentity = useRef<{ userId: string | null | undefined; revision: number }>({ userId: undefined, revision: 0 });
+  const [sessionRequest, setSessionRequest] = useState(authIdentity.current);
+
+  const invalidateSession = useCallback((userId: string | null) => {
+    const next = { userId, revision: authIdentity.current.revision + 1 };
+    authIdentity.current = next;
+    recoveryUserId.current = null;
+    clearProfileCache();
+    queryClient.clear();
+    setActiveAuthUserId(null);
+    setUserProfile(null);
+    setShowAccountCreation(false);
+    setShowNewUserOnboarding(false);
+    setPasswordRecoveryActive(false);
+    setLoadingProfile(userId !== null);
+    setSessionRequest(next);
+  }, []);
+
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
+    let active = true;
+    // Keep this callback synchronous: profile fetching runs in the load effect.
+    const { data } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!active) return;
+      if (event === "SIGNED_OUT") {
+        invalidateSession(null);
+        return;
+      }
+      if (!["SIGNED_IN", "TOKEN_REFRESHED", "PASSWORD_RECOVERY"].includes(event) || !session?.user) return;
+      if (authIdentity.current.userId === undefined) {
+        // Initial callback consumption must finish before deciding recovery mode.
+        authIdentity.current = { ...authIdentity.current, userId: session.user.id };
+      } else if (authIdentity.current.userId !== session.user.id) {
+        invalidateSession(session.user.id);
+      }
+      if (event === "PASSWORD_RECOVERY") {
+        recoveryUserId.current = session.user.id;
+        setPasswordRecoveryActive(true);
+      }
+    });
+    return () => {
+      active = false;
+      data.subscription.unsubscribe();
+    };
+  }, [invalidateSession]);
 
   useEffect(() => {
     let active = true;
+    const revision = sessionRequest.revision;
+    if (isSupabaseConfigured && sessionRequest.userId === null) return;
 
     async function loadProfile() {
       if (isSupabaseConfigured) {
         try {
           const session = await loadProfileSessionForActiveSession();
 
-          if (!active) return;
+          if (!active || authIdentity.current.revision !== revision) return;
+          const expectedUserId = authIdentity.current.userId;
+          if (expectedUserId && session?.userId !== expectedUserId) {
+            if (sessionRequest.userId === undefined && session) invalidateSession(expectedUserId);
+            else invalidateSession(null);
+            return;
+          }
+          authIdentity.current = { ...authIdentity.current, userId: session?.userId ?? null };
+          setPasswordRecoveryActive(Boolean(session && (session.passwordRecovery || recoveryUserId.current === session.userId)));
 
           if (session) {
             const normalizedProfile = normalizeUserProfile({
@@ -113,7 +167,10 @@ const App = () => {
             setUserProfile(null);
           }
         } catch (error) {
-          if (active) {
+          if (active && authIdentity.current.revision === revision) {
+            authIdentity.current = { ...authIdentity.current, userId: null };
+            recoveryUserId.current = null;
+            setPasswordRecoveryActive(false);
             setActiveAuthUserId(null);
             clearProfileCache();
             setUserProfile(null);
@@ -122,7 +179,7 @@ const App = () => {
             });
           }
         } finally {
-          if (active) setLoadingProfile(false);
+          if (active && authIdentity.current.revision === revision) setLoadingProfile(false);
         }
 
         return;
@@ -144,7 +201,7 @@ const App = () => {
     return () => {
       active = false;
     };
-  }, []);
+  }, [sessionRequest, invalidateSession]);
 
   useEffect(() => {
     if (!isSupabaseConfigured || !activeAuthUserId) return;
@@ -155,7 +212,15 @@ const App = () => {
       const generation = ++request;
       try {
         const { data, error } = await supabase.auth.getUser();
-        if (!active || generation !== request || error || data.user?.id !== activeAuthUserId) return;
+        if (!active || generation !== request) return;
+        if (error) {
+          if (error.name === "AuthSessionMissingError") invalidateSession(null);
+          return;
+        }
+        if (data.user?.id !== activeAuthUserId) {
+          invalidateSession(data.user?.id ?? null);
+          return;
+        }
         const emailAddress = normalizeEmailAddress(data.user.email);
         setUserProfile(current => {
           if (!current || current.authUserId !== activeAuthUserId || current.emailAddress === emailAddress) return current;
@@ -178,7 +243,7 @@ const App = () => {
       data.subscription.unsubscribe();
       window.removeEventListener("focus", refreshEmail);
     };
-  }, [activeAuthUserId]);
+  }, [activeAuthUserId, invalidateSession]);
 
   useEffect(() => {
     if (!userProfile || showAccountCreation || passwordRecoveryActive) {
@@ -196,6 +261,7 @@ const App = () => {
   }, [activeAuthUserId, passwordRecoveryActive, showAccountCreation, userProfile]);
 
   const persistProfile = (profile: UserProfile, authUserId = activeAuthUserId) => {
+    authIdentity.current = { ...authIdentity.current, userId: authUserId };
     const normalizedProfile = normalizeUserProfile({
       ...profile,
       authUserId: authUserId ?? profile.authUserId,
@@ -210,8 +276,12 @@ const App = () => {
   };
 
   const handleCreateAccount = async (profile: UserProfile, password: string) => {
+    const revision = authIdentity.current.revision;
     const normalizedProfile = normalizeUserProfile(profile);
     const result = await createSupabaseAccountProfile(normalizedProfile, password);
+    if (authIdentity.current.revision !== revision && authIdentity.current.userId !== result.userId) {
+      throw new Error("Your account changed. Please try again from the current account.");
+    }
 
     if (result.needsEmailConfirmation) {
       setActiveAuthUserId(null);
@@ -233,22 +303,32 @@ const App = () => {
   };
 
   const handleUpdateProfile = async (profile: UserProfile) => {
+    const revision = authIdentity.current.revision;
     const normalizedProfile = normalizeUserProfile(profile);
 
     try {
       const savedProfile = await saveSupabaseProfile(normalizedProfile);
+      if (authIdentity.current.revision !== revision || authIdentity.current.userId !== activeAuthUserId) {
+        throw new Error("Your account changed. Reopen your profile before making another change.");
+      }
       persistProfile(savedProfile, activeAuthUserId);
       toast.success("Profile saved to Supabase");
     } catch (error) {
-      toast.error("Profile was not saved", {
-        description: error instanceof Error ? error.message : "Try again after signing in.",
-      });
+      if (authIdentity.current.revision === revision) {
+        toast.error("Profile was not saved", {
+          description: error instanceof Error ? error.message : "Try again after signing in.",
+        });
+      }
       throw error;
     }
   };
 
   const handleSignIn = async (emailAddress: string, password: string) => {
+    const revision = authIdentity.current.revision;
     const result = await signInAndLoadSupabaseProfile(emailAddress, password);
+    if (authIdentity.current.revision !== revision && authIdentity.current.userId !== result.userId) {
+      throw new Error("Your account changed. Please sign in again.");
+    }
     clearProfileCache();
     setActiveAuthUserId(result.userId ?? null);
     persistProfile(result.profile, result.userId ?? null);
@@ -260,8 +340,33 @@ const App = () => {
   };
 
   const handlePasswordResetComplete = () => {
+    recoveryUserId.current = null;
     setPasswordRecoveryActive(false);
     window.history.replaceState(null, "", window.location.pathname);
+  };
+
+  const handleSignOut = async () => {
+    if (signOutPending.current) return;
+    signOutPending.current = true;
+    setSigningOut(true);
+    const revision = authIdentity.current.revision;
+    try {
+      if (isSupabaseConfigured) {
+        const { error } = await monitorRequest("auth_signout_failure", () => supabase.auth.signOut({ scope: "local" }));
+        if (error) throw error;
+      }
+      // SIGNED_OUT normally invalidates first; never clear a newer account here.
+      if (authIdentity.current.revision === revision) invalidateSession(null);
+    } catch {
+      if (authIdentity.current.revision === revision) {
+        toast.error("Could not sign out", { description: "Check your connection and try again." });
+      } else if (authIdentity.current.userId === null && authIdentity.current.revision === revision + 1) {
+        toast.warning("Signed out on this browser", { description: "Your local session was cleared, but SPLIT could not confirm server sign-out." });
+      }
+    } finally {
+      signOutPending.current = false;
+      setSigningOut(false);
+    }
   };
 
   const completeNewUserOnboarding = () => {
@@ -322,10 +427,14 @@ const App = () => {
                 path="/"
                 element={
                   <Index
+                    key={activeAuthUserId ?? "local"}
                     userProfile={userProfile}
                     activeAuthUserId={activeAuthUserId}
                     onUpdateProfile={handleUpdateProfile}
                     onOpenAccountCreation={() => setShowAccountCreation(true)}
+                    onViewOnboardingAgain={viewNewUserOnboardingAgain}
+                    onSignOut={handleSignOut}
+                    signingOut={signingOut}
                   />
                 }
               />
@@ -335,12 +444,13 @@ const App = () => {
           </BrowserRouter>
         ) : (
           <AccountAccess
+            key={sessionRequest.revision}
             initialProfile={userProfile}
+            initialMode={sessionRequest.userId === null && !showAccountCreation ? "signin" : "create"}
             forcePasswordReset={passwordRecoveryActive}
             onCreateAccount={handleCreateAccount}
             onSignIn={handleSignIn}
             onPasswordResetComplete={handlePasswordResetComplete}
-            onViewOnboardingAgain={userProfile ? viewNewUserOnboardingAgain : undefined}
           />
         )}
       </TooltipProvider>

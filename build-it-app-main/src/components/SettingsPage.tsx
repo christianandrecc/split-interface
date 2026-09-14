@@ -13,6 +13,7 @@ import { ROLE_OPTIONS } from "@/components/contract-builder/types";
 import { Input } from "@/components/ui/input";
 import { DEFAULT_APP_SETTINGS, loadAccountSettings, saveAccountSettings, type AppSettings, type SavedSettings } from "@/lib/accountSettings";
 import type { UserProfile } from "@/lib/userProfile";
+import AccountClosureRequest from "@/components/AccountClosureRequest";
 import "./settings.css";
 
 const categories = [
@@ -22,11 +23,13 @@ const categories = [
   { id: "documents", label: "Documents", title: "Document preferences", icon: FileText, keys: ["includeAuditTrail"] },
 ] as const;
 
-export default function SettingsPage({ userProfile }: { userProfile: UserProfile }) {
-  return <AccountSettings key={userProfile.authUserId || userProfile.splitId} userProfile={userProfile} />;
+type SettingsPageProps = { userProfile: UserProfile; onViewOnboardingAgain?: () => void };
+
+export default function SettingsPage({ userProfile, onViewOnboardingAgain }: SettingsPageProps) {
+  return <AccountSettings key={userProfile.authUserId || userProfile.splitId} userProfile={userProfile} onViewOnboardingAgain={onViewOnboardingAgain} />;
 }
 
-function AccountSettings({ userProfile }: { userProfile: UserProfile }) {
+function AccountSettings({ userProfile, onViewOnboardingAgain }: SettingsPageProps) {
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_APP_SETTINGS);
   const [applied, setApplied] = useState<SavedSettings | null>(null);
   const [saved, setSaved] = useState(false);
@@ -52,6 +55,7 @@ function AccountSettings({ userProfile }: { userProfile: UserProfile }) {
   const panelRef = useContentEntrance<HTMLDivElement>(category);
   const methodLabelId = useId();
   const territoryId = useId();
+  const onboardingHintId = useId();
   const territories = ["Worldwide", "United States", "North America"];
   const changes = applied ? (Object.keys(settings) as (keyof AppSettings)[]).filter((key) => settings[key] !== applied.settings[key]) : [];
   const disabled = loading || saving || !applied;
@@ -86,6 +90,15 @@ function AccountSettings({ userProfile }: { userProfile: UserProfile }) {
       <div className="settings-shell">
         <header className="settings-heading">
           <h1>Settings</h1>
+          {onViewOnboardingAgain && (
+            <span className="settings-onboarding" title={changes.length ? "Save or discard your changes first" : undefined}>
+              <Button type="button" variant="outline" onClick={onViewOnboardingAgain} disabled={saving || changes.length > 0}
+                aria-describedby={changes.length ? onboardingHintId : undefined}>
+                <RotateCcw size={16} aria-hidden="true" />View onboarding again
+              </Button>
+              {changes.length > 0 && <span id={onboardingHintId} className="sr-only">Save or discard your changes first.</span>}
+            </span>
+          )}
         </header>
 
         <Tabs value={category} onValueChange={setCategory} orientation={isMobile ? "horizontal" : "vertical"} className="settings-layout">
@@ -139,6 +152,8 @@ function AccountSettings({ userProfile }: { userProfile: UserProfile }) {
               ))}
             </div>
             </fieldset>
+
+            {category === "privacy" && <AccountClosureRequest />}
 
             <footer className="settings-footer">
               <span role={loading ? undefined : "status"} className="settings-save-status" data-applied={saved}>

@@ -18,6 +18,11 @@ dist-ssr
 *.local
 supabase/.temp/
 
+# Database recovery artifacts must stay outside this public repository.
+*.dump
+*.dump.age
+*.backup.json.age
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

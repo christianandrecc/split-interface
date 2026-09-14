@@ -1,4 +1,5 @@
 import { isSupabaseConfigured, supabase } from "@/integrations/supabase/client";
+import { reportFailure } from "@/lib/monitoring";
 
 export type SearchableSplitSheet = {
   id: string;
@@ -125,7 +126,8 @@ export async function searchPublicProfiles(query: string, limit = 8): Promise<Pu
     });
 
     if (error) {
-      console.warn("[SPLIT] Unable to search profiles from Supabase", error);
+      reportFailure("profile_search_failure", error);
+      console.warn("[SPLIT] Unable to search profiles from Supabase");
       return [];
     }
 
@@ -133,7 +135,8 @@ export async function searchPublicProfiles(query: string, limit = 8): Promise<Pu
       .map(mapPublicProfileSearchRow)
       .filter((result): result is PublicProfileSearchResult => Boolean(result));
   } catch (error) {
-    console.warn("[SPLIT] Unable to search profiles from Supabase", error);
+    reportFailure("profile_search_failure", error);
+    console.warn("[SPLIT] Unable to search profiles from Supabase");
     return [];
   }
 }

@@ -99,3 +99,66 @@ API response is not proof of inbox delivery. Before live beta, verify custom SMT
 and delivery with controlled inboxes; Supabase's default SMTP restricts recipients
 to project-team addresses. Do not grant testers project administration to work
 around that restriction: [SMTP setup](https://supabase.com/docs/guides/auth/auth-smtp).
+
+## Local recovery hardening
+
+Pending deployment after the September 11 partner release:
+
+- `requestSupabasePasswordReset` returns `requested`, not `sent`. It normalizes
+  and validates the address before Auth, reports rate limits/provider/network
+  failures without exposing raw account diagnostics, and never writes profiles.
+- The reset request form separates error alerts from conditional success notices.
+  A synchronous request guard and 60-second cooldown prevent duplicate sends;
+  leaving the form cannot put a late response on the sign-in form. This client
+  cooldown is UX protection, not a substitute for server rate limits or CAPTCHA.
+- App recovery mode comes from successful callback consumption plus matching
+  `auth.getUser()`, not a URL substring. PKCE uses the SDK's recovered flow type;
+  implicit callbacks require the complete validated session and exact recovery
+  type. An expired/incomplete callback is rejected before loading an old session.
+- Codes/tokens are cleared on success, API errors and thrown network errors.
+  No password is changed automatically; the validated recovery form still asks
+  for a matching new password and waits for the Auth update to succeed.
+- Automated and intercepted browser tests cannot establish real SMTP delivery.
+
+## Hosted email gate
+
+Use the existing project, not a replacement Auth service. SMTP configuration is
+a hosted Auth setting, not a SQL migration or a frontend `VITE_` variable.
+
+1. Inspect [SMTP settings](https://supabase.com/dashboard/project/hpwquupkqssqqgqtwdyu/auth/smtp).
+   Confirm an existing provider, verified sender domain, From address and sender
+   name. Configure the provider's required SPF/DKIM and review DMARC. Keep SMTP
+   passwords/API keys in provider/Supabase secret fields, never chat or source.
+2. Preserve email verification and Secure email change. Verify email templates
+   for confirmation, recovery and email change retain valid Supabase confirmation
+   links. Disable provider click tracking that rewrites one-time Auth links; see
+   [email template guidance](https://supabase.com/docs/guides/auth/auth-email-templates#email-tracking).
+3. Inspect [URL configuration](https://supabase.com/dashboard/project/hpwquupkqssqqgqtwdyu/auth/url-configuration).
+   Confirm Site URL and the approved callback include
+   `https://split-interface.vercel.app/`. Avoid broad production wildcards. Only
+   allow local/preview destinations intentionally; the app defaults localhost
+   email requests to production unless configured otherwise.
+4. Review [rate limits](https://supabase.com/dashboard/project/hpwquupkqssqqgqtwdyu/auth/rate-limits)
+   against expected beta volume. Do not disable verification, grant testers
+   project-team access or increase limits indiscriminately to mask delivery failures.
+5. With two explicitly authorized test inboxes, create a new account normally.
+   Record actual receipt (including spam), sender, timestamp, hosted callback and
+   verified account state. Resend after the cooldown; confirm stale links fail
+   clearly. A provider's accepted/queued event alone is not proof of receipt.
+6. Request recovery while signed out, complete a fresh link and change the
+   password. Confirm the new password signs in and the old one fails. Test a
+   stale link with an existing session and confirm it cannot change that session
+   through the failed recovery form. Use only dedicated test accounts.
+7. Change from test inbox A to test inbox B. Confirm only one email first and
+   verify A remains active, then confirm the second and verify B becomes the
+   sign-in/profile/recovery address. Verify in another browser as well.
+8. Keep only non-sensitive pass/fail evidence and timestamps. Do not record
+   passwords, session tokens or full one-time links in committed QA notes.
+
+September 14 Management API inspection confirmed email verification is required,
+Secure email change is enabled, and the Site URL/allowlist point to the existing
+production domain. Custom SMTP host, port, sender and user are not configured;
+the default sender is limited to two emails per hour. This is an open beta blocker,
+not a frontend or migration issue. A provider and verified sending domain must be
+configured before signup/resend/recovery/two-inbox change receipt can be certified.
+No existing account password or confirmation state was changed by this inspection.

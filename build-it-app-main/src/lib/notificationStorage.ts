@@ -1,5 +1,6 @@
 import { isSupabaseConfigured, supabase } from "@/integrations/supabase/client";
 import type { Json, Tables } from "@/integrations/supabase/types";
+import { reportFailure } from "@/lib/monitoring";
 
 type SplitNotificationRow = Tables<"split_notifications">;
 
@@ -54,7 +55,8 @@ export async function loadSplitNotifications(limit = 30): Promise<SplitNotificat
 
     return ((data ?? []) as SplitNotificationRow[]).map(rowToNotification);
   } catch (error) {
-    console.warn("SPLIT could not load notifications from Supabase.", error);
+    reportFailure("notifications_load_failure", error);
+    console.warn("SPLIT could not load notifications from Supabase.");
     return [];
   }
 }
@@ -77,7 +79,8 @@ export async function markSplitNotificationsRead(options: {
     if (error) throw new Error(error.message);
     return Number(data) || 0;
   } catch (error) {
-    console.warn("SPLIT could not mark notifications as read.", error);
+    reportFailure("notifications_read_failure", error);
+    console.warn("SPLIT could not mark notifications as read.");
     return 0;
   }
 }

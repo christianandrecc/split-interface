@@ -64,6 +64,21 @@ function makeNotification(overrides: Partial<SplitNotification> = {}): SplitNoti
 }
 
 describe("workspaceRecord", () => {
+  it("removes a declined invite from that viewer's attention queue without losing history routing", () => {
+    const doc = makeSentDocument({ status: "Disputed" });
+    doc.collaboratorInvites[0].status = "Declined";
+    const record = workspaceRecord(documentToAgreement(doc), makeViewer("mayarios"));
+    expect(record).toMatchObject({ pending: false, reviewInvite: false, label: "Invite declined", action: "messages" });
+    expect(filterWorkspaceRecords([record], "attention", "", "recent")).toEqual([]);
+    expect(filterWorkspaceRecords([record], "all", "", "recent")).toEqual([record]);
+    expect(workspaceRecord(documentToAgreement(doc), makeViewer()).pending).toBe(true);
+  });
+  it("does not offer signing when an invite was declined even with stale ready state", () => {
+    const doc = makeSentDocument({ status: "Ready to Sign" });
+    doc.collaboratorInvites[0].status = "Declined";
+    doc.splitSignatures = [{ id: "pending-signature", proposalVersionId: doc.currentProposalId!, collaboratorId: "creator", collaboratorName: "Chori", status: "Pending" }];
+    expect(workspaceRecord(documentToAgreement(doc), makeViewer()).actionLabel).toBe("Open messages");
+  });
   it("does not offer signing while another invitation is pending", () => {
     const document = makeSentDocument({ status: "Ready to Sign" });
     document.collaboratorInvites[0].status = "Pending";

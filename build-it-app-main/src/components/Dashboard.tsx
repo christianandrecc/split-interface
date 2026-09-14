@@ -33,7 +33,7 @@ import {
   loadSplitSheetDocuments,
   documentBelongsToProfile,
   deleteSplitSheetDraft,
-  saveLocalSplitSheetDocuments,
+  cacheLocalSplitSheetDocuments,
   saveSplitSheetDocument,
   saveSplitSheetParticipantAction,
   splitSheetCanUseLocalDraftFallback,
@@ -62,6 +62,7 @@ import {
   CheckCircle2,
   MessageCircle,
   Loader2,
+  LogOut,
   UserRound,
   GitBranch,
   type LucideIcon,
@@ -90,11 +91,17 @@ export default function Dashboard({
   activeAuthUserId,
   onUpdateProfile,
   onOpenAccountCreation,
+  onViewOnboardingAgain,
+  onSignOut,
+  signingOut = false,
 }: {
   userProfile: UserProfile;
   activeAuthUserId?: string | null;
   onUpdateProfile: (profile: UserProfile) => Promise<void>;
   onOpenAccountCreation: () => void;
+  onViewOnboardingAgain?: () => void;
+  onSignOut?: () => Promise<void>;
+  signingOut?: boolean;
 }) {
   const [activeView, setActiveView] = useState<View>("dashboard");
   const [selectedAgreement, setSelectedAgreement] = useState<Agreement | null>(null);
@@ -121,6 +128,7 @@ export default function Dashboard({
   const notificationAccountKey = activeAuthUserId ?? activeAccountKey;
   const lastDocumentAccountKeyRef = useRef(activeAccountKey);
   const deletedDraftIds = useRef(new Set<string>());
+  const documentLoadGeneration = useRef(0);
   const lastNotificationAccountKeyRef = useRef(notificationAccountKey);
 
   const agreements = useMemo(() => generatedDocuments.map(documentToAgreement), [generatedDocuments]);
@@ -170,16 +178,17 @@ export default function Dashboard({
     }
 
     async function loadDocuments(showLoading = true) {
+      const generation = ++documentLoadGeneration.current;
       if (showLoading) setLoadingSplitSheets(true);
       let loadFailed = false;
       const results = await loadSplitSheetDocuments(userProfile, () => { loadFailed = true; });
-      if (!active) return;
+      if (!active || generation !== documentLoadGeneration.current) return;
 
       // A refresh started before deletion may still return the removed draft.
       const documents = results.map((result) => result.document).filter((document) => !deletedDraftIds.current.has(document.id));
       setSplitSheetLoadError(loadFailed);
       setGeneratedDocuments((current) => loadFailed && current.length ? current : documents);
-      saveLocalSplitSheetDocuments(documents.filter(splitSheetCanUseLocalDraftFallback), localStorageOwner);
+      if (!loadFailed) cacheLocalSplitSheetDocuments(documents.filter(splitSheetCanUseLocalDraftFallback), localStorageOwner);
       setLoadingSplitSheets(false);
     }
 
@@ -282,13 +291,15 @@ export default function Dashboard({
   }, [searchQuery]);
 
   const applyGeneratedDocument = (document: StoredSplitSheetDocument) => {
+    documentLoadGeneration.current++;
+    setLoadingSplitSheets(false);
     setGeneratedDocuments((current) => {
       const exists = current.some((item) => item.id === document.id);
       const next = exists
         ? current.map((item) => (item.id === document.id ? document : item))
         : [document, ...current];
 
-      saveLocalSplitSheetDocuments(next.filter(splitSheetCanUseLocalDraftFallback), localStorageOwner);
+      cacheLocalSplitSheetDocuments(next.filter(splitSheetCanUseLocalDraftFallback), localStorageOwner);
       return next;
     });
   };
@@ -302,6 +313,8 @@ export default function Dashboard({
 
   const deleteDraft = async (document: StoredSplitSheetDocument) => {
     await deleteSplitSheetDraft(document, userProfile);
+    documentLoadGeneration.current++;
+    setLoadingSplitSheets(false);
     deletedDraftIds.current.add(document.id);
     setGeneratedDocuments((current) => current.filter((item) => item.id !== document.id));
     setSelectedAgreement(null);
@@ -315,11 +328,6 @@ export default function Dashboard({
   const updateGeneratedDocument = async (document: StoredSplitSheetDocument, context: SplitSheetUpdateContext = {}) => {
     const requiresRemoteConfirmation = Boolean(context.action) ||
       !splitSheetCanUseLocalDraftFallback(document);
-    if (!requiresRemoteConfirmation) {
-      applyGeneratedDocument(document);
-      setSelectedAgreement(documentToAgreement(document));
-    }
-
     const persisted = requiresRemoteConfirmation
       ? await saveSplitSheetParticipantAction(document, context, userProfile)
       : await saveSplitSheetDocument(document, "update", userProfile);
@@ -539,8 +547,14 @@ export default function Dashboard({
               </PopoverTrigger>
               <PopoverContent align="end" className="w-56 p-2">
                 <div className="border-b border-border px-3 py-3 mb-1 text-sm font-bold break-words">{userProfile.displayName || userProfile.username || "Your account"}</div>
-                <button onClick={() => { setAccountMenuOpen(false); setActiveView("profile"); }} className="flex w-full items-center gap-2 rounded-md px-3 py-2.5 text-sm hover:bg-secondary"><UserRound size={16} />Your Profile</button>
-                <button onClick={() => { setAccountMenuOpen(false); onOpenAccountCreation(); }} className="flex w-full items-center gap-2 rounded-md px-3 py-2.5 text-sm hover:bg-secondary"><Settings size={16} />Account Setup</button>
+                <button type="button" disabled={signingOut} onClick={() => { setAccountMenuOpen(false); setActiveView("profile"); }} className="flex w-full items-center gap-2 rounded-md px-3 py-2.5 text-sm hover:bg-secondary disabled:opacity-50"><UserRound size={16} />Your Profile</button>
+                <button type="button" disabled={signingOut} onClick={() => { setAccountMenuOpen(false); onOpenAccountCreation(); }} className="flex w-full items-center gap-2 rounded-md px-3 py-2.5 text-sm hover:bg-secondary disabled:opacity-50"><Settings size={16} />Account Setup</button>
+                {onSignOut && <div className="mt-1 border-t border-border pt-1">
+                  <button type="button" disabled={signingOut} aria-busy={signingOut} onClick={() => void onSignOut()} className="flex min-h-11 w-full items-center gap-2 rounded-md px-3 py-2.5 text-sm hover:bg-secondary disabled:opacity-50">
+                    {signingOut ? <Loader2 size={16} className="animate-spin" /> : <LogOut size={16} />}
+                    {signingOut ? "Signing out..." : "Sign out"}
+                  </button>
+                </div>}
               </PopoverContent>
             </Popover>
             <button onClick={startNewAgreement} className="workspace-action primary workspace-header-new" aria-label="New SPLIT" title="New SPLIT">
@@ -599,10 +613,12 @@ export default function Dashboard({
               userProfile={userProfile}
               initialDealId={selectedMessageDealId}
               onUpdateDocument={updateGeneratedDocument}
+              onReloadDocuments={() => setReloadSplitSheets(current => current + 1)}
+              reloading={loadingSplitSheets}
               onOpenAgreement={openAgreement}
             />
           )}
-          {activeView === "settings" && <SettingsPage userProfile={userProfile} />}
+          {activeView === "settings" && <SettingsPage userProfile={userProfile} onViewOnboardingAgain={onViewOnboardingAgain} />}
           {activeView === "profile" && (
             <CreatorProfileView
               userProfile={userProfile}
@@ -1070,7 +1086,7 @@ function ActivityEmptyState({ label }: { label: string }) {
   );
 }
 
-export function StatusBadge({ status }: { status: Agreement["status"] }) {
+export function StatusBadge({ status, inviteDeclined }: { status: Agreement["status"]; inviteDeclined?: boolean }) {
   const styles: Record<Agreement["status"], string> = {
     Executed: "bg-[hsl(var(--split-verified)/0.12)] text-[hsl(var(--split-verified))] border-[hsl(var(--split-verified)/0.25)]",
     "Verified and Stored": "bg-[hsl(var(--split-verified)/0.12)] text-[hsl(var(--split-verified))] border-[hsl(var(--split-verified)/0.25)]",
@@ -1085,7 +1101,7 @@ export function StatusBadge({ status }: { status: Agreement["status"] }) {
     Disputed: "bg-destructive/10 text-destructive border-destructive/20",
     Archived: "bg-slate-100 text-slate-600 border-slate-200",
   };
-  const workflowLabel = getSplitWorkflowLabel(status);
+  const workflowLabel = inviteDeclined ? "Invite declined" : getSplitWorkflowLabel(status);
   const verified = VERIFIED_SPLIT_STATUSES.includes(status);
 
   return (

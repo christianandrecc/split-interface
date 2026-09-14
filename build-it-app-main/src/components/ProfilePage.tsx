@@ -9,11 +9,26 @@ import { Label } from "@/components/ui/label";
 import { formatNationalPhoneNumber, getPhoneInputMaxLength } from "@/lib/phone";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { AtSign, Check, Eye, HelpCircle, IdCard, Link2, Mail, MapPin, Music2, Save, Tags, User } from "lucide-react";
+import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Checkbox } from "@/components/ui/checkbox";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { useContentEntrance } from "@/hooks/use-content-entrance";
+import { ArrowLeft, AtSign, Check, Eye, HelpCircle, IdCard, Link2, Loader2, Lock, Mail, MapPin, Music2, RotateCcw, Tags, User } from "lucide-react";
+import "./settings.css";
+import "./profile-editor.css";
 
 const proOptions = ["ASCAP", "BMI", "SESAC", "Other", "Skip PRO Registration"];
 
 const visibilityOptions = ["Public", "Collaborators only", "Private"];
+
+const profileCategories = [
+  { id: "public", label: "Public profile", icon: AtSign, fields: ["username", "displayName", "profileLocation", "profileVisibility", "roleTags", "socialInstagram", "socialTikTok", "socialX"] },
+  { id: "personal", label: "Personal details", icon: User, fields: ["legalFirstName", "legalMiddleName", "legalLastName", "pkaNames", "phoneCountryCode", "phoneNumber", "addressLine", "city", "state", "zipCode", "country"] },
+  { id: "registration", label: "Registration", icon: Music2, fields: ["proAffiliation", "ipiNumber", "customProName"] },
+  { id: "account", label: "Account", icon: IdCard, fields: [] },
+] as const;
 
 const usStateOptions = [
   "Alabama",
@@ -112,15 +127,35 @@ type ProfilePageProps = {
 };
 
 export default function ProfilePage({ userProfile, onUpdateProfile, onBackToPublicProfile }: ProfilePageProps) {
-  const [draft, setDraft] = useState<UserProfile>(() => hydrateProfileForEditing(userProfile));
+  return <ProfileEditor key={userProfile.authUserId || userProfile.splitId || "local"} userProfile={userProfile} onUpdateProfile={onUpdateProfile} onBackToPublicProfile={onBackToPublicProfile} />;
+}
+
+function ProfileEditor({ userProfile, onUpdateProfile, onBackToPublicProfile }: ProfilePageProps) {
+  const [initialProfile] = useState(() => hydrateProfileForEditing(userProfile));
+  const [draft, setDraft] = useState<UserProfile>(initialProfile);
+  const [applied, setApplied] = useState<UserProfile>(initialProfile);
+  const [category, setCategory] = useState("public");
+  const [discardIntent, setDiscardIntent] = useState<"reset" | "leave" | null>(null);
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
   const previousProfile = useRef(userProfile);
+  const inFlight = useRef(false);
+  const alive = useRef(false);
+  const isMobile = useIsMobile();
+  const panelRef = useContentEntrance<HTMLDivElement>(category);
+  const changes = (Object.keys(draft) as (keyof UserProfile)[]).filter(key => draft[key] !== applied[key]);
+  useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
+  useEffect(() => {
+    if (!changes.length) return;
+    const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [changes.length]);
 
   useEffect(() => {
-    const previous = hydrateProfileForEditing(previousProfile.current);
-    const next = hydrateProfileForEditing(userProfile);
+    const previous = hydrateProfileForEditing({ ...previousProfile.current, splitId: previousProfile.current.splitId || initialProfile.splitId });
+    const next = hydrateProfileForEditing({ ...userProfile, splitId: userProfile.splitId || initialProfile.splitId });
     const sameAccount = previous.authUserId === next.authUserId;
     // Auth confirmation may arrive while unrelated profile edits are still unsaved.
     setDraft(current => sameAccount ? Object.fromEntries(Object.entries(next).map(([key, value]) => [
@@ -128,12 +163,12 @@ export default function ProfilePage({ userProfile, onUpdateProfile, onBackToPubl
         ? value : current[key as keyof UserProfile],
     ])) as UserProfile : next);
     previousProfile.current = userProfile;
+    setApplied(next);
     setSaveError("");
-  }, [userProfile]);
+  }, [userProfile, initialProfile.splitId]);
 
   const displayName = useMemo(() => draft.displayName || buildLegalName(draft) || draft.emailAddress || "Your Profile", [draft]);
   const phoneMaxLength = getPhoneInputMaxLength(draft.phoneCountryCode);
-  const usernameAvailable = draft.username.length >= 3 && !["split", "admin", "support"].includes(draft.username);
   const selectedRoles = parseRoleTags(draft.roleTags);
 
   const update = (field: keyof UserProfile, value: string) => {
@@ -169,83 +204,63 @@ export default function ProfilePage({ userProfile, onUpdateProfile, onBackToPubl
   };
 
   const handleSave = async () => {
+    if (inFlight.current || !changes.length) return;
+    inFlight.current = true;
     setSaveError("");
     setSaving(true);
+    const submitted = normalizeProfile(draft);
 
     try {
-      await onUpdateProfile(normalizeProfile(draft));
-      setSaved(true);
+      await onUpdateProfile(submitted);
+      if (alive.current) {
+        setDraft(current => hydrateProfileForEditing({ ...submitted, emailAddress: current.emailAddress }));
+        setApplied(current => hydrateProfileForEditing({ ...submitted, emailAddress: current.emailAddress }));
+        setSaved(true);
+      }
     } catch (error) {
-      setSaveError(error instanceof Error ? error.message : "Could not save profile to Supabase.");
+      if (alive.current) setSaveError(error instanceof Error ? error.message : "Could not save your profile. Your changes are still here.");
     } finally {
-      setSaving(false);
+      inFlight.current = false;
+      if (alive.current) setSaving(false);
     }
   };
 
   return (
-    <div className="h-full overflow-y-auto">
-      <div className="mx-auto max-w-5xl px-4 py-5 md:px-8 md:py-8">
-        <div className="mb-6 flex flex-col gap-4 md:mb-8 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">Edit Profile</h1>
-            <p className="mt-1 text-sm text-muted-foreground">Manage the account details SPLIT uses across your split sheets.</p>
-          </div>
-          <div className="flex flex-col gap-2 sm:flex-row">
+    <section className="settings-page profile-editor" aria-label="Edit Profile" aria-busy={saving}>
+      <div className="settings-shell">
+        <header className="settings-heading profile-heading">
+            <h1>Edit Profile</h1>
             {onBackToPublicProfile && (
-              <Button type="button" variant="outline" onClick={onBackToPublicProfile} className="h-11 md:px-5">
-                Back to Profile
+              <Button type="button" variant="ghost" disabled={saving} onClick={() => changes.length ? setDiscardIntent("leave") : onBackToPublicProfile()}>
+                <ArrowLeft size={16} />Back to Profile
               </Button>
             )}
-            <Button onClick={handleSave} disabled={saving} className="h-11 md:px-6">
-              {saved ? <Check className="h-4 w-4" /> : <Save className="h-4 w-4" />}
-              {saving ? "Saving…" : saved ? "Saved" : "Save Changes"}
-            </Button>
-          </div>
-        </div>
-
-        {saveError && (
-          <div className="mb-5 rounded-lg border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm leading-6 text-destructive">
-            {saveError}
-          </div>
-        )}
-
-        <section className="mb-5 rounded-lg border border-border bg-card p-5">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex min-w-0 items-center gap-4">
-              <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-full bg-primary/10 text-lg font-bold text-primary">
-                {getInitials(displayName)}
+        </header>
+        <Tabs value={category} onValueChange={setCategory} orientation={isMobile ? "horizontal" : "vertical"} className="settings-layout">
+          <TabsList className="settings-navigation" aria-label="Profile categories">
+            {profileCategories.map(({ id, label, icon: Icon, fields }) => {
+              const changed = fields.some(field => changes.includes(field));
+              return <TabsTrigger key={id} value={id} className="settings-nav-item" aria-label={label} aria-description={changed ? "Unsaved changes" : undefined}>
+                <Icon size={17} aria-hidden="true" /><span>{label}</span>
+                {changed && <span className="settings-change-dot" aria-hidden="true" />}
+              </TabsTrigger>;
+            })}
+          </TabsList>
+          <div className="settings-detail profile-detail">
+            <fieldset disabled={saving} className="min-w-0">
+            <div ref={panelRef} className="profile-panels">
+            <TabsContent value="public" className="settings-panel">
+              <div className="settings-section-heading profile-section-heading">
+                <span className="settings-section-icon"><AtSign size={18} /></span><h2>Public profile</h2>
+                <Dialog>
+                  <DialogTrigger asChild><Button type="button" variant="ghost" className="profile-preview-trigger"><Eye size={16} />Preview profile</Button></DialogTrigger>
+                  <DialogContent className="profile-preview-dialog">
+                    <DialogHeader><DialogTitle>Profile preview</DialogTitle><DialogDescription className="sr-only">Current public profile details. Unsaved changes are included in this preview.</DialogDescription></DialogHeader>
+                    <CollaboratorProfilePreview profile={draft} displayName={displayName} />
+                  </DialogContent>
+                </Dialog>
               </div>
-              <div className="min-w-0">
-                <h2 className="truncate text-lg font-bold">{displayName}</h2>
-                <p className="truncate text-sm text-muted-foreground">{draft.username ? `@${draft.username}` : draft.emailAddress || "No handle saved"}</p>
-              </div>
-            </div>
-            <div className="flex flex-wrap gap-2 lg:max-w-[58%] lg:justify-end">
-                    {CREATOR_ROLE_OPTIONS.map((role) => {
-                const active = selectedRoles.includes(role);
-                return (
-                  <button
-                    key={role}
-                    type="button"
-                    onClick={() => toggleRoleTag(role)}
-                    className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${
-                      active
-                        ? "border-primary bg-primary/10 text-primary"
-                        : "border-border bg-background text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    {role}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </section>
-
-        <div className="grid gap-5">
-          <ProfileSection icon={<AtSign className="h-4 w-4" />} title="Creator Identity">
-            <div className="grid gap-5 lg:grid-cols-[1fr_320px]">
-              <div className="space-y-4">
+              <div className="profile-fields">
                 <div className="grid gap-4 md:grid-cols-2">
                   <Field label="@Username" htmlFor="profileUsername">
                     <div className="relative">
@@ -258,9 +273,6 @@ export default function ProfilePage({ userProfile, onUpdateProfile, onBackToPubl
                         placeholder="yourname"
                       />
                     </div>
-                    <p className={`mt-1 text-[11px] leading-4 ${usernameAvailable ? "text-[hsl(var(--split-verified))]" : "text-muted-foreground"}`}>
-                      {usernameAvailable ? `@${draft.username} is ready for beta use.` : "Use at least 3 letters or numbers."}
-                    </p>
                   </Field>
                   <Field label="Display Name" htmlFor="profileDisplayName">
                     <Input
@@ -297,6 +309,14 @@ export default function ProfilePage({ userProfile, onUpdateProfile, onBackToPubl
                   </Field>
                 </div>
 
+                <fieldset className="profile-roles">
+                  <legend>Creator roles</legend>
+                  <div>{CREATOR_ROLE_OPTIONS.map(role => <label key={role}>
+                    <Checkbox checked={selectedRoles.includes(role)} disabled={saving} onCheckedChange={() => toggleRoleTag(role)} />{role}
+                  </label>)}</div>
+                </fieldset>
+                <div className="profile-socials">
+                <h3>Social links</h3>
                 <div className="grid gap-4 md:grid-cols-2">
                   <Field label="Instagram" htmlFor="profileInstagram">
                     <Input id="profileInstagram" value={draft.socialInstagram} onChange={(event) => update("socialInstagram", event.target.value)} placeholder="@handle or URL" />
@@ -308,12 +328,11 @@ export default function ProfilePage({ userProfile, onUpdateProfile, onBackToPubl
                     <Input id="profileX" value={draft.socialX} onChange={(event) => update("socialX", event.target.value)} placeholder="@handle or URL" />
                   </Field>
                 </div>
+                </div>
               </div>
-
-              <CollaboratorProfilePreview profile={draft} displayName={displayName} />
-            </div>
-          </ProfileSection>
-
+            </TabsContent>
+            <TabsContent value="personal" className="settings-panel">
+              <div className="settings-section-heading"><span className="settings-section-icon"><User size={18} /></span><h2>Personal details</h2></div>
           <ProfileSection icon={<User className="h-4 w-4" />} title="Legal Identity">
             <div className="grid gap-4 md:grid-cols-3">
               <Field label="Legal First Name" htmlFor="profileFirstName">
@@ -332,6 +351,7 @@ export default function ProfilePage({ userProfile, onUpdateProfile, onBackToPubl
           </ProfileSection>
 
           <ProfileSection icon={<Mail className="h-4 w-4" />} title="Contact">
+            <p className="profile-privacy-note"><Lock size={14} />Phone numbers and addresses stay private during beta.</p>
             <div className="grid gap-4 md:grid-cols-[160px_1fr]">
               <Field label="Country Code" htmlFor="profilePhoneCode">
                 <Select
@@ -428,8 +448,9 @@ export default function ProfilePage({ userProfile, onUpdateProfile, onBackToPubl
               </Field>
             </div>
           </ProfileSection>
-
-          <ProfileSection icon={<Music2 className="h-4 w-4" />} title="Music Registration">
+            </TabsContent>
+            <TabsContent value="registration" className="settings-panel">
+          <ProfileSection icon={<Music2 className="h-4 w-4" />} title="Music Registration" primary>
             <div className="grid gap-4 md:grid-cols-2">
               <Field label="PRO Affiliation" htmlFor="profilePro" help="A PRO collects public performance royalties. You can find this in your ASCAP, BMI, SESAC, or society account. Choose Skip if you have not registered yet.">
                 <Select value={draft.proAffiliation} onValueChange={(value) => update("proAffiliation", value)}>
@@ -462,17 +483,47 @@ export default function ProfilePage({ userProfile, onUpdateProfile, onBackToPubl
             </div>
 
           </ProfileSection>
-
-          <ProfileSection icon={<IdCard className="h-4 w-4" />} title="Sign In Details">
+            </TabsContent>
+            <TabsContent value="account" className="settings-panel">
+          <ProfileSection icon={<IdCard className="h-4 w-4" />} title="Sign In Details" primary>
             <div className="grid gap-4 md:grid-cols-2">
               <ReadOnlyDetail label="@Username" value={draft.username ? `@${draft.username}` : "Not set"} />
               <ReadOnlyDetail label="Password" value="Managed by sign in" />
             </div>
             <AccountEmailControl key={userProfile.authUserId || "signed-out"} userId={userProfile.authUserId} />
           </ProfileSection>
-        </div>
+            </TabsContent>
+            </div>
+            </fieldset>
+            <footer className="settings-footer profile-footer">
+              {saveError && <p role="alert" className="profile-save-error">{saveError}</p>}
+              <span role="status" className="settings-save-status" data-applied={saved && !changes.length}>
+                {saved && !changes.length && <Check size={14} />}
+                {saving ? "Saving..." : changes.length ? "Unsaved changes" : saved ? "Saved" : "No changes"}
+              </span>
+              <div className="settings-footer-actions">
+                <Tooltip><TooltipTrigger asChild>
+                  <Button type="button" variant="ghost" size="icon" disabled={saving || !changes.length} aria-label="Discard changes" onClick={() => setDiscardIntent("reset")}><RotateCcw size={16} /></Button>
+                </TooltipTrigger><TooltipContent>Discard changes</TooltipContent></Tooltip>
+                <Button type="button" className="settings-apply" onClick={handleSave} disabled={saving || !changes.length}>
+                  {saving ? <Loader2 className="animate-spin" /> : <Check />}Save Changes
+                </Button>
+              </div>
+            </footer>
+          </div>
+        </Tabs>
+        <AlertDialog open={discardIntent !== null} onOpenChange={open => { if (!open) setDiscardIntent(null); }}>
+          <AlertDialogContent className="w-[calc(100%-2rem)] max-w-md rounded-lg">
+            <AlertDialogHeader><AlertDialogTitle>Discard profile changes?</AlertDialogTitle><AlertDialogDescription>Your unsaved changes in all profile categories will be discarded.</AlertDialogDescription></AlertDialogHeader>
+            <AlertDialogFooter><AlertDialogCancel>Keep editing</AlertDialogCancel><Button variant="destructive" onClick={() => {
+              const leave = discardIntent === "leave";
+              setDraft(applied); setSaved(false); setSaveError(""); setDiscardIntent(null);
+              if (leave) onBackToPublicProfile?.();
+            }}>Discard changes</Button></AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
-    </div>
+    </section>
   );
 }
 
@@ -538,17 +589,13 @@ function buildLegalName(profile: UserProfile) {
 function CollaboratorProfilePreview({ profile, displayName }: { profile: UserProfile; displayName: string }) {
   const roles = parseRoleTags(profile.roleTags);
   const socials = [
-    profile.socialInstagram,
-    profile.socialTikTok,
-    profile.socialX,
-  ].filter(Boolean);
+    { platform: "Instagram", value: profile.socialInstagram },
+    { platform: "TikTok", value: profile.socialTikTok },
+    { platform: "X / Twitter", value: profile.socialX },
+  ].filter(social => social.value);
 
   return (
-    <aside className="rounded-lg border border-border bg-background p-4">
-      <div className="mb-3 flex items-center gap-2 text-xs font-semibold text-muted-foreground">
-        <Eye className="h-3.5 w-3.5" />
-        Collaborator preview
-      </div>
+    <div className="profile-preview">
       <div className="flex items-start gap-3">
         {profile.profileImageUrl ? (
           <img src={profile.profileImageUrl} alt="" className="h-14 w-14 rounded-full object-cover" />
@@ -558,9 +605,9 @@ function CollaboratorProfilePreview({ profile, displayName }: { profile: UserPro
           </div>
         )}
         <div className="min-w-0">
-          <h3 className="truncate text-base font-bold">{displayName}</h3>
-          <p className="truncate text-sm font-medium text-primary">{profile.username ? `@${profile.username}` : "@username"}</p>
-          <p className="mt-1 truncate text-xs text-muted-foreground">{profile.profileLocation || "Location not set"}</p>
+          <h3 className="break-words text-base font-bold">{displayName}</h3>
+          <p className="break-all text-sm text-muted-foreground">{profile.username ? `@${profile.username}` : "@username"}</p>
+          <p className="mt-1 break-words text-xs text-muted-foreground">{profile.profileLocation || "Location not set"}</p>
         </div>
       </div>
 
@@ -577,41 +624,39 @@ function CollaboratorProfilePreview({ profile, displayName }: { profile: UserPro
         )}
       </div>
 
-      <div className="mt-4 rounded-lg border border-border bg-secondary/40 px-3 py-2.5">
+      <div className="mt-5 border-t border-border pt-4">
         <div className="flex items-center gap-2 text-xs font-semibold text-foreground">
           <Eye className="h-3.5 w-3.5 text-muted-foreground" />
           {profile.profileVisibility || "Collaborators only"}
         </div>
-        <p className="mt-1 text-[11px] leading-4 text-muted-foreground">
-          This controls who can see your collaborator card and released-work credits.
-        </p>
       </div>
 
       {socials.length > 0 && (
         <div className="mt-4 space-y-1.5">
-          {socials.slice(0, 4).map((social) => (
-            <div key={social} className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+          {socials.map(({ platform, value }) => (
+            <div key={platform} className="flex items-start gap-2 text-xs text-muted-foreground">
               <Link2 className="h-3.5 w-3.5" />
-              <span className="truncate">{social}</span>
+              <span className="min-w-0 break-all"><span className="font-semibold">{platform}</span> {value}</span>
             </div>
           ))}
         </div>
       )}
-    </aside>
+    </div>
   );
 }
 
 function getInitials(name: string) {
   const parts = name.trim().split(/\s+/).filter(Boolean);
-  return `${parts[0]?.[0] ?? "Y"}${parts[1]?.[0] ?? "P"}`.toUpperCase();
+  return `${parts[0]?.[0] ?? "?"}${parts[1]?.[0] ?? ""}`.toUpperCase();
 }
 
-function ProfileSection({ icon, title, children }: { icon: ReactNode; title: string; children: ReactNode }) {
+function ProfileSection({ icon, title, children, primary = false }: { icon: ReactNode; title: string; children: ReactNode; primary?: boolean }) {
+  const Heading = primary ? "h2" : "h3";
   return (
-    <section className="rounded-lg border border-border bg-card p-5">
-      <div className="mb-5 flex items-center gap-2">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">{icon}</div>
-        <h2 className="text-sm font-bold">{title}</h2>
+    <section className="profile-section" data-primary={primary}>
+      <div className={primary ? "settings-section-heading" : "profile-subheading"}>
+        <span className={primary ? "settings-section-icon" : "profile-subsection-icon"}>{icon}</span>
+        <Heading>{title}</Heading>
       </div>
       <div className="space-y-4">{children}</div>
     </section>
@@ -630,7 +675,7 @@ function Field({
   help?: string;
 }) {
   return (
-    <div className="space-y-2">
+    <div className="profile-field space-y-2">
       <div className="flex items-center gap-1.5">
         <Label htmlFor={htmlFor} className="text-xs font-semibold text-muted-foreground">
           {label}
@@ -663,7 +708,7 @@ function HelpTip({ content }: { content: string }) {
 
 function ReadOnlyDetail({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg border border-border bg-secondary/50 px-3 py-2.5">
+    <div className="profile-readonly">
       <div className="text-xs font-semibold text-muted-foreground">{label}</div>
       <div className="mt-1 text-sm font-medium text-foreground">{value}</div>
     </div>

@@ -13,8 +13,11 @@ describe("publishing deferred", () => {
     render(<TooltipProvider><ProfilePage userProfile={{ ...makeDocument().creatorProfile, ...publishing }} onUpdateProfile={onUpdateProfile} /></TooltipProvider>);
     expect(screen.queryByText("Private Publishing Routing")).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/Publishing|Publisher|Admin Company|Admin Collection/)).not.toBeInTheDocument();
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "Registration" }), { button: 0, ctrlKey: false });
     expect(screen.getByLabelText(/PRO Affiliation/)).toBeInTheDocument();
     expect(screen.getByLabelText(/IPI \/ CAE Number/)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/Publishing|Publisher|Admin Company|Admin Collection/)).not.toBeInTheDocument();
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "Public profile" }), { button: 0, ctrlKey: false });
     fireEvent.change(screen.getByLabelText("Display Name"), { target: { value: "Updated Artist" } });
     fireEvent.click(screen.getByRole("button", { name: "Save Changes" }));
     await waitFor(() => expect(onUpdateProfile).toHaveBeenCalledOnce());

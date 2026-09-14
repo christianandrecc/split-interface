@@ -427,7 +427,7 @@ function InviteWriter({
 
           {recentMatches.length === 0 && ecosystemMatches.length === 0 && !searchingEcosystem && searchQuery.trim().length >= 2 && (
             <div className="px-3 py-5 text-center text-xs leading-5 text-muted-foreground">
-              No matching SPLIT users yet. You can still invite by email or phone.
+              No matching SPLIT users. Email and phone entries only match verified accounts; no email or SMS is sent.
             </div>
           )}
         </div>

@@ -7,6 +7,9 @@ import { verifySplitPrivacy } from "./verify-split-privacy.mjs";
 import { verifySplitRegistration } from "./verify-split-registration.mjs";
 import { verifyAccountSettings } from "./verify-account-settings.mjs";
 import { seedLegacyAccountEmail, verifyAccountEmail } from "./verify-account-email.mjs";
+import { seedLegacyDelivery, verifyInAppDelivery } from "./verify-in-app-delivery.mjs";
+import { verifyInviteDecline } from "./verify-invite-decline.mjs";
+import { verifyAccountRetention } from "./verify-account-retention.mjs";
 
 // Disposable PostgreSQL only: no credentials, network calls, or live records.
 // The auth shim models PostgREST's user claim, not hosted GoTrue.
@@ -91,6 +94,7 @@ try {
   `);
   for (const file of readdirSync("supabase/migrations").filter(name => name.endsWith(".sql")).sort()) {
     if (file.endsWith("_sync_profile_account_email.sql")) await seedLegacyAccountEmail(db);
+    if (file.endsWith("_separate_in_app_split_delivery.sql")) await seedLegacyDelivery(db);
     await db.exec(readFileSync(`supabase/migrations/${file}`, "utf8"));
     report.migrations.push(file);
   }
@@ -163,9 +167,9 @@ try {
   assert.equal(activeApprovals(doc).find(a => a.collaboratorId === "creator").status, "Approved");
   const inviteRecipients = (await admin("select distinct recipient_user_id from public.split_notifications where split_sheet_id=$1 and event_type='split_invite'", [doc.id])).rows;
   assert.deepEqual(inviteRecipients.map(row => row.recipient_user_id), [participant]);
-  assert.equal((await admin("select id from public.split_sheet_contract_deliveries where split_sheet_id=$1", [doc.id])).rows.length, 1);
+  assert.equal((await admin("select id from public.split_sheet_contract_deliveries where split_sheet_id=$1", [doc.id])).rows.length, 0);
   assert.equal(doc.collaboratorInvites[0].status, "Pending");
-  report.checks.push("Sending queues invitations and notifies only the assigned collaborator, with no automatic acceptance");
+  report.checks.push("Sending creates in-app invitations and notifies only the assigned collaborator, with no external delivery job or automatic acceptance");
   await rejectsWithoutWrites("Creator cannot replace sent state", () => save(doc, "update"), "55000", /Messages/);
   await rejectsWithoutWrites("Repeated send cannot requeue delivery", () => save(doc), "55000", /Messages/);
   await rejectsWithoutWrites("Creator cannot sign before approval", () => action(doc, "sign"), "55000", /Every party/);
@@ -379,9 +383,12 @@ try {
   await verifySplitRegistration({ db, report, login, admin, load, save, action, rejectsWithoutWrites });
   await verifyAccountSettings({ db, report, login, admin, fixture, save, load });
   await verifyAccountEmail({ db, report, login, admin, save, action, load, fixture });
+  await verifyInAppDelivery({ db, report, admin, login, save, load, fixture, rejectsWithoutWrites, creator });
+  await verifyInviteDecline({ db, report, admin, login, save, load, action, fixture, rejectsWithoutWrites, creator, participant, outsider });
+  await verifyAccountRetention({ db, report, admin, login, save, load, action, fixture });
   console.log(JSON.stringify(report, null, 2));
 } catch (error) {
-  console.error(JSON.stringify({ message: error.message, code: error.code, detail: error.detail, where: error.where, stack: error.code ? undefined : error.stack }, null, 2));
+  console.error(JSON.stringify({ message: error.message, code: error.code, detail: error.detail, where: error.where, stack: error.code === "ERR_ASSERTION" || !error.code ? error.stack : undefined }, null, 2));
   process.exitCode = 1;
 } finally {
   await db.close();

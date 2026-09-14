@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { AlertDialog, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogCancel, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { createSplitSheetDocument, addDocumentAuditTrail, type StoredSplitSheetDocument } from "./document";
 import type { UserProfile } from "@/lib/userProfile";
-import { queueContractDelivery } from "@/lib/splitSheetWorkflow";
+import { prepareSplitInvite } from "@/lib/splitSheetWorkflow";
 import {
   STEPS,
   type StepId,
@@ -144,7 +144,7 @@ export default function ContractBuilder({
       documentRef.current = draft;
       const actor = userProfile.legalName || userProfile.emailAddress || "SPLIT user";
       const request = mode === "send"
-        ? queueContractDelivery({
+        ? prepareSplitInvite({
             ...draft,
             status: draft.collaborators.length ? "Pending Collaborator Acceptance" : "Ready to Sign",
           }, actor)
@@ -157,7 +157,7 @@ export default function ContractBuilder({
       setCompleted(true);
       setConfirmSend(false);
       if (mode === "send") {
-        toast.success(draft.collaborators.length ? "Split invitations sent" : "Split sheet ready to sign");
+        toast.success(draft.collaborators.length ? "Invitations sent in SPLIT" : "Split sheet ready to sign");
       } else {
         toast.success(result.persisted ? "Saved to Drafts" : "Draft saved on this device", {
           description: result.persisted ? undefined : "Supabase has not confirmed this draft yet.",
@@ -258,7 +258,10 @@ export default function ContractBuilder({
                     <AlertDialogContent className="w-[calc(100%-2rem)] max-w-md rounded-lg">
                       <AlertDialogHeader>
                         <AlertDialogTitle>Ready to send?</AlertDialogTitle>
-                        <AlertDialogDescription>Make sure all details, split percentages, and collaborator usernames are correct before sending.</AlertDialogDescription>
+                        <AlertDialogDescription>
+                          Make sure all details, split percentages, and collaborator usernames are correct before sending.
+                          Invitations appear inside SPLIT. No email or SMS is sent.
+                        </AlertDialogDescription>
                       </AlertDialogHeader>
                       {saveError && <p role="alert" className="text-sm text-destructive">{saveError}</p>}
                       <AlertDialogFooter className="gap-2 sm:space-x-0">

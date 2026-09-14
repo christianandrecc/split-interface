@@ -70,7 +70,7 @@ export function getCollaboratorStatusSummary(document: StoredSplitSheetDocument)
   });
 }
 
-export function queueContractDelivery(document: StoredSplitSheetDocument, actor: string): StoredSplitSheetDocument {
+export function prepareSplitInvite(document: StoredSplitSheetDocument, actor: string): StoredSplitSheetDocument {
   return addDocumentAuditTrail(
     {
       ...document,
@@ -78,6 +78,6 @@ export function queueContractDelivery(document: StoredSplitSheetDocument, actor:
       sentAt: document.sentAt || new Date().toISOString(),
     },
     actor,
-    "Started Messages review; server contract delivery pending",
+    "Sent the split sheet for review in SPLIT",
   );
 }
