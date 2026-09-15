@@ -14,6 +14,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { formatNationalPhoneNumber, getPhoneInputMaxLength } from "@/lib/phone";
 import {
+  AccountAccessError,
   isValidEmailAddress,
   normalizeEmailAddress,
   requestSupabasePasswordReset,
@@ -138,6 +139,7 @@ export default function AccountAccess({
   const [formNotice, setFormNotice] = useState("");
   const [pendingConfirmationEmail, setPendingConfirmationEmail] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const accountRequestPending = useRef(false);
 
   const currentPage = accountPages[accountPage];
   const progress = ((accountPage + 1) / accountPages.length) * 100;
@@ -167,6 +169,7 @@ export default function AccountAccess({
 
   const handleCreateAccount = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (accountRequestPending.current) return;
     setFormError("");
     setFormNotice("");
 
@@ -182,6 +185,7 @@ export default function AccountAccess({
     }
 
     try {
+      accountRequestPending.current = true;
       setSubmitting(true);
       const preparedProfile = prepareProfileForRegistration(profile);
       const result = await onCreateAccount(preparedProfile, accountPassword);
@@ -193,14 +197,20 @@ export default function AccountAccess({
         setMode("confirm");
       }
     } catch (error) {
+      if (error instanceof AccountAccessError && error.code === "username_unavailable") {
+        setAccountPage(0);
+        window.requestAnimationFrame(() => document.getElementById("username")?.focus());
+      }
       setFormError(error instanceof Error ? error.message : "Could not create the Supabase account.");
     } finally {
+      accountRequestPending.current = false;
       setSubmitting(false);
     }
   };
 
   const handleSignIn = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (accountRequestPending.current) return;
     setFormError("");
     setFormNotice("");
 
@@ -211,11 +221,19 @@ export default function AccountAccess({
     }
 
     try {
+      accountRequestPending.current = true;
       setSubmitting(true);
       await onSignIn(email, signInPassword);
     } catch (error) {
+      if (error instanceof AccountAccessError && error.code === "email_not_confirmed") {
+        setPendingConfirmationEmail(email);
+        setSignInPassword("");
+        setMode("confirm");
+        return;
+      }
       setFormError(error instanceof Error ? error.message : "Could not sign in to Supabase.");
     } finally {
+      accountRequestPending.current = false;
       setSubmitting(false);
     }
   };
@@ -284,6 +302,7 @@ export default function AccountAccess({
               <div className="mb-5 grid grid-cols-2 rounded-lg border border-border bg-secondary p-1">
                 <button
                   type="button"
+                  disabled={submitting}
                   onClick={() => {
                     setMode("create");
                     setFormError("");
@@ -298,6 +317,7 @@ export default function AccountAccess({
                 </button>
                 <button
                   type="button"
+                  disabled={submitting}
                   onClick={() => {
                     setMode("signin");
                     setFormError("");
@@ -387,7 +407,7 @@ export default function AccountAccess({
                     type="button"
                     variant="outline"
                     className="h-11 px-4"
-                    disabled={accountPage === 0}
+                    disabled={accountPage === 0 || submitting}
                     onClick={() => {
                       setFormError("");
                       setFormNotice("");
@@ -446,6 +466,7 @@ export default function AccountAccess({
                 <button
                   type="button"
                   className="mt-4 w-full text-center text-xs font-semibold text-primary hover:underline"
+                  disabled={submitting}
                   onClick={() => {
                     setMode("forgot");
                     setFormError("");
@@ -690,8 +711,6 @@ function PersonalInformationPage({
   profile: UserProfile;
   updateProfile: (field: keyof UserProfile, value: string) => void;
 }) {
-  const normalizedUsername = normalizeUsername(profile.username);
-  const available = normalizedUsername.length >= 3 && !["split", "admin", "support"].includes(normalizedUsername);
   const phoneMaxLength = getPhoneInputMaxLength(profile.phoneCountryCode);
 
   return (
@@ -704,12 +723,14 @@ function PersonalInformationPage({
             value={profile.username ?? ""}
             onChange={(event) => updateProfile("username", normalizeUsername(event.target.value))}
             placeholder="yourname"
+            minLength={3}
+            maxLength={24}
             required
             className="h-12 rounded-full pl-9 pr-5 text-base shadow-sm shadow-foreground/5 md:text-sm"
           />
         </div>
-        <p className={`mt-1 text-xs leading-5 ${available ? "text-[hsl(var(--split-verified))]" : "text-muted-foreground"}`}>
-          {available ? `@${normalizedUsername} is ready for beta use.` : "Use at least 3 letters or numbers. Supabase enforces uniqueness when the account is created."}
+        <p className="mt-1 text-xs leading-5 text-muted-foreground">
+          3-24 characters: letters, numbers, periods, or underscores.
         </p>
       </Field>
 

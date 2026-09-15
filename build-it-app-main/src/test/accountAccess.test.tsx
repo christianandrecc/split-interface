@@ -34,6 +34,71 @@ function completePersonalPage() {
 }
 
 describe("AccountAccess registration flow", () => {
+  it("returns to the taken username without losing profile fields and can retry with a new handle", async () => {
+    const create = vi.fn().mockRejectedValueOnce(new profileStorage.AccountAccessError("username_unavailable", "That username is already taken."))
+      .mockResolvedValueOnce({ needsEmailConfirmation: true });
+    renderAccountAccess(create);
+    completePersonalPage();
+    fireEvent.click(screen.getByRole("button", { name: "Artist" }));
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    fireEvent.change(screen.getByPlaceholderText("8 characters minimum"), { target: { value: "password123" } });
+    fireEvent.change(screen.getByPlaceholderText("Repeat password"), { target: { value: "password123" } });
+    fireEvent.click(screen.getByLabelText(/terms & conditions/i));
+    fireEvent.click(screen.getByLabelText(/privacy policy/i));
+    fireEvent.click(screen.getAllByRole("button", { name: /create account/i })[1]);
+    expect(await screen.findByRole("heading", { name: "Personal information" })).toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent(/username is already taken/);
+    expect(screen.queryByText(/ready for beta use/)).not.toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: /email address/i })).toHaveValue("chori@example.com");
+    expect(screen.getByRole("textbox", { name: /legal name/i })).toHaveValue("Christian Carrera");
+    fireEvent.change(screen.getByRole("textbox", { name: /username/i }), { target: { value: "chori_two" } });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    expect(screen.getByPlaceholderText("8 characters minimum")).toHaveValue("password123");
+    fireEvent.click(screen.getAllByRole("button", { name: /create account/i })[1]);
+    expect(await screen.findByRole("heading", { name: /check your inbox/i })).toBeInTheDocument();
+    expect(create.mock.calls[1][0]).toMatchObject({ username: "chori_two", roleTags: "Artist" });
+  });
+
+  it("prevents repeated signup requests and navigation during submission", async () => {
+    let finish!: (value: { needsEmailConfirmation: boolean }) => void;
+    const create = vi.fn(() => new Promise(resolve => { finish = resolve; }));
+    renderAccountAccess(create);
+    completePersonalPage();
+    fireEvent.click(screen.getByRole("button", { name: "Artist" }));
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    fireEvent.change(screen.getByPlaceholderText("8 characters minimum"), { target: { value: "password123" } });
+    fireEvent.change(screen.getByPlaceholderText("Repeat password"), { target: { value: "password123" } });
+    fireEvent.click(screen.getByLabelText(/terms & conditions/i));
+    fireEvent.click(screen.getByLabelText(/privacy policy/i));
+    const form = screen.getAllByRole("button", { name: /create account/i })[1].closest("form")!;
+    fireEvent.submit(form);
+    fireEvent.submit(form);
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("button", { name: "Sign In" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Back" })).toBeDisabled();
+    await act(async () => finish({ needsEmailConfirmation: true }));
+    expect(screen.getByRole("heading", { name: /check your inbox/i })).toBeInTheDocument();
+  });
+
+  it("offers confirmation recovery from sign-in without signing up again or automatically sending email", async () => {
+    const resend = vi.spyOn(profileStorage, "requestSignupConfirmation").mockResolvedValue({ requested: true });
+    const signIn = vi.fn().mockRejectedValue(new profileStorage.AccountAccessError("email_not_confirmed", "Confirm your email."));
+    const create = vi.fn();
+    renderAccountAccess(create, signIn, { initialMode: "signin" });
+    fireEvent.change(screen.getByRole("textbox", { name: /email address/i }), { target: { value: "New@Example.test" } });
+    fireEvent.change(screen.getByLabelText(/^Password/), { target: { value: "test-password" } });
+    fireEvent.click(screen.getAllByRole("button", { name: "Sign In" })[1]);
+    expect(await screen.findByRole("heading", { name: /check your inbox/i })).toBeInTheDocument();
+    expect(screen.getByText("new@example.test")).toBeInTheDocument();
+    expect(create).not.toHaveBeenCalled();
+    expect(resend).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Resend confirmation" }));
+    await waitFor(() => expect(resend).toHaveBeenCalledWith("new@example.test"));
+    fireEvent.click(screen.getByRole("button", { name: /go to sign in/i }));
+    expect(screen.getByLabelText(/^Password/)).toHaveValue("");
+  });
+
   it.each([
     { label: "typed character by character", finalName: "Aurora Music" },
     { label: "replaced after returning to the personal page", finalName: "Northern Lights" },

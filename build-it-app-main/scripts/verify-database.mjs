@@ -10,6 +10,7 @@ import { seedLegacyAccountEmail, verifyAccountEmail } from "./verify-account-ema
 import { seedLegacyDelivery, verifyInAppDelivery } from "./verify-in-app-delivery.mjs";
 import { verifyInviteDecline } from "./verify-invite-decline.mjs";
 import { verifyAccountRetention } from "./verify-account-retention.mjs";
+import { verifySignup } from "./verify-signup.mjs";
 
 // Disposable PostgreSQL only: no credentials, network calls, or live records.
 // The auth shim models PostgREST's user claim, not hosted GoTrue.
@@ -82,7 +83,7 @@ function counter(doc, creatorPercent) {
 
 try {
   await db.exec(`
-    create role anon; create role authenticated; create role service_role;
+    create role anon; create role authenticated; create role service_role; create role supabase_auth_admin;
     create schema auth; create schema extensions;
     create table auth.users (id uuid primary key, email text, phone text, email_confirmed_at timestamptz,
       phone_confirmed_at timestamptz, email_change text default '', raw_user_meta_data jsonb default '{}'::jsonb);
@@ -103,13 +104,14 @@ try {
     has_function_privilege('authenticated',p.oid,'execute') as user_access,
     p.proconfig from pg_proc p join pg_namespace n on n.oid=p.pronamespace
     where n.nspname='public' and p.prosecdef`)).rows;
-  assert.equal(privileges.filter(row => row.anon_access).length, 0);
+  assert.deepEqual(privileges.filter(row => row.anon_access).map(row => row.proname), ["is_signup_username_available"]);
   for (const name of ["load_my_split_sheets", "upsert_split_sheet_document", "apply_split_sheet_participant_update", "is_split_sheet_participant", "delete_split_sheet_draft"]) {
     assert.equal(privileges.find(row => row.proname === name).user_access, true);
     assert.ok(privileges.find(row => row.proname === name).proconfig.some(value => value.startsWith("search_path=")));
   }
   for (const row of privileges.filter(row => /^(initialize_|sync_|replace_)/.test(row.proname))) assert.equal(row.user_access, false, row.proname);
-  report.checks.push("All migrations replay; anonymous privileged calls blocked; internal writers inaccessible; RPC search paths fixed");
+  report.checks.push("All migrations replay; only boolean username availability allows anonymous access; internal writers inaccessible; RPC search paths fixed");
+  await verifySignup({ db, report });
   for (const [id, username, legalName] of [
     [creator, "qa_creator", "QA Creator"], [participant, "qa_participant", "QA Participant"], [outsider, "qa_outsider", "QA Outsider"],
   ]) {

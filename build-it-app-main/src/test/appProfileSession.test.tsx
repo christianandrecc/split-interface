@@ -40,7 +40,8 @@ vi.mock("@/integrations/supabase/client", () => ({
   },
 }));
 
-vi.mock("@/lib/profileStorage", () => ({
+vi.mock("@/lib/profileStorage", async importOriginal => ({
+  ...await importOriginal<typeof import("@/lib/profileStorage")>(),
   createSupabaseAccountProfile: mocks.createSupabaseAccountProfile,
   isValidEmailAddress: (value?: string | null) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test((value ?? "").trim()),
   loadProfileSessionForActiveSession: mocks.loadProfileSessionForActiveSession,

@@ -545,6 +545,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      is_signup_username_available: {
+        Args: { p_username: string }
+        Returns: boolean
+      }
       delete_split_sheet_draft: {
         Args: {
           p_split_sheet_id: string

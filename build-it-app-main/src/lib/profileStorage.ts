@@ -1,7 +1,7 @@
 import { isSupabaseConfigured, supabase } from "@/integrations/supabase/client";
 import type { Json, Tables, TablesInsert } from "@/integrations/supabase/types";
 import { formatNationalPhoneNumber } from "@/lib/phone";
-import { normalizeUserProfile, type UserProfile } from "@/lib/userProfile";
+import { normalizeUserProfile, normalizeUsername, type UserProfile } from "@/lib/userProfile";
 import { monitorRequest } from "@/lib/monitoring";
 
 type ProfileRow = Tables<"profiles">;
@@ -28,6 +28,32 @@ export type ActiveProfileSession = {
 export type PasswordResetResult = {
   requested: boolean;
 };
+
+export class AccountAccessError extends Error {
+  constructor(public readonly code: "username_unavailable" | "email_not_confirmed", message: string) {
+    super(message);
+    this.name = "AccountAccessError";
+  }
+}
+
+function usernameUnavailable() {
+  return new AccountAccessError("username_unavailable", "That username is already taken. Choose another username. Already signed up? Sign in instead to confirm your email or recover access.");
+}
+
+export async function checkSignupUsername(username: string): Promise<boolean> {
+  requireSupabaseConfig();
+  const normalized = normalizeUsername(username);
+  if (!/^[a-z0-9._]{3,24}$/.test(normalized)) {
+    throw new Error("Choose a username with 3 to 24 letters, numbers, periods, or underscores.");
+  }
+  try {
+    const { data, error } = await supabase.rpc("is_signup_username_available", { p_username: normalized });
+    if (error || typeof data !== "boolean") throw new Error("Unavailable");
+    return data;
+  } catch {
+    throw new Error("Could not check that username. Check your connection and try again. Your details are still here.");
+  }
+}
 
 const DEFAULT_AUTH_REDIRECT_URL = "https://split-interface.vercel.app/";
 const LOCAL_AUTH_HOSTS = new Set(["localhost", "127.0.0.1", "0.0.0.0"]);
@@ -460,16 +486,19 @@ async function loadProfileForAuthUser(user: AuthUserLike) {
 function explainStorageError(error: { message?: string }) {
   const message = error.message ?? "Supabase profile storage failed.";
 
-  if (/already registered|already exists|user already|duplicate key|profiles_username_unique_idx|unique constraint/i.test(message)) {
+  if (/profiles_username_unique_idx/i.test(message)) {
+    return "That username is already taken. Choose another username, or sign in to your existing account.";
+  }
+  if (/already registered|already exists|user already|duplicate key|unique constraint/i.test(message)) {
     return "We could not complete account creation with those details. Try signing in or use different account details.";
   }
 
   if (/schema cache|profile_data|username|display_name|profiles/i.test(message)) {
-    return "Supabase profile table is not ready yet. Run the profile storage SQL migration in Supabase, then try again.";
+    return "We could not load or save your SPLIT profile. Please retry, or contact SPLIT support if this continues.";
   }
 
   if (/row-level security|violates row-level security/i.test(message)) {
-    return "Supabase blocked the profile save with row-level security. Sign in again, then retry.";
+    return "Your profile could not be saved. Sign in again, then retry.";
   }
 
   return message;
@@ -588,6 +617,7 @@ export async function createSupabaseAccountProfile(profile: UserProfile, passwor
   if (!email) throw new Error("Add an email address before creating the account.");
   if (!isValidEmailAddress(email)) throw new Error("Enter a valid email address.");
   if (password.length < 8) throw new Error("Use at least 8 characters for your password.");
+  if (!(await checkSignupUsername(normalized.username))) throw usernameUnavailable();
 
   const { data, error } = await monitorRequest("auth_signup_failure", () => supabase.auth.signUp({
     email,
@@ -598,7 +628,22 @@ export async function createSupabaseAccountProfile(profile: UserProfile, passwor
     },
   }));
 
-  if (error) throw new Error(explainStorageError(error));
+  if (error) {
+    // Auth hides trigger constraint details. Recheck only after a database
+    // failure so a competing signup gets an actionable, non-destructive retry.
+    if (error.code === "unexpected_failure" || /database error|profiles_username_unique_idx/i.test(error.message)) {
+      const available = await checkSignupUsername(normalized.username).catch(() => null);
+      if (available === false) throw usernameUnavailable();
+      throw new Error("We could not finish account setup. Please retry or contact SPLIT support. Your details are still here.");
+    }
+    if (error.code === "email_address_not_authorized") {
+      throw new Error("Confirmation email delivery is not available for this address yet. Please contact SPLIT support before trying again.");
+    }
+    if (error.status === 429 || error.code === "over_email_send_rate_limit" || error.code === "over_request_rate_limit") {
+      throw new Error("Too many account or email requests. Please wait before trying again, or contact SPLIT support if this continues.");
+    }
+    throw new Error(explainStorageError(error));
+  }
 
   if (!data.session || !data.user) {
     return {
@@ -628,6 +673,9 @@ export async function signInAndLoadSupabaseProfile(emailAddress: string, passwor
     password,
   }));
 
+  if (error?.code === "email_not_confirmed") {
+    throw new AccountAccessError("email_not_confirmed", "Confirm your email before signing in.");
+  }
   if (error) throw new Error(error.message);
   if (!data.user) throw new Error("Supabase did not return a signed-in user.");
 

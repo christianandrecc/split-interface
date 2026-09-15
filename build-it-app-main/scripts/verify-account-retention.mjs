@@ -50,7 +50,6 @@ export async function verifyAccountRetention({ db, report, login, admin, save, l
   assert.equal(doc.status, "Verified and Stored");
   await rejectDeletion("Retention: finalized creator deletion preserves Auth/profile/settings and all split evidence", owner);
   await rejectDeletion("Retention: finalized collaborator deletion cannot cascade into signature response rows", partner);
-  await admin("create role supabase_auth_admin");
   await admin("grant usage on schema auth to supabase_auth_admin");
   await admin("grant select,delete on auth.users to supabase_auth_admin");
   const beforeAuthAdmin = await snapshot();
