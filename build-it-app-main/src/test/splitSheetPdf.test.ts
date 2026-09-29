@@ -47,7 +47,7 @@ describe("Studio Record PDF", () => {
     expect(text(reduced.layout)).toContain("60%");
     expect(reduced.model.people).toEqual(full.model.people);
     expect(JSON.stringify(doc)).toBe(before);
-  });
+  }, 15_000); // Two font-embedded PDFs need extra time on the two-core release builder.
   it("renders the selected font, actual legal names, metadata, signed state and history", async () => {
     const doc = signedDocument();
     doc.data.songTitle = "SAMPLE - Night Swim";
