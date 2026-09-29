@@ -102,7 +102,7 @@ describe("deployment configuration", () => {
     expect(scripts["verify:beta"]).toContain("npm run typecheck");
     expect(config.outputDirectory).toBe("dist");
     expect(config.rewrites).toContainEqual({
-      source: "/(.*)",
+      source: "/((?!api/).*)",
       destination: "/index.html",
     });
   });

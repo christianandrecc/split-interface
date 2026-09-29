@@ -12,6 +12,7 @@ import AgreementDetail from "@/components/AgreementDetail";
 import AccountContractBuilder from "@/components/contract-builder/AccountContractBuilder";
 import CollaborationView from "@/components/CollaborationView";
 import SettingsPage from "@/components/SettingsPage";
+import NotificationsPopover from "@/components/NotificationsPopover";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useContentEntrance } from "@/hooks/use-content-entrance";
@@ -49,6 +50,7 @@ import {
 } from "@/lib/notificationStorage";
 import { buildRecentCollaboratorSuggestions } from "@/lib/collaboratorSuggestions";
 import { toast } from "sonner";
+import { pendingSplitInvitation, clearPendingSplitInvitation } from "@/lib/splitInvitationLink";
 import {
   FileText,
   LayoutDashboard,
@@ -113,6 +115,7 @@ export default function Dashboard({
   const [generatedDocuments, setGeneratedDocuments] = useState<StoredSplitSheetDocument[]>([]);
   const [loadingSplitSheets, setLoadingSplitSheets] = useState(true);
   const [splitSheetLoadError, setSplitSheetLoadError] = useState(false);
+  const [invitationUnavailable, setInvitationUnavailable] = useState(false);
   const [reloadSplitSheets, setReloadSplitSheets] = useState(0);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchFocused, setSearchFocused] = useState(false);
@@ -173,6 +176,7 @@ export default function Dashboard({
       setLibraryView(INITIAL_LIBRARY_VIEW);
       libraryPosition.current = { top: 0, focusId: null };
       setSelectedMessageDealId(undefined);
+      setInvitationUnavailable(false);
       setSplitSheetLoadError(false);
       setLoadingSplitSheets(true);
     }
@@ -189,6 +193,19 @@ export default function Dashboard({
       setSplitSheetLoadError(loadFailed);
       setGeneratedDocuments((current) => loadFailed && current.length ? current : documents);
       if (!loadFailed) cacheLocalSplitSheetDocuments(documents.filter(splitSheetCanUseLocalDraftFallback), localStorageOwner);
+      if (!loadFailed) {
+        const invitationId = pendingSplitInvitation();
+        if (invitationId) {
+          // Only navigate to documents returned by the account-scoped loader.
+          const invitedDocument = documents.find(item => item.id === invitationId && item.status !== "Draft");
+          setInvitationUnavailable(!invitedDocument);
+          if (invitedDocument) {
+            setSelectedMessageDealId(invitationId);
+            setActiveView("collaboration");
+            clearPendingSplitInvitation();
+          }
+        }
+      }
       setLoadingSplitSheets(false);
     }
 
@@ -381,7 +398,7 @@ export default function Dashboard({
     markNotificationLocallyRead([notification.id]);
     void markSplitNotificationsRead({ notificationIds: [notification.id] });
 
-    if (!notification.splitSheetId) {
+    if (!notification.splitSheetId || notification.actionTarget === "activity") {
       setActiveView("activity");
       return;
     }
@@ -531,6 +548,7 @@ export default function Dashboard({
           </div>
           <div className="workspace-header-tools">
             <NotificationsPopover
+              key={notificationAccountKey}
               notifications={notifications}
               loading={loadingNotifications}
               onViewAll={() => setActiveView("activity")}
@@ -565,6 +583,15 @@ export default function Dashboard({
 
         {/* Content */}
         <main ref={contentRef} className="workspace-content safe-bottom">
+          {invitationUnavailable && <section role="alert" className="mb-5 border-b border-border pb-4 text-sm">
+            <p className="font-semibold">This invitation isn’t available to this account.</p>
+            <p className="mt-1 text-muted-foreground">Sign in with the invited account, or refresh if you just confirmed your email.</p>
+            <div className="mt-3 flex flex-wrap gap-3">
+              <button type="button" className="workspace-action" disabled={loadingSplitSheets} onClick={() => setReloadSplitSheets(value => value + 1)}>Refresh invitation</button>
+              {onSignOut && <button type="button" className="workspace-action" disabled={signingOut} onClick={() => void onSignOut()}><LogOut size={16} />Switch account</button>}
+              <button type="button" className="workspace-action" onClick={() => { clearPendingSplitInvitation(); setInvitationUnavailable(false); }}>Dismiss</button>
+            </div>
+          </section>}
           {activeView === "dashboard" && (
             <WorkspaceOverview
               key={activeAccountKey}
@@ -624,7 +651,7 @@ export default function Dashboard({
               userProfile={userProfile}
               mode="own"
               onEditProfile={() => setActiveView("profile-edit")}
-              onMessage={() => setActiveView("collaboration")}
+              onViewSplitSheets={() => { setSelectedAgreement(null); setActiveView("agreements"); }}
             />
           )}
           {activeView === "public-profile" && selectedPublicProfile && (
@@ -804,120 +831,6 @@ function notificationTime(value: string) {
   return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
-function NotificationsPopover({
-  notifications,
-  loading,
-  onViewAll,
-  onOpenNotification,
-  onMarkAllRead,
-}: {
-  notifications: SplitNotification[];
-  loading: boolean;
-  onViewAll: () => void;
-  onOpenNotification: (notification: SplitNotification) => void;
-  onMarkAllRead: () => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const unreadCount = notifications.filter((notification) => !notification.readAt).length;
-
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <button aria-label="Open notifications" className="split-press relative p-2 rounded-lg hover:bg-accent text-muted-foreground hover:text-foreground transition-colors">
-          <Bell className="h-4 w-4" />
-          {unreadCount > 0 && (
-            <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-primary ring-2 ring-background" />
-          )}
-        </button>
-      </PopoverTrigger>
-      <PopoverContent align="end" className="w-[min(420px,calc(100vw-24px))] p-0">
-        <div className="border-b border-border px-4 py-3">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <h2 className="text-sm font-bold">Recent Notifications</h2>
-              <p className="mt-0.5 text-xs text-muted-foreground">Signatures, approvals, invites, and split-sheet updates.</p>
-            </div>
-            <div className="flex items-center gap-2">
-              {unreadCount > 0 && (
-                <button
-                  type="button"
-                  onClick={onMarkAllRead}
-                  className="text-[11px] font-semibold text-primary hover:underline"
-                >
-                  Mark all read
-                </button>
-              )}
-              <span className="inline-flex h-7 items-center whitespace-nowrap rounded-full bg-primary/10 px-2.5 text-xs font-semibold text-primary">
-                {unreadCount || notifications.length}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        <div className="max-h-[420px] space-y-2 overflow-y-auto px-3 py-3">
-          {loading && notifications.length === 0 ? (
-            <div className="rounded-lg border border-border bg-background px-4 py-6 text-center">
-              <Loader2 className="mx-auto h-5 w-5 animate-spin text-muted-foreground" />
-              <p className="mt-2 text-sm font-semibold text-foreground">Loading notifications</p>
-            </div>
-          ) : notifications.length === 0 ? (
-            <div className="rounded-lg border border-dashed border-border bg-background px-4 py-6 text-center">
-              <Bell className="mx-auto h-5 w-5 text-muted-foreground" />
-              <p className="mt-2 text-sm font-semibold text-foreground">No notifications yet</p>
-              <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                Invites, approvals, signatures, disputes, and messages will show up here.
-              </p>
-            </div>
-          ) : (
-            notifications.map((notification) => {
-              const { icon: Icon, tone, actionLabel } = notificationPresentation(notification);
-              return (
-                <button
-                  key={notification.id}
-                  onClick={() => {
-                    setOpen(false);
-                    onOpenNotification(notification);
-                  }}
-                  className={`flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 text-left transition-colors hover:border-primary/25 hover:bg-secondary/50 ${
-                    notification.readAt ? "border-border bg-background" : "border-primary/20 bg-primary/5"
-                  }`}
-                >
-                  <span className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg ${tone}`}>
-                    <Icon className="h-3.5 w-3.5" />
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="flex min-w-0 items-center gap-2">
-                      <span className="block truncate text-sm font-semibold text-foreground">{notification.title}</span>
-                      {!notification.readAt && <span className="h-1.5 w-1.5 flex-shrink-0 rounded-full bg-primary" />}
-                    </span>
-                    <span className="mt-0.5 block truncate text-xs text-muted-foreground">{notification.body}</span>
-                    <span className="mt-1 block text-[11px] font-medium text-muted-foreground/80">{notificationTime(notification.createdAt)}</span>
-                  </span>
-                  <span className="inline-flex flex-shrink-0 items-center gap-1 text-[11px] font-semibold text-primary">
-                    <span className="hidden sm:inline">{actionLabel}</span>
-                    <ChevronRight className="h-3.5 w-3.5" />
-                  </span>
-                </button>
-              );
-            })
-          )}
-        </div>
-
-        <div className="border-t border-border px-4 py-3">
-          <button
-            onClick={() => {
-              setOpen(false);
-              onViewAll();
-            }}
-            className="text-xs font-semibold text-primary hover:underline"
-          >
-            View all split sheet activity
-          </button>
-        </div>
-      </PopoverContent>
-    </Popover>
-  );
-}
 
 function AgreementActivityPage({
   agreements,

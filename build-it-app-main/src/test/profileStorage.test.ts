@@ -30,8 +30,8 @@ const fullProfileSignupMigrationSql = readFileSync(
 
 describe("profile phone storage", () => {
   it("keeps Supabase email confirmation links off local hosts by default", () => {
-    expect(resolveSupabaseAuthRedirectUrl("http://127.0.0.1:8080")).toBe("https://split-interface.vercel.app/");
-    expect(resolveSupabaseAuthRedirectUrl("http://localhost:5173")).toBe("https://split-interface.vercel.app/");
+    expect(resolveSupabaseAuthRedirectUrl("http://127.0.0.1:8080")).toBe("https://www.mysplit.co/");
+    expect(resolveSupabaseAuthRedirectUrl("http://localhost:5173")).toBe("https://www.mysplit.co/");
   });
 
   it("uses the deployed origin or explicit env redirect for Supabase auth links", () => {

@@ -1,10 +1,14 @@
 import { type ElementType, type ReactNode } from "react";
-import { Clock, FileQuestion, Music, UserRound } from "lucide-react";
+import { Clock, FileQuestion } from "lucide-react";
 import type { ContractData } from "./types";
+import type { AppleMusicTrack } from "@/lib/appleMusicCatalog";
+import SampleTrackSearch from "./SampleTrackSearch";
 
 interface Props {
   data: ContractData;
   onChange: (d: Partial<ContractData>) => void;
+  sampleTrack: AppleMusicTrack | null;
+  onSampleTrackChange: (track: AppleMusicTrack | null) => void;
 }
 
 const SAMPLE_CHOICES = [
@@ -39,26 +43,7 @@ function FieldGroup({ icon: Icon, label, children }: { icon: ElementType; label:
   );
 }
 
-function TextInput({
-  value,
-  onChange,
-  placeholder,
-}: {
-  value: string;
-  onChange: (value: string) => void;
-  placeholder: string;
-}) {
-  return (
-    <input
-      value={value}
-      onChange={(event) => onChange(event.target.value)}
-      placeholder={placeholder}
-      className="h-11 min-w-0 w-full rounded-lg border border-border bg-card px-3 text-sm placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-ring/30"
-    />
-  );
-}
-
-export default function StepClauses({ data, onChange }: Props) {
+export default function StepClauses({ data, onChange, sampleTrack, onSampleTrackChange }: Props) {
   const selected = SAMPLE_CHOICES.find((choice) => choice.value === data.sampleStatus) ?? SAMPLE_CHOICES[0];
   const needsSampleDetails = selected.value === "Sample";
 
@@ -81,6 +66,7 @@ export default function StepClauses({ data, onChange }: Props) {
                   onChange={() => {
                   const hasNoSample = choice.value === "No sample or interpolation";
                   const hasStructuredSample = choice.value === "Sample";
+                  if (!hasStructuredSample) onSampleTrackChange(null);
                   onChange({
                     sampleStatus: choice.value,
                     sampleClearanceStatus: hasNoSample ? "Not needed" : "Unsure",
@@ -99,27 +85,13 @@ export default function StepClauses({ data, onChange }: Props) {
 
         {needsSampleDetails && (
           <section className="border-t border-border pt-5">
-            <div className="grid gap-4 md:grid-cols-2">
-              <FieldGroup icon={UserRound} label="Sample Artist">
-                <TextInput
-                  value={data.sampleOriginalArtist}
-                  onChange={(value) => onChange({ sampleOriginalArtist: value })}
-                  placeholder="Artist of the sampled work"
-                />
-              </FieldGroup>
-
-              <FieldGroup icon={Music} label="Sample Title">
-                <TextInput
-                  value={data.sampleOriginalWork}
-                  onChange={(value) => onChange({ sampleOriginalWork: value })}
-                  placeholder="Title of the sampled work"
-                />
-              </FieldGroup>
-            </div>
+            <SampleTrackSearch artist={data.sampleOriginalArtist} title={data.sampleOriginalWork}
+              track={sampleTrack} onTrackChange={onSampleTrackChange} onChange={onChange} />
 
             <div className="mt-4">
               <FieldGroup icon={Clock} label="Seconds Used">
                 <select
+                  aria-label="Seconds Used"
                   value={data.samplePortion}
                   onChange={(event) => onChange({ samplePortion: event.target.value })}
                   className="h-11 w-full rounded-lg border border-border bg-card px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring/30"

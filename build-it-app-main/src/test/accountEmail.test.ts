@@ -15,6 +15,7 @@ const row = { user_id: user.id, display_name: profile.displayName, email: user.e
 beforeEach(() => {
   vi.resetAllMocks();
   window.history.replaceState({}, "", "/");
+  window.sessionStorage.clear();
   for (const method of [mocks.from, mocks.select, mocks.eq, mocks.upsert]) method.mockReturnValue(mocks);
   mocks.getUser.mockResolvedValue({ data: { user }, error: null });
   mocks.updateUser.mockResolvedValue({ data: { user: pending }, error: null });
@@ -58,7 +59,7 @@ describe("account email authority", () => {
 describe("email change lifecycle", () => {
   it("requests confirmation without writing profiles or replacing the current email", async () => {
     expect(await requestAccountEmailChange(user.id, "  New@Example.test ")).toEqual({ userId: user.id, email: user.email, pendingEmail: pending.new_email });
-    expect(mocks.updateUser).toHaveBeenCalledWith({ email: pending.new_email }, { emailRedirectTo: "https://split-interface.vercel.app/" });
+    expect(mocks.updateUser).toHaveBeenCalledWith({ email: pending.new_email }, { emailRedirectTo: "https://www.mysplit.co/" });
     expect(mocks.from).not.toHaveBeenCalled();
   });
   it("restores pending state from Auth and clears it only after Auth confirms the new email", async () => {
@@ -82,7 +83,7 @@ describe("email change lifecycle", () => {
   it("resends using the current address and skips sends after confirmation", async () => {
     mocks.getUser.mockResolvedValue({ data: { user: pending }, error: null });
     await resendAccountEmailChange(user.id);
-    expect(mocks.resend).toHaveBeenCalledWith({ type: "email_change", email: user.email, options: { emailRedirectTo: "https://split-interface.vercel.app/" } });
+    expect(mocks.resend).toHaveBeenCalledWith({ type: "email_change", email: user.email, options: { emailRedirectTo: "https://www.mysplit.co/" } });
     mocks.getUser.mockResolvedValue({ data: { user }, error: null });
     await resendAccountEmailChange(user.id);
     expect(mocks.resend).toHaveBeenCalledTimes(1);
@@ -100,7 +101,7 @@ describe("email change lifecycle", () => {
   });
   it("routes password reset requests to the entered sign-in address without updating a profile", async () => {
     await requestSupabasePasswordReset(" Current@Example.test ");
-    expect(mocks.resetPasswordForEmail).toHaveBeenCalledWith(user.email, { redirectTo: "https://split-interface.vercel.app/" });
+    expect(mocks.resetPasswordForEmail).toHaveBeenCalledWith(user.email, { redirectTo: "https://www.mysplit.co/" });
     expect(mocks.from).not.toHaveBeenCalled();
   });
 });
@@ -108,7 +109,7 @@ describe("email change lifecycle", () => {
 describe("signup confirmation requests", () => {
   it("requests a signup resend without claiming delivery or exposing account status", async () => {
     expect(await requestSignupConfirmation(" New@Example.test ")).toEqual({ requested: true });
-    expect(mocks.resend).toHaveBeenCalledWith({ type: "signup", email: "new@example.test", options: { emailRedirectTo: "https://split-interface.vercel.app/" } });
+    expect(mocks.resend).toHaveBeenCalledWith({ type: "signup", email: "new@example.test", options: { emailRedirectTo: "https://www.mysplit.co/" } });
     expect(mocks.from).not.toHaveBeenCalled();
     expect(mocks.updateUser).not.toHaveBeenCalled();
   });
@@ -128,6 +129,15 @@ describe("signup confirmation requests", () => {
 });
 
 describe("Auth email confirmation callbacks", () => {
+  it("preserves a split invitation through confirmation and resend", async () => {
+    const id = "33333333-3333-4333-8333-333333333333";
+    window.history.replaceState({}, "", `/?split=${id}&code=confirmation-code`);
+    mocks.exchangeCodeForSession.mockResolvedValue({ data: { user, session: { user } }, error: null });
+    await consumeSupabaseAuthCallbackFromUrl();
+    expect(window.location.search).toBe(`?split=${id}`);
+    await requestSignupConfirmation("new@example.test");
+    expect(mocks.resend).toHaveBeenCalledWith({ type: "signup", email: "new@example.test", options: { emailRedirectTo: `https://www.mysplit.co/?split=${id}` } });
+  });
   it("consumes PKCE callbacks and removes the code from the URL", async () => {
     window.history.replaceState({}, "", "/?code=confirmation-code");
     mocks.exchangeCodeForSession.mockResolvedValue({ data: { user, session: { user }, redirectType: null }, error: null });
@@ -153,7 +163,7 @@ describe("Auth email confirmation callbacks", () => {
 describe("password reset delivery requests", () => {
   it("reports request acceptance, not proof of delivery", async () => {
     expect(await requestSupabasePasswordReset(" Current@Example.test ")).toEqual({ requested: true });
-    expect(mocks.resetPasswordForEmail).toHaveBeenCalledExactlyOnceWith(user.email, { redirectTo: "https://split-interface.vercel.app/" });
+    expect(mocks.resetPasswordForEmail).toHaveBeenCalledExactlyOnceWith(user.email, { redirectTo: "https://www.mysplit.co/" });
     expect(mocks.from).not.toHaveBeenCalled();
     expect(mocks.updateUser).not.toHaveBeenCalled();
   });

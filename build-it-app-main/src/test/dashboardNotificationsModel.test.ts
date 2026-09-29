@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   buildDashboardNotificationGroups,
   getDashboardNotificationPresentation,
+  groupNotificationFeed,
+  notificationCategory,
   splitNotificationActionLabel,
   splitNotificationIsVerifiedEvent,
 } from "@/lib/dashboardNotifications";
@@ -25,6 +27,37 @@ function notification(overrides: Partial<SplitNotification> = {}): SplitNotifica
 }
 
 describe("dashboard notification model", () => {
+  it("categorizes every supported event and keeps unknown events in Updates", () => {
+    for (const event of ["split_invite", "split_sent", "invite_accept", "invite_decline"]) expect(notificationCategory(event)).toBe("invites");
+    for (const event of ["counter_offer", "split_accept", "split_reject"]) expect(notificationCategory(event)).toBe("proposals");
+    for (const event of ["signature", "split_verified"]) expect(notificationCategory(event)).toBe("signatures");
+    expect(notificationCategory("chat_message")).toBe("messages");
+    for (const event of ["split_updated", "contract_delivery", "future_event"]) expect(notificationCategory(event)).toBe("updates");
+  });
+
+  it("combines type and unread filters without mutating notifications", () => {
+    const items = [notification({ id: "read", eventType: "signature", readAt: "2026-09-16" }),
+      notification({ id: "invite" }), notification({ id: "unread", eventType: "signature" })];
+    expect(groupNotificationFeed(items, { category: "signatures", unreadOnly: true }).flatMap((group) => group.items.map((item) => item.id))).toEqual(["unread"]);
+    expect(items.map((item) => item.id)).toEqual(["read", "invite", "unread"]);
+    expect(groupNotificationFeed(items, { category: "messages" })).toEqual([]);
+  });
+
+  it("sorts by newest first and separates local calendar dates and older months", () => {
+    const now = new Date(2026, 8, 16, 12);
+    const dated = (id: string, date: Date) => notification({ id, createdAt: date.toISOString() });
+    const groups = groupNotificationFeed([
+      dated("august", new Date(2026, 7, 20, 10)),
+      dated("this-week", new Date(2026, 8, 14, 10)),
+      dated("today", new Date(2026, 8, 16, 9)),
+      dated("yesterday", new Date(2026, 8, 15, 23, 59)),
+      notification({ id: "invalid", createdAt: "invalid" }),
+      dated("september", new Date(2026, 8, 10, 10)),
+    ], { now });
+    expect(groups.map((group) => group.label)).toEqual(["Today", "Yesterday", "This week", "September 2026", "August 2026", "Earlier"]);
+    expect(groups.flatMap((group) => group.items.map((item) => item.id))).toEqual(["today", "yesterday", "this-week", "september", "august", "invalid"]);
+  });
+
   it("maps action targets to dashboard button labels", () => {
     expect(splitNotificationActionLabel("messages")).toBe("Open messages");
     expect(splitNotificationActionLabel("agreement")).toBe("View split");

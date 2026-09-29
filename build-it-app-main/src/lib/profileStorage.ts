@@ -3,6 +3,7 @@ import type { Json, Tables, TablesInsert } from "@/integrations/supabase/types";
 import { formatNationalPhoneNumber } from "@/lib/phone";
 import { normalizeUserProfile, normalizeUsername, type UserProfile } from "@/lib/userProfile";
 import { monitorRequest } from "@/lib/monitoring";
+import { authCallbackCleanPath, withPendingSplitInvitation } from "@/lib/splitInvitationLink";
 
 type ProfileRow = Tables<"profiles">;
 type ProfileInsert = TablesInsert<"profiles">;
@@ -55,7 +56,7 @@ export async function checkSignupUsername(username: string): Promise<boolean> {
   }
 }
 
-const DEFAULT_AUTH_REDIRECT_URL = "https://split-interface.vercel.app/";
+const DEFAULT_AUTH_REDIRECT_URL = "https://www.mysplit.co/";
 const LOCAL_AUTH_HOSTS = new Set(["localhost", "127.0.0.1", "0.0.0.0"]);
 
 function requireSupabaseConfig() {
@@ -141,7 +142,7 @@ export function getSupabaseAuthRedirectUrl() {
     import.meta.env.VITE_APP_URL;
   const currentOrigin = typeof window === "undefined" ? null : window.location.origin;
 
-  return resolveSupabaseAuthRedirectUrl(currentOrigin, configuredUrl);
+  return withPendingSplitInvitation(resolveSupabaseAuthRedirectUrl(currentOrigin, configuredUrl));
 }
 
 function buildLegalName(profile: UserProfile) {
@@ -571,7 +572,7 @@ function hasAuthCallbackUrl() {
 
 function clearSupabaseAuthUrl() {
   if (typeof window === "undefined" || !hasAuthCallbackUrl()) return;
-  window.history.replaceState(null, "", window.location.pathname || "/");
+  window.history.replaceState(null, "", authCallbackCleanPath());
 }
 
 export async function consumeSupabaseAuthCallbackFromUrl() {

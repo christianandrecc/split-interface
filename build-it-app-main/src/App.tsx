@@ -20,6 +20,7 @@ import { isSupabaseConfigured, supabase } from "@/integrations/supabase/client";
 import type { CachedProfileSession } from "@/lib/profileSessionCache";
 import { toast } from "sonner";
 import { monitorRequest } from "@/lib/monitoring";
+import { authCallbackCleanPath } from "@/lib/splitInvitationLink";
 
 const queryClient = new QueryClient();
 const PROFILE_STORAGE_KEY = "split.userProfile.v6";
@@ -342,7 +343,7 @@ const App = () => {
   const handlePasswordResetComplete = () => {
     recoveryUserId.current = null;
     setPasswordRecoveryActive(false);
-    window.history.replaceState(null, "", window.location.pathname);
+    window.history.replaceState(null, "", authCallbackCleanPath());
   };
 
   const handleSignOut = async () => {

@@ -46,3 +46,27 @@ describe("SPLIT browser icons", () => {
     expect([ico[6], ico[7]]).toEqual([32, 32]);
   });
 });
+
+describe("SPLIT link previews", () => {
+  const meta = (key: string) => html.querySelector(`meta[property="${key}"], meta[name="${key}"]`)?.getAttribute("content");
+
+  it("uses the production domain for the canonical and Open Graph URLs", () => {
+    expect(html.querySelector('link[rel="canonical"]')?.getAttribute("href")).toBe("https://mysplit.co/");
+    expect(meta("og:url")).toBe("https://mysplit.co/");
+    expect(meta("og:site_name")).toBe("SPLIT");
+  });
+
+  it("serves the current elephant artwork under a new shared preview filename", () => {
+    const imageUrl = "https://mysplit.co/split-social-elephant-20260924.png";
+    for (const key of ["og:image", "og:image:secure_url", "twitter:image"]) {
+      expect(html.querySelectorAll(`meta[property="${key}"], meta[name="${key}"]`)).toHaveLength(1);
+      expect(meta(key)).toBe(imageUrl);
+    }
+    expect(publicAsset(imageUrl)).toEqual(readFileSync("src/assets/split-elephant-icon.png"));
+    expect(pngSize(publicAsset(imageUrl))).toBe(`${meta("og:image:width")}x${meta("og:image:height")}`);
+    expect(meta("og:image:type")).toBe("image/png");
+    expect(meta("og:image:alt")).toContain("elephant");
+    expect(meta("twitter:image:alt")).toBe(meta("og:image:alt"));
+    expect(html.head.innerHTML).not.toContain("split-logo.png");
+  });
+});

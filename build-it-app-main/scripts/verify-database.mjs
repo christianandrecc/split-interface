@@ -11,11 +11,12 @@ import { seedLegacyDelivery, verifyInAppDelivery } from "./verify-in-app-deliver
 import { verifyInviteDecline } from "./verify-invite-decline.mjs";
 import { verifyAccountRetention } from "./verify-account-retention.mjs";
 import { verifySignup } from "./verify-signup.mjs";
+import { verifyInvitationEmails } from "./verify-invitation-emails.mjs";
 
 // Disposable PostgreSQL only: no credentials, network calls, or live records.
 // The auth shim models PostgREST's user claim, not hosted GoTrue.
 const db = new PGlite({ extensions: { pgcrypto } });
-const report = { migrations: [], checks: [] };
+const report = { migrations: [], hostedOnlyMigrations: [], checks: [] };
 const creator = "11111111-1111-4111-8111-111111111111";
 const participant = "22222222-2222-4222-8222-222222222222";
 const outsider = "33333333-3333-4333-8333-333333333333";
@@ -94,6 +95,11 @@ try {
     alter default privileges in schema public grant all on functions to anon, authenticated, service_role;
   `);
   for (const file of readdirSync("supabase/migrations").filter(name => name.endsWith(".sql")).sort()) {
+    if (file.endsWith("_schedule_split_invitation_emails.sql") || file.endsWith("_restrict_invitation_scheduler_transport.sql")) {
+      // PGlite has no pg_net, pg_cron or Supabase Vault. Verify this separately on the hosted project.
+      report.hostedOnlyMigrations.push(file);
+      continue;
+    }
     if (file.endsWith("_sync_profile_account_email.sql")) await seedLegacyAccountEmail(db);
     if (file.endsWith("_separate_in_app_split_delivery.sql")) await seedLegacyDelivery(db);
     await db.exec(readFileSync(`supabase/migrations/${file}`, "utf8"));
@@ -110,7 +116,7 @@ try {
     assert.ok(privileges.find(row => row.proname === name).proconfig.some(value => value.startsWith("search_path=")));
   }
   for (const row of privileges.filter(row => /^(initialize_|sync_|replace_)/.test(row.proname))) assert.equal(row.user_access, false, row.proname);
-  report.checks.push("All migrations replay; only boolean username availability allows anonymous access; internal writers inaccessible; RPC search paths fixed");
+  report.checks.push("Application migrations replay; hosted extension setup listed separately; only boolean username availability allows anonymous access; internal writers inaccessible; RPC search paths fixed");
   await verifySignup({ db, report });
   for (const [id, username, legalName] of [
     [creator, "qa_creator", "QA Creator"], [participant, "qa_participant", "QA Participant"], [outsider, "qa_outsider", "QA Outsider"],
@@ -388,6 +394,7 @@ try {
   await verifyInAppDelivery({ db, report, admin, login, save, load, fixture, rejectsWithoutWrites, creator });
   await verifyInviteDecline({ db, report, admin, login, save, load, action, fixture, rejectsWithoutWrites, creator, participant, outsider });
   await verifyAccountRetention({ db, report, admin, login, save, load, action, fixture });
+  await verifyInvitationEmails({ db, report, admin, login, save, load, action, fixture, creator, participant, outsider });
   console.log(JSON.stringify(report, null, 2));
 } catch (error) {
   console.error(JSON.stringify({ message: error.message, code: error.code, detail: error.detail, where: error.where, stack: error.code === "ERR_ASSERTION" || !error.code ? error.stack : undefined }, null, 2));

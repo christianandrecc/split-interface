@@ -103,7 +103,7 @@ describe("ContractBuilder", () => {
       />,
     );
 
-    expect(screen.getByRole("heading", { name: "Create a New Work" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Create a New Split" })).toBeInTheDocument();
     expect(screen.getByText("Chori")).toBeInTheDocument();
   });
 
@@ -134,7 +134,7 @@ describe("ContractBuilder", () => {
 
     fireEvent.click(screen.getAllByRole("button", { name: /new split/i })[0]);
 
-    expect(screen.getByRole("heading", { name: "Create a New Work" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Create a New Split" })).toBeInTheDocument();
   });
 
   it("returns to the dashboard when the SPLIT logo is clicked", () => {

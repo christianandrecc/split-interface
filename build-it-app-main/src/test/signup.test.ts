@@ -9,6 +9,8 @@ const profile = { ...createEmptyProfile(), username: "new_artist", displayName: 
 
 beforeEach(() => {
   vi.resetAllMocks();
+  window.sessionStorage.clear();
+  window.history.replaceState(null, "", "/");
   mocks.rpc.mockResolvedValue({ data: true, error: null });
   mocks.signUp.mockResolvedValue({ data: { user: { id: "new-id" }, session: null }, error: null });
   for (const method of [mocks.from, mocks.select, mocks.eq, mocks.upsert]) method.mockReturnValue(mocks);
@@ -38,9 +40,16 @@ describe("signup and confirmation recovery", () => {
   it("only sends a valid new signup once and leaves unconfirmed profiles to the Auth trigger", async () => {
     expect(await createSupabaseAccountProfile(profile, "test-password")).toMatchObject({ saved: false, needsEmailConfirmation: true, userId: "new-id" });
     expect(mocks.signUp).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ email: "new@example.test", options: {
-      emailRedirectTo: "https://split-interface.vercel.app/", data: expect.objectContaining({ username: "new_artist", legal_name: "Test Artist" }),
+      emailRedirectTo: "https://www.mysplit.co/", data: expect.objectContaining({ username: "new_artist", legal_name: "Test Artist" }),
     } }));
     expect(mocks.from).not.toHaveBeenCalled();
+  });
+
+  it("carries the invitation through a new account's confirmation link", async () => {
+    const id = "11111111-1111-4111-8111-111111111111";
+    window.history.replaceState(null, "", `/?split=${id}`);
+    await createSupabaseAccountProfile(profile, "test-password");
+    expect(mocks.signUp).toHaveBeenCalledWith(expect.objectContaining({ options: expect.objectContaining({ emailRedirectTo: `https://www.mysplit.co/?split=${id}` }) }));
   });
 
   it("recovers a username collision that happens after the initial check", async () => {

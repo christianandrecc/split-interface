@@ -30,6 +30,7 @@ import type { SplitSheetSaveResult } from "@/lib/splitSheetStorage";
 import type { CollaboratorSuggestion } from "@/lib/collaboratorSuggestions";
 import DeleteDraftButton from "@/components/DeleteDraftButton";
 import { DEFAULT_APP_SETTINGS, type AppSettings } from "@/lib/accountSettings";
+import type { AppleMusicTrack } from "@/lib/appleMusicCatalog";
 
 export default function ContractBuilder({
   userProfile,
@@ -57,6 +58,7 @@ export default function ContractBuilder({
   const [step, setStep] = useState<StepId>(initialDocument ? "review" : "metadata");
   const [furthestStep, setFurthestStep] = useState(initialDocument ? STEPS.length - 1 : 0);
   const [data, setData] = useState<ContractData>(() => initialDocument?.data ?? createInitialContract(userProfile, settings));
+  const [sampleTrack, setSampleTrack] = useState<AppleMusicTrack | null>(null);
   const documentRef = useRef<StoredSplitSheetDocument | null>(initialDocument ?? null);
   const inFlight = useRef(false);
   const [saving, setSaving] = useState<"draft" | "send" | null>(null);
@@ -157,7 +159,7 @@ export default function ContractBuilder({
       setCompleted(true);
       setConfirmSend(false);
       if (mode === "send") {
-        toast.success(draft.collaborators.length ? "Invitations sent in SPLIT" : "Split sheet ready to sign");
+        toast.success(draft.collaborators.length ? "Invitations created" : "Split sheet ready to sign");
       } else {
         toast.success(result.persisted ? "Saved to Drafts" : "Draft saved on this device", {
           description: result.persisted ? undefined : "Supabase has not confirmed this draft yet.",
@@ -223,7 +225,7 @@ export default function ContractBuilder({
           <fieldset disabled={savingDocument || completed} className="min-w-0">
             <div ref={contentRef}>
             {step === "metadata" && <StepMetadata data={data} signedInArtistName={signedInArtistName} onChange={update} />}
-            {step === "clauses" && <StepClauses data={data} onChange={update} />}
+            {step === "clauses" && <StepClauses data={data} onChange={update} sampleTrack={sampleTrack} onSampleTrackChange={setSampleTrack} />}
             {step === "parties" && (
               <StepParties
                 data={data}
@@ -260,7 +262,7 @@ export default function ContractBuilder({
                         <AlertDialogTitle>Ready to send?</AlertDialogTitle>
                         <AlertDialogDescription>
                           Make sure all details, split percentages, and collaborator usernames are correct before sending.
-                          Invitations appear inside SPLIT. No email or SMS is sent.
+                          Collaborators can accept or decline their invitations in SPLIT.
                         </AlertDialogDescription>
                       </AlertDialogHeader>
                       {saveError && <p role="alert" className="text-sm text-destructive">{saveError}</p>}

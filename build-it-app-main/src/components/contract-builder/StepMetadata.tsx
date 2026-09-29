@@ -3,6 +3,7 @@ import { Calendar, ChevronDown, FileText, LockKeyhole, Music, NotebookPen, UserR
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import type { ContractData } from "./types";
 import { getTodayDateInputValue } from "./types";
+import CreationDatePicker from "./CreationDatePicker";
 
 interface Props {
   data: ContractData;
@@ -80,7 +81,7 @@ export default function StepMetadata({ data, signedInArtistName, onChange }: Pro
 
   return (
     <div>
-      <h1 tabIndex={-1} className="mb-6 text-2xl font-bold outline-none">Create a New Work</h1>
+      <h1 tabIndex={-1} className="mb-6 text-2xl font-bold outline-none">Create a New Split</h1>
 
       <div className="space-y-5">
         <FieldGroup icon={Music} label="Work Title" htmlFor="work-title">
@@ -101,9 +102,8 @@ export default function StepMetadata({ data, signedInArtistName, onChange }: Pro
           </FieldGroup>
 
           <FieldGroup icon={Calendar} label="Creation Date" htmlFor="creation-date">
-            <TextInput
+            <CreationDatePicker
               id="creation-date"
-              type="date"
               value={data.creationDate}
               max={today}
               onChange={handleCreationDateChange}

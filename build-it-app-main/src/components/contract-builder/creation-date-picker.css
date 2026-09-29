@@ -1,0 +1,35 @@
+.creation-date-trigger[type="button"] { display: flex; justify-content: space-between; width: 100%; min-width: 0; height: 44px; padding: 0 12px; border-radius: 8px; background: hsl(var(--card)); color: hsl(var(--foreground)); font-size: 14px; font-weight: 400; box-shadow: none; }
+.creation-date-trigger svg { width: 16px; height: 16px; color: hsl(var(--muted-foreground)); }
+.creation-date-trigger[aria-expanded="true"] { border-color: hsl(var(--primary)); box-shadow: 0 0 0 2px hsl(var(--primary)/.15); }
+.creation-date-popover[role="dialog"] { width: 320px; max-width: calc(100vw - 24px); max-height: var(--radix-popover-content-available-height); overflow-y: auto; padding: 12px; border-radius: 8px; border-color: hsl(var(--border)); background: hsl(var(--background)); box-shadow: 0 10px 32px hsl(var(--foreground)/.12); letter-spacing: 0; }
+.creation-date-popover .creation-calendar { padding: 0; }
+.creation-calendar-months, .creation-calendar-month { width: 100%; }
+.creation-calendar-month-menu[role="listbox"] { max-height: min(280px, var(--radix-select-content-available-height)); }
+.creation-calendar-caption { display: grid; grid-template-columns: 28px minmax(0, 1fr) 68px 28px; align-items: center; gap: 6px; padding-bottom: 14px; }
+.creation-calendar-caption > button:not([role="combobox"]) { width: 28px; height: 34px; padding: 0; border-radius: 5px; color: hsl(var(--muted-foreground)); }
+.creation-calendar-caption svg { width: 15px; height: 15px; }
+.creation-calendar-caption > [role="combobox"] { width: 100%; height: 34px; padding: 0 8px; border-radius: 5px; font-size: 12px; font-weight: 600; gap: 2px; box-shadow: none; }
+.creation-calendar-caption input { height: 34px; min-width: 0; padding: 0 4px; border-radius: 5px; font-size: 12px; text-align: center; font-weight: 600; font-variant-numeric: tabular-nums; }
+.creation-calendar table { width: 100%; border-collapse: collapse; margin: 0; }
+.creation-calendar thead tr, .creation-calendar tbody tr { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 2px; width: 100%; margin: 0; }
+.creation-calendar thead tr { margin-bottom: 6px; }
+.creation-calendar tbody { display: grid; gap: 2px; }
+.creation-calendar th { width: auto; padding: 6px 0; color: hsl(var(--muted-foreground)); font-size: 11px; font-weight: 500; }
+.creation-calendar td { width: auto; height: 36px; padding: 0; border-radius: 5px; background: transparent; }
+.creation-calendar td > button, .creation-calendar td > div { display: inline-flex; justify-content: center; align-items: center; width: 100%; height: 36px; padding: 0; border-radius: 5px; font-size: 12px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.creation-calendar td > button { color: hsl(var(--foreground)); background: transparent; }
+.creation-calendar td > button[aria-selected="true"] { color: hsl(var(--foreground)); background: hsl(var(--primary)); font-weight: 700; opacity: 1; }
+.creation-calendar td > button.creation-calendar-today:not([aria-selected="true"]) { box-shadow: inset 0 0 0 1px hsl(var(--primary)/.6); }
+.creation-calendar td > button.day-outside:not([aria-selected="true"]) { color: hsl(var(--muted-foreground)); opacity: .5; }
+.creation-calendar td > button:disabled { color: hsl(var(--muted-foreground)); opacity: .35; }
+.creation-date-popover button:focus-visible { outline: 2px solid hsl(var(--ring)); outline-offset: 1px; }
+.creation-date-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; border-top: 1px solid hsl(var(--border)); margin-top: 12px; padding-top: 10px; }
+.creation-date-footer > button { height: 32px; padding: 0 10px; border-radius: 5px; background: hsl(var(--primary)/.09); color: hsl(var(--foreground)); font-size: 12px; }
+.creation-date-footer > span { font-size: 11px; color: hsl(var(--muted-foreground)); }
+.creation-date-popover button { touch-action: manipulation; }
+@media (hover: hover) { .creation-calendar td > button:hover:not(:disabled):not([aria-selected="true"]) { background: hsl(var(--secondary)); } }
+@media (max-height: 500px) {
+  .creation-calendar-caption { padding-bottom: 8px; }
+  .creation-calendar td, .creation-calendar td > button, .creation-calendar td > div { height: 32px; }
+  .creation-date-footer { margin-top: 8px; padding-top: 8px; }
+}

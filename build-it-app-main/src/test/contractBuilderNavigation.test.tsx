@@ -47,6 +47,7 @@ describe("creation step navigation", () => {
     expect(screen.getByText("Night Swim (Reprise)")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Edit Sample Disclosure" }));
     fireEvent.click(screen.getByRole("radio", { name: "Yes" }));
+    fireEvent.click(screen.getByRole("button", { name: "Enter manually" }));
     fireEvent.change(screen.getByLabelText("Sample Artist"), { target: { value: "Original artist" } });
     fireEvent.change(screen.getByLabelText("Sample Title"), { target: { value: "Original work" } });
     fireEvent.change(screen.getByLabelText("Seconds Used"), { target: { value: "0-15 sec" } });
