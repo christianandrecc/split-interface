@@ -1,5 +1,5 @@
 import { createPrivateKey, sign } from "node:crypto";
-import { normalizeAppleMusicSongs } from "../src/lib/appleMusicCatalog.ts";
+import { normalizeAppleMusicSongs } from "../src/lib/appleMusicCatalog.js";
 
 type Environment = Record<string, string | undefined>;
 const reply = (body: unknown, status = 200) => Response.json(body, {

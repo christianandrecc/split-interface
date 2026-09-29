@@ -3,14 +3,17 @@
 ## Release Status (2026-09-29)
 
 - Outbox migrations, Vault-backed scheduler and `send-split-invitations` Edge Function deployed to SPLIT (`hpwquupkqssqqgqtwdyu`).
-- Delivery is deliberately **disabled**; activation timestamp is unset and no historical invitations were queued.
-- Authenticated health check returned 200 / `configured: true`: the runtime sees `RESEND_API_KEY`. This does not verify the key's sending permission or inbox delivery.
+- Website release `c5dc667` is live at `https://www.mysplit.co/`; the production aliases were confirmed on Vercel.
+- Delivery is **enabled for new invitations** from `2026-09-29 17:05:05 UTC`. No historical invitations were queued.
+- A single clearly labeled unsigned test split was created from the user-approved beta account to the approved beta email alias. Other invitations were excluded during that controlled test.
+- The worker returned HTTP 200 with one send and no failures. Resend accepted it on the first attempt, and the user confirmed receipt in Gmail. The actual account display name and test work title were used, not the preview placeholders.
+- Authenticated health check returned 200 / `configured: true`; the subsequent real submission verified the key's sending access.
 - Live unauthenticated worker request returned 401. Client roles cannot read the queue or execute worker RPCs.
 - pg_net transport hardening needs a Supabase-admin follow-up: the grant owner is `supabase_admin`, and the project `postgres` role cannot revoke its default public table grants. The attempted REVOKE returned success but effective privileges remained unchanged. Do not describe that migration as successful hardening. Keep the `net` schema excluded from the Data API and never expose privileged SQL/transport wrappers to clients.
 - Verified the production Data API rejects `Accept-Profile: net` with HTTP 406 / `PGRST106`, requesting only an empty ID result (no request headers or secrets read). Thus these internal transport grants are not reachable by application clients through REST. The worker health check still passes after the attempted restriction.
-- Scheduled job runs successfully without making outbound calls while disabled.
-- Frontend routing is implemented locally, pending the website release decision because the checkout also contains earlier UI changes.
-- Real Resend submission, inbox receipt and an authenticated live invitation round trip remain unverified.
+- Scheduled job runs every minute. Pausing delivery prevents it from invoking the worker.
+- Playwright checked the deployed invitation link through the Sign In screen at 1280px and 390px. The split ID was retained, no horizontal overflow or browser errors were detected, and the new elephant share image loaded.
+- A complete authenticated recipient round trip (sign in or create the invited account, then review and explicitly accept/decline) remains a user beta check. The email test split is synthetic and must not be signed.
 
 ## Behavior
 
@@ -38,7 +41,7 @@ The sender is `SPLIT <notifications@mail.mysplit.co>`. Reply-To and Contact SPLI
 
 ## Activation and Verification
 
-Do not enable general delivery until the website release and a controlled test are agreed. Keep tests limited to user-approved dedicated accounts/inboxes; do not reset active users or alter signed records.
+The initial controlled test and activation above are complete. For future rollouts, agree the website release and controlled test before activation. Keep tests limited to user-approved dedicated accounts/inboxes; do not reset active users or alter signed records.
 
 For a credential-presence check (does not send email), as the database administrator:
 
@@ -88,7 +91,7 @@ The private table `split_private.invitation_emails` records `waiting_address`, `
 
 `npx deno@2.9.6 check supabase/functions/send-split-invitations/index.ts` type-checks the deployed runtime.
 
-Playwright checked local email rendering and Review invitation -> account access -> Sign In at 1280px and 390px, with no runtime errors or horizontal overflow. These browser checks are not Outlook/Gmail rendering or real inbox tests.
+Playwright checked local email rendering and deployed invitation -> account access -> Sign In at 1280px and 390px, with no runtime errors or horizontal overflow. These browser checks do not cover Outlook/Gmail rendering. The user separately confirmed the live test's Gmail receipt.
 
 Supabase advisors report deny-all RLS without policies on the two private tables (intentional), existing explicitly authorized SECURITY DEFINER entry points, and the existing leaked-password-protection warning. Do not grant clients access to the private queue to silence the RLS notice.
 
