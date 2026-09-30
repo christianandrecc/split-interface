@@ -1,0 +1,4 @@
+{
+  "compilerOptions": { "strict": true },
+  "imports": { "svix": "npm:svix@2.5.0" }
+}

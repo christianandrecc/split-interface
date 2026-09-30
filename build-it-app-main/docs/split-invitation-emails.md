@@ -71,7 +71,61 @@ The scheduler stays installed but does not invoke the worker while disabled. Alr
 
 ## Operations
 
-The private table `split_private.invitation_emails` records `waiting_address`, `queued`, `processing`, `sent`, `skipped` or `failed`. `sent` means Resend accepted the request, not delivered/read. Provider delivery/bounce webhooks and a creator-facing email-status panel are separate follow-ups, not implemented here. Use the Resend dashboard for delivery/bounce status meanwhile.
+The private table `split_private.invitation_emails` records `waiting_address`, `queued`, `processing`, `sent`, `skipped` or `failed`. `sent` means Resend accepted the request, not delivered/read. The follow-up below adds signed delivery receipts and compact creator-only failure actions. Until the Resend webhook connection is verified, use the Resend dashboard for delivery/bounce status.
+
+## Delivery Visibility Follow-Up
+
+- Applied `20260930145529_invitation_delivery_visibility.sql` on September 30.
+  The contact-verification migration was also applied with SMS enforcement off.
+  Local migration filenames match the timestamps assigned by hosted Supabase.
+- Deployed the `split-invitation-delivery` endpoint on September 30. An unsigned
+  request returned `503 webhook_not_configured`; the signing secret and Resend
+  subscription still need setup before delivery receipts can be verified.
+- Deploy `supabase/functions/split-invitation-delivery/` with `index.ts` and
+  `deno.json` (Svix 2.5.0). Disable Supabase gateway JWT verification for this
+  endpoint only; the handler rejects unsigned, modified or stale Svix requests.
+  It returns 503 until its signing secret exists. This is separate from the
+  existing custom-bearer sending worker.
+- In Resend > Webhooks create an endpoint:
+  `https://hpwquupkqssqqgqtwdyu.supabase.co/functions/v1/split-invitation-delivery`.
+  Subscribe to `email.delivered`, `email.delivery_delayed`, `email.bounced`,
+  `email.complained`, `email.failed`, and `email.suppressed`.
+- Save the endpoint signing secret directly as `RESEND_WEBHOOK_SECRET` in
+  Supabase Edge Function Secrets. It is not the Resend API key. Never paste it
+  into chat or a `VITE_` variable. The endpoint is deployed, but this secret has
+  not yet been configured or verified.
+- Deploy the frontend. Invitation state stays beside each collaborator at the
+  start of Messages. Only creators see an Email issue action for a pending
+  invitation with a known delivery problem; joined and declined invitations do
+  not show email diagnostics. The action opens details, the invited contact,
+  support, and a guarded retry when eligible. There is no separate email panel.
+- Pending invitations refresh in the background every 30 seconds while visible
+  and on focus. A missing delivery RPC stops polling until remount; missing
+  tracking never implies successful or failed delivery. Other request failures
+  use privacy-filtered monitoring. Known problems remain visible after a failed
+  refresh, but retry is disabled until fresh status is available. Other
+  collaborators cannot read delivery rows or request retries. Bell notifications
+  still surface failures requiring review.
+- Retry email requires confirmation. Only definite rejected requests can be
+  retried; the database rechecks ownership, invitation status, recipient, limits,
+  cooldown and the original 20-hour deadline. It retains the original job,
+  payload, attempt count and idempotency key. Delivered, bounced, complained,
+  suppressed, already accepted, expired or ambiguous sends cannot be retried.
+- Webhook receipts contain only event ID, provider message ID, event type and
+  timestamps. No recipient or raw body is stored. Receipts may precede the worker
+  commit, duplicates do not duplicate notifications, and late delivered/delayed
+  events cannot erase a bounce/complaint. Unmatched receipts older than 30 days
+  are pruned when new receipts arrive.
+- Test with one approved unsigned invitation. Observe Sent, then a signed
+  Delivered receipt, separately confirming inbox receipt. Verify the webhook's
+  delivery history in Resend. A recipient mail-server acceptance does not prove
+  inbox placement or reading. Historical sends do not automatically gain events.
+- Operational monitoring still requires reviewing Resend webhook failures and
+  scheduled-worker failures. Creator bell alerts do not replace an operator
+  on-call alert. Do not generate a real spam complaint as a test.
+
+References: [verify Resend webhooks](https://resend.com/docs/webhooks/verify-webhooks-requests),
+[event types](https://resend.com/docs/webhooks/event-types).
 
 - Five messages per batch, every minute; exclusive five-minute leases prevent overlapping drains.
 - Stable Resend idempotency key: `split-invitation-v1/<job UUID>`; payload remains fixed during retries.

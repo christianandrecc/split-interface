@@ -23,6 +23,10 @@ import type { UserProfile } from "@/lib/userProfile";
 export type NegotiationStatus = "awaiting_invites" | "invite_declined" | "negotiating" | "ready_to_sign" | "signed";
 export type NegotiationMessageType = "text" | "proposal" | "counter" | "accept" | "reject" | "sign" | "system";
 
+export function splitTakeLabel(version: number): string {
+  return version === 1 ? "First take" : `Take ${version}`;
+}
+
 export type DealParticipant = {
   id: string;
   name: string;
@@ -111,9 +115,9 @@ export function documentToNegotiationDeal(document: StoredSplitSheetDocument, us
   const splitVersions = document.splitProposalVersions.map((proposal) => ({
     id: proposal.id,
     version: proposal.versionNumber,
-    title: proposal.proposedBy,
+    title: proposalAuthorDisplayName(document, proposal),
     createdAt: proposal.createdAt,
-    createdBy: proposal.proposedBy,
+    createdBy: proposalAuthorDisplayName(document, proposal),
     createdByParticipantId: proposalAuthorParticipantId(document, proposal),
     note: proposal.notes || "Split proposal",
     allocations: proposal.allocations.map((allocation) => ({
@@ -203,7 +207,7 @@ export function buildNegotiationMessages(document: StoredSplitSheetDocument, cur
       type: "counter",
       senderId: proposalAuthorParticipantId(document, proposal) || "unknown",
       createdAt: proposal.createdAt,
-      body: `${proposal.proposedBy} proposed split version ${proposal.versionNumber}.`,
+      body: `${proposalAuthorDisplayName(document, proposal)} shared ${splitTakeLabel(proposal.versionNumber).toLowerCase()}.`,
       proposedSplitId: proposal.id,
     });
   });
@@ -306,6 +310,11 @@ export function proposalAuthorParticipantId(
   }
   // Older local records have labels only. Never assign an unknown author to the creator.
   return participantIdForActor(document, proposal.proposedBy);
+}
+
+function proposalAuthorDisplayName(document: StoredSplitSheetDocument, proposal: StoredSplitSheetDocument["splitProposalVersions"][number]) {
+  const participantId = proposalAuthorParticipantId(document, proposal);
+  return participantId ? splitSheetParticipantDisplayName(document, participantId) : "Unknown collaborator";
 }
 
 export function firstViewerParticipantId(deal: NegotiationDeal) {

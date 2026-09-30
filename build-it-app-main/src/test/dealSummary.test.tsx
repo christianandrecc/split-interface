@@ -61,12 +61,12 @@ describe("deal summary interface", () => {
     const summary = screen.getByRole("complementary", { name: "Deal summary" });
     expect(within(summary).getAllByText("Chori")).toHaveLength(2); // Proposal author and one ownership row.
     expect(within(summary).getAllByText("Maya Rios")).toHaveLength(1);
-    expect(within(summary).getAllByText("v1")).toHaveLength(1);
+    expect(within(summary).getAllByText("First take")).toHaveLength(1);
     expect(within(summary).queryByText("Agreement version")).not.toBeInTheDocument();
     expect(within(summary).queryByText("Revenue streams")).not.toBeInTheDocument();
     expect(within(summary).getByText("1 of 2 accepted")).toBeInTheDocument();
     expect(within(summary).getByText("0 of 2 signed")).toBeInTheDocument();
-    expect(within(summary).getByRole("button", { name: /Version history/ })).toHaveAttribute("aria-expanded", "false");
+    expect(within(summary).getByRole("button", { name: /Split history/ })).toHaveAttribute("aria-expanded", "false");
     expect(within(summary).queryByText("Initial split proposal")).not.toBeInTheDocument();
   });
   it("reveals the stored contact details on demand", () => {
@@ -89,10 +89,10 @@ describe("deal summary interface", () => {
     const next = { ...version, id: "proposal-2", version: 2, note: "An equal split", allocations: version.allocations.map((allocation) => ({ ...allocation, percent: 50 })) };
     deal.splitVersions.push(next); deal.currentVersionId = next.id;
     render(<DealSummary deal={deal} currentVersion={next} />);
-    fireEvent.click(screen.getByRole("button", { name: /Version history/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Split history/ }));
     expect(screen.getByText("An equal split")).toBeInTheDocument();
     expect(screen.queryByText(version.createdAt)).not.toBeInTheDocument();
-    const compare = screen.getByRole("button", { name: "Compare with v1" });
+    const compare = screen.getByRole("button", { name: "Compare with first take" });
     fireEvent.click(compare);
     expect(compare).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByText("60%")).toBeInTheDocument();
@@ -104,9 +104,28 @@ describe("deal summary interface", () => {
     const next = { ...version, id: "proposal-2", version: 2, note: "Clarification" };
     deal.splitVersions.push(next);
     render(<DealSummary deal={deal} currentVersion={next} />);
-    fireEvent.click(screen.getByRole("button", { name: /Version history/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Compare with v1" }));
+    fireEvent.click(screen.getByRole("button", { name: /Split history/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Compare with first take" }));
     expect(screen.getByText("No share changes.")).toBeInTheDocument();
+  });
+  it("keeps exact revision numbers, authors, dates and comparison order in split history", () => {
+    const { deal, version } = fixture();
+    const fourth = { ...version, id: "proposal-4", version: 4, createdBy: "Maya Rios", createdAt: "2026-09-12T12:00:00Z", note: "Updated shares" };
+    const twelfth = { ...version, id: "proposal-12", version: 12, createdAt: "2026-09-29T12:30:00Z" };
+    deal.splitVersions = [twelfth, version, fourth];
+    deal.currentVersionId = twelfth.id;
+    const { container } = render(<DealSummary deal={deal} currentVersion={twelfth} />);
+    fireEvent.click(screen.getByRole("button", { name: /Split history/ }));
+    const history = screen.getByRole("list", { name: "Split history" });
+    expect(within(history).getAllByRole("listitem").map(item => item.querySelector(".deal-version-badge")!.textContent)).toEqual(["Take 12", "Take 4", "First take"]);
+    const fourthRow = within(history).getByText("Take 4").closest("li")!;
+    expect(fourthRow).toHaveTextContent("Maya Rios");
+    expect(fourthRow).toHaveTextContent("Updated shares");
+    expect(fourthRow.querySelector("time")).toHaveAttribute("datetime", fourth.createdAt);
+    expect(within(fourthRow).getByText("Take 4")).toHaveAttribute("title", "Revision 4");
+    expect(within(history).getByText("Current").closest("li")).toHaveTextContent("Take 12");
+    expect(within(history).getByRole("button", { name: "Compare with take 4" })).toBeInTheDocument();
+    expect(container.textContent).not.toMatch(/\bv\d+\b/);
   });
   it("navigates to the correct full record", () => {
     const { deal, version } = fixture(); const open = vi.fn();
@@ -127,7 +146,7 @@ describe("deal summary interface", () => {
     version.createdAt = "bad-date";
     render(<DealSummary deal={deal} />);
     expect(screen.getByText("No proposal recorded yet.")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /Version history/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Split history/ }));
     expect(screen.getByText("Date unavailable")).toBeInTheDocument();
   });
 });

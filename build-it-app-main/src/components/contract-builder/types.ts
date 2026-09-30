@@ -1,3 +1,5 @@
+import { isSupportedInvitation } from "../../lib/inviteIdentity.ts";
+
 export const STEPS = [
   { id: "metadata", label: "Work", num: 1 },
   { id: "clauses", label: "Sample", num: 2 },
@@ -249,12 +251,7 @@ export function partyDisplayName(party: Party) {
 }
 
 export function hasWriterIdentity(party: Party) {
-  return Boolean(
-    party.isCurrentUser ||
-      party.inviteValue.trim() ||
-      party.email.trim() ||
-      party.phoneNumber.trim()
-  );
+  return party.isCurrentUser || isSupportedInvitation(party.inviteMethod, party.inviteValue || party.email);
 }
 
 export function isWriterReady(party: Party) {

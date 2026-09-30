@@ -2,7 +2,7 @@ import { useId, useState } from "react";
 import { ArrowRight, Check, CheckCircle2, ChevronDown, Clock3, FileText, History, Lock, Mail, PenLine, XCircle } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { compareSplitVersions, dealSummaryParticipants, type SummaryParticipantState } from "@/lib/dealSummary";
-import type { NegotiationDeal, SplitVersion } from "@/lib/splitSheetNegotiation";
+import { splitTakeLabel, type NegotiationDeal, type SplitVersion } from "@/lib/splitSheetNegotiation";
 import { workspaceInitials } from "@/lib/workspaceOverview";
 import "./deal-summary.css";
 
@@ -22,12 +22,13 @@ function VersionTime({ value }: { value: string }) {
   </time>;
 }
 
-export default function DealSummary({ deal, currentVersion, onOpenAgreement }: {
+export default function DealSummary({ deal, currentVersion, onOpenAgreement, initiallyExpanded = false }: {
   deal: NegotiationDeal;
   currentVersion?: SplitVersion;
   onOpenAgreement?: (id: string) => void;
+  initiallyExpanded?: boolean;
 }) {
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(initiallyExpanded);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [comparisonId, setComparisonId] = useState<string | null>(null);
   const id = useId();
@@ -47,7 +48,7 @@ export default function DealSummary({ deal, currentVersion, onOpenAgreement }: {
     <div className="deal-summary-body" id={`${id}-body`}>
       <header className="deal-summary-header">
         <div className="deal-summary-heading"><span>Deal summary</span><span className={`deal-summary-status ${deal.status === "signed" ? "positive" : "pending"}`}><StatusIcon size={12} />{status}</span></div>
-        <div className="deal-summary-title"><h2>{deal.title}</h2>{currentVersion && <span className="deal-version-badge">v{currentVersion.version}</span>}</div>
+        <div className="deal-summary-title"><h2>{deal.title}</h2>{currentVersion && <span className="deal-version-badge" title={`Revision ${currentVersion.version}`}>{splitTakeLabel(currentVersion.version)}</span>}</div>
         {currentVersion && <>
           <p className="deal-summary-streams">{currentVersion.revenueStreams.filter((stream) => stream.id !== "audit").map((stream) => stream.label).join(" / ")}</p>
           <p className="deal-summary-proposer">Proposed by <strong>{currentVersion.createdBy || "Unknown collaborator"}</strong></p>
@@ -85,20 +86,20 @@ export default function DealSummary({ deal, currentVersion, onOpenAgreement }: {
 
       <section className="deal-summary-history">
         <button type="button" className="deal-history-toggle" aria-expanded={historyOpen} aria-controls={`${id}-history`} onClick={() => setHistoryOpen((open) => !open)}>
-          <History size={15} /><span>Version history</span><span className="deal-history-count">{versions.length}</span><ChevronDown size={16} />
+          <History size={15} /><span>Split history</span><span className="deal-history-count">{versions.length}</span><ChevronDown size={16} />
         </button>
-        {historyOpen && <ol id={`${id}-history`}>
+        {historyOpen && <ol id={`${id}-history`} aria-label="Split history">
           {versions.slice().reverse().map((version, index) => {
             const previous = versions[versions.length - index - 2];
             const comparison = previous ? compareSplitVersions(previous, version) : [];
             const comparing = comparisonId === version.id;
             return <li key={version.id}>
-              <div className="deal-version-heading"><span className="deal-version-badge">v{version.version}</span><strong>{version.createdBy || "Unknown collaborator"}</strong>{version.id === currentVersion?.id && <span className="deal-version-current">Current</span>}</div>
+              <div className="deal-version-heading"><span className="deal-version-badge" title={`Revision ${version.version}`}>{splitTakeLabel(version.version)}</span><strong>{version.createdBy || "Unknown collaborator"}</strong>{version.id === currentVersion?.id && <span className="deal-version-current">Current</span>}</div>
               <VersionTime value={version.createdAt} />
               <p>{version.note}</p>
               {previous && <>
                 <button type="button" className="deal-compare-toggle" aria-expanded={comparing} aria-controls={`${id}-compare-${index}`} onClick={() => setComparisonId(comparing ? null : version.id)}>
-                  Compare with v{previous.version}<ChevronDown size={13} />
+                  Compare with {splitTakeLabel(previous.version).toLowerCase()}<ChevronDown size={13} />
                 </button>
                 {comparing && <div className="deal-version-comparison" id={`${id}-compare-${index}`}>
                   {comparison.length ? comparison.map((change) => <div key={change.id}><span>{change.name}</span><span><span>{change.before === null ? "Added" : `${change.before}%`}</span><ArrowRight size={12} aria-label="to" /><strong>{change.after === null ? "Removed" : `${change.after}%`}</strong></span></div>) : <p>No share changes.</p>}
@@ -106,7 +107,7 @@ export default function DealSummary({ deal, currentVersion, onOpenAgreement }: {
               </>}
             </li>;
           })}
-          {!versions.length && <li>No versions recorded yet.</li>}
+          {!versions.length && <li>No takes recorded yet.</li>}
         </ol>}
       </section>
       {onOpenAgreement && <footer className="deal-summary-footer"><button type="button" className="split-press" onClick={() => onOpenAgreement(deal.id)}><FileText size={16} /><span>View full split sheet</span><ArrowRight size={16} /></button></footer>}

@@ -7,6 +7,7 @@ import {
   participantIdentityForProfile,
   proposalResponsePermissions,
   proposalAuthorParticipantId,
+  splitTakeLabel,
 } from "@/lib/splitSheetNegotiation";
 import { createEmptyProfile, type UserProfile } from "@/lib/userProfile";
 import { makeCounterDocument, makeDocument } from "@/test/fixtures/splitSheet";
@@ -22,6 +23,22 @@ function profile(overrides: Partial<UserProfile> = {}): UserProfile {
 }
 
 describe("split sheet negotiation mapping", () => {
+  it.each([[1, "First take"], [2, "Take 2"], [12, "Take 12"]] as const)("labels revision %s without renumbering it", (version, label) => {
+    expect(splitTakeLabel(version)).toBe(label);
+  });
+
+  it("uses take language in generated previews without rewriting records or chat text", () => {
+    const document = makeCounterDocument();
+    document.splitProposalVersions.at(-1)!.versionNumber = 12;
+    const original = structuredClone(document);
+    const messages = buildNegotiationMessages(document, document.currentProposalId);
+    expect(messages.find(message => message.type === "counter")).toMatchObject({
+      body: "Maya Rios shared take 12.",
+      proposedSplitId: document.currentProposalId,
+    });
+    expect(document).toEqual(original);
+  });
+
   it.each(["Pending", "Declined"] as const)("keeps %s invites in the required count and blocks signing even with stale ready state", status => {
     const doc = makeDocument();
     doc.sentAt = doc.createdAt;
@@ -194,11 +211,41 @@ describe("split sheet negotiation mapping", () => {
     const document = makeCounterDocument();
     const deal = documentToNegotiationDeal(document, profile())!;
     expect(deal.splitVersions.at(-1)?.createdByParticipantId).toBe("maya-invite");
+    expect(deal.splitVersions.at(-1)?.createdBy).toBe("Maya Rios");
     expect(deal.messages.filter((message) => message.proposedSplitId === "proposal-2")).toEqual([
       expect.objectContaining({ type: "counter", senderId: "maya-invite" }),
     ]);
     expect(deal.acceptedBy).toEqual(["maya-invite"]);
     expect(proposalResponsePermissions(deal, "proposal-2")).toEqual({ accept: false, counter: false });
+  });
+
+  it.each(["participant", "account", "legacy"])("uses the creator's artist name for a %s-attributed legal-name proposal", source => {
+    const document = makeCounterDocument();
+    document.creatorUserId = "creator-account";
+    document.creatorProfile.legalName = "Christian Andre Carrera";
+    const proposal = document.splitProposalVersions.at(-1)!;
+    proposal.proposedBy = document.creatorProfile.legalName;
+    delete proposal.proposedByUserId;
+    if (source === "participant") proposal.proposedByParticipantId = "creator";
+    if (source === "account") proposal.proposedByUserId = document.creatorUserId;
+    document.creatorProfile.authUserId = document.creatorUserId;
+    const original = structuredClone(document);
+    const deal = documentToNegotiationDeal(document, document.creatorProfile)!;
+    expect(deal.splitVersions.at(-1)).toMatchObject({ createdBy: "Chori", title: "Chori", createdByParticipantId: "creator" });
+    expect(deal.messages.find(message => message.type === "counter")?.body).toBe("Chori shared take 2.");
+    expect(document).toEqual(original);
+  });
+
+  it("uses the invited artist's profile name without changing legal or signature data", () => {
+    const document = makeCounterDocument();
+    document.collaboratorInvites[0].profileSnapshot = { displayName: "MAYA", username: "mayarios" };
+    document.splitSignatures.push({ id: "signature", proposalVersionId: "proposal-2", collaboratorId: "maya-invite", collaboratorName: "Maya Alexandra Rios", status: "Signed", signedAt: document.updatedAt, signerLegalName: "Maya Alexandra Rios" });
+    const original = structuredClone(document);
+    const deal = documentToNegotiationDeal(document, document.creatorProfile)!;
+    expect(deal.splitVersions.at(-1)?.createdBy).toBe("MAYA");
+    expect(deal.messages.find(message => message.type === "counter")?.body).toBe("MAYA shared take 2.");
+    expect(deal.messages.find(message => message.type === "sign")?.body).toBe("MAYA signed the split sheet.");
+    expect(document).toEqual(original);
   });
 
   it("allows only accepted recipients to respond to the latest proposal", () => {
@@ -226,6 +273,7 @@ describe("split sheet negotiation mapping", () => {
     proposal.proposedBy = "Chori";
     expect(proposalAuthorParticipantId(document, proposal)).toBeUndefined();
     expect(buildNegotiationMessages(document, proposal.id).find((message) => message.type === "counter")?.senderId).toBe("unknown");
+    expect(buildNegotiationMessages(document, proposal.id).find((message) => message.type === "counter")?.body).toBe("Unknown collaborator shared take 2.");
     expect(proposalResponsePermissions(documentToNegotiationDeal(document, profile())!, proposal.id).counter).toBe(false);
     delete proposal.proposedByUserId;
     document.data.parties[1].professionalName = "Chori";

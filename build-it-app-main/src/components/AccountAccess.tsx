@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { formatNationalPhoneNumber, getPhoneInputMaxLength } from "@/lib/phone";
+import { normalizeAccountPhone } from "@/lib/accountPhone";
 import {
   AccountAccessError,
   isValidEmailAddress,
@@ -140,6 +141,16 @@ export default function AccountAccess({
   const [pendingConfirmationEmail, setPendingConfirmationEmail] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const accountRequestPending = useRef(false);
+  const stepHeading = useRef<HTMLHeadingElement>(null);
+  const previousPage = useRef(accountPage);
+
+  useEffect(() => {
+    if (previousPage.current !== accountPage) {
+      stepHeading.current?.focus();
+      stepHeading.current?.scrollIntoView?.({ block: "nearest" });
+      previousPage.current = accountPage;
+    }
+  }, [accountPage]);
 
   const currentPage = accountPages[accountPage];
   const progress = ((accountPage + 1) / accountPages.length) * 100;
@@ -279,7 +290,7 @@ export default function AccountAccess({
             </div>
           </div>
 
-          <div className="py-10 lg:py-16">
+          <div className="hidden py-10 lg:block lg:py-16">
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Account setup</p>
             <h1 className="mt-4 max-w-md text-3xl font-bold tracking-tight md:text-4xl">
               Your creator details, ready for every split sheet.
@@ -368,7 +379,7 @@ export default function AccountAccess({
 
                 <div className="min-h-[420px]">
                   <p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">{currentPage.eyebrow}</p>
-                  <h2 className="mt-3 text-2xl font-bold tracking-tight">{currentPage.title}</h2>
+                  <h2 ref={stepHeading} tabIndex={-1} className="mt-3 text-2xl font-bold tracking-tight outline-none">{currentPage.title}</h2>
                   <p className="mt-2 max-w-lg text-sm leading-6 text-muted-foreground">{currentPage.description}</p>
 
                   <div className="mt-7">
@@ -676,7 +687,7 @@ function EmailConfirmationPage({
           <div className="rounded-lg border border-border bg-background p-4">
             <div className="text-xs font-semibold uppercase tracking-[0.14em] text-primary">1</div>
             <div className="mt-2 font-semibold text-foreground">Open your email</div>
-            <p className="mt-1 text-xs leading-5">Look for the SPLIT confirmation message from Supabase.</p>
+            <p className="mt-1 text-xs leading-5">Look for the confirmation message from SPLIT.</p>
           </div>
           <div className="rounded-lg border border-border bg-background p-4">
             <div className="text-xs font-semibold uppercase tracking-[0.14em] text-primary">2</div>
@@ -769,7 +780,7 @@ function PersonalInformationPage({
         />
       </Field>
 
-      <Field label="Phone Number" htmlFor="phoneNumber" required help="Used for account recovery and split-sheet contact matching. Pick the country code, then enter the national number.">
+      <Field label="Phone Number" htmlFor="phoneNumber" required help="Your private account phone number. Invitations and password recovery use email during beta.">
         <div className="grid gap-3 md:grid-cols-[150px_1fr]">
           <Select
             value={profile.phoneCountryCode}
@@ -1012,6 +1023,8 @@ function validateAccountPage(
     if (!isValidEmailAddress(profile.emailAddress)) return "Enter a valid email address.";
     if (!profile.legalName.trim()) return "Enter your legal name.";
     if (!profile.phoneNumber.trim()) return "Enter your phone number.";
+    try { normalizeAccountPhone(`${profile.phoneCountryCode.split(" ")[0]}${profile.phoneNumber}`); }
+    catch { return "Enter a valid phone number with the correct country code."; }
   }
 
   if (page === 1) {

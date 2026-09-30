@@ -1,5 +1,6 @@
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import AccountEmailControl from "@/components/AccountEmailControl";
+import { supabase, isSupabaseConfigured } from "@/integrations/supabase/client";
 import AddressSearchField from "@/components/AddressSearchField";
 import { CREATOR_ROLE_OPTIONS } from "@/lib/creatorRoles";
 import { normalizeUserProfile, normalizeUsername, type UserProfile } from "@/lib/userProfile";
@@ -169,6 +170,17 @@ function ProfileEditor({ userProfile, onUpdateProfile, onBackToPublicProfile }: 
 
   const displayName = useMemo(() => draft.displayName || buildLegalName(draft) || draft.emailAddress || "Your Profile", [draft]);
   const phoneMaxLength = getPhoneInputMaxLength(draft.phoneCountryCode);
+  const [phoneVerified, setPhoneVerified] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    setPhoneVerified(false);
+    if (isSupabaseConfigured && userProfile.authUserId) {
+      void supabase.auth.getUser().then(({ data }) => {
+        if (!cancelled) setPhoneVerified(data.user?.id === userProfile.authUserId && Boolean(data.user?.phone_confirmed_at));
+      }).catch(() => {});
+    }
+    return () => { cancelled = true; };
+  }, [userProfile.authUserId, userProfile.phoneNumber]);
   const selectedRoles = parseRoleTags(draft.roleTags);
 
   const update = (field: keyof UserProfile, value: string) => {
@@ -355,6 +367,7 @@ function ProfileEditor({ userProfile, onUpdateProfile, onBackToPublicProfile }: 
             <div className="grid gap-4 md:grid-cols-[160px_1fr]">
               <Field label="Country Code" htmlFor="profilePhoneCode">
                 <Select
+                  disabled={phoneVerified}
                   value={draft.phoneCountryCode}
                   onValueChange={(value) => {
                     update("phoneCountryCode", value);
@@ -376,6 +389,7 @@ function ProfileEditor({ userProfile, onUpdateProfile, onBackToPublicProfile }: 
               <Field label="Phone Number" htmlFor="profilePhone">
                 <Input
                   id="profilePhone"
+                  disabled={phoneVerified}
                   type="tel"
                   inputMode="numeric"
                   autoComplete="tel-national"
@@ -388,6 +402,7 @@ function ProfileEditor({ userProfile, onUpdateProfile, onBackToPublicProfile }: 
                 />
               </Field>
             </div>
+            {phoneVerified && <p className="text-xs text-muted-foreground">Phone verified. <a className="underline" href="mailto:xtiancarrera@gmail.com?subject=SPLIT%20phone%20change">Contact SPLIT</a> to change it during beta.</p>}
           </ProfileSection>
 
           <ProfileSection icon={<MapPin className="h-4 w-4" />} title="Legal Address">

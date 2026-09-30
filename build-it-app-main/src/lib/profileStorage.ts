@@ -4,12 +4,15 @@ import { formatNationalPhoneNumber } from "@/lib/phone";
 import { normalizeUserProfile, normalizeUsername, type UserProfile } from "@/lib/userProfile";
 import { monitorRequest } from "@/lib/monitoring";
 import { authCallbackCleanPath, withPendingSplitInvitation } from "@/lib/splitInvitationLink";
+import { verifiedPhoneFields } from "@/lib/verifiedPhone";
 
 type ProfileRow = Tables<"profiles">;
 type ProfileInsert = TablesInsert<"profiles">;
 type AuthUserLike = {
   id: string;
   email?: string | null;
+  phone?: string | null;
+  phone_confirmed_at?: string | null;
   user_metadata?: Record<string, unknown> | null;
 };
 
@@ -470,13 +473,13 @@ async function loadProfileForAuthUser(user: AuthUserLike) {
   const storedProfile = await loadProfileForUser(user.id);
   const metadataProfile = profileFromAuthUserMetadata(user);
 
-  if (!metadataProfile) return storedProfile ? { ...storedProfile, emailAddress: normalizeEmailAddress(user.email) } : null;
+  if (!metadataProfile) return storedProfile ? { ...storedProfile, emailAddress: normalizeEmailAddress(user.email), ...verifiedPhoneFields(user) } : null;
 
   if (!storedProfile) {
-    return upsertProfileForUser(user.id, metadataProfile);
+    return upsertProfileForUser(user.id, { ...metadataProfile, ...verifiedPhoneFields(user) });
   }
 
-  const mergedProfile = { ...mergeProfileWithFallback(storedProfile, metadataProfile), emailAddress: normalizeEmailAddress(user.email) };
+  const mergedProfile = { ...mergeProfileWithFallback(storedProfile, metadataProfile), emailAddress: normalizeEmailAddress(user.email), ...verifiedPhoneFields(user) };
   if (profileGainedBackfillData(storedProfile, mergedProfile)) {
     return upsertProfileForUser(user.id, mergedProfile);
   }
@@ -709,7 +712,11 @@ export async function saveSupabaseProfile(profile: UserProfile) {
     throw new Error("Your account changed. Reload your profile before saving.");
   }
 
-  return upsertProfileForUser(data.user.id, { ...profile, emailAddress: normalizeEmailAddress(data.user.email) });
+  const verified = verifiedPhoneFields(data.user);
+  if (verified.phoneNumber && `${profile.phoneCountryCode}${profile.phoneNumber}`.replace(/\D/g, "") !== `${verified.phoneCountryCode}${verified.phoneNumber}`.replace(/\D/g, "")) {
+    throw new Error("Your verified phone cannot be changed through profile edits. Contact SPLIT to change it during beta.");
+  }
+  return upsertProfileForUser(data.user.id, { ...profile, emailAddress: normalizeEmailAddress(data.user.email), ...verified });
 }
 
 export async function requestSupabasePasswordReset(emailAddress: string): Promise<PasswordResetResult> {

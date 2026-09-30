@@ -12,6 +12,7 @@ import { verifyInviteDecline } from "./verify-invite-decline.mjs";
 import { verifyAccountRetention } from "./verify-account-retention.mjs";
 import { verifySignup } from "./verify-signup.mjs";
 import { verifyInvitationEmails } from "./verify-invitation-emails.mjs";
+import { verifyBetaContactDelivery } from "./verify-beta-contact-delivery.mjs";
 
 // Disposable PostgreSQL only: no credentials, network calls, or live records.
 // The auth shim models PostgREST's user claim, not hosted GoTrue.
@@ -115,7 +116,7 @@ try {
     assert.equal(privileges.find(row => row.proname === name).user_access, true);
     assert.ok(privileges.find(row => row.proname === name).proconfig.some(value => value.startsWith("search_path=")));
   }
-  for (const row of privileges.filter(row => /^(initialize_|sync_|replace_)/.test(row.proname))) assert.equal(row.user_access, false, row.proname);
+  for (const row of privileges.filter(row => /^(initialize_|sync_|replace_)/.test(row.proname) && row.proname !== "sync_my_verified_phone")) assert.equal(row.user_access, false, row.proname);
   report.checks.push("Application migrations replay; hosted extension setup listed separately; only boolean username availability allows anonymous access; internal writers inaccessible; RPC search paths fixed");
   await verifySignup({ db, report });
   for (const [id, username, legalName] of [
@@ -395,6 +396,7 @@ try {
   await verifyInviteDecline({ db, report, admin, login, save, load, action, fixture, rejectsWithoutWrites, creator, participant, outsider });
   await verifyAccountRetention({ db, report, admin, login, save, load, action, fixture });
   await verifyInvitationEmails({ db, report, admin, login, save, load, action, fixture, creator, participant, outsider });
+  await verifyBetaContactDelivery({ db, report, admin, login, save, load, action, fixture, creator, participant, outsider });
   console.log(JSON.stringify(report, null, 2));
 } catch (error) {
   console.error(JSON.stringify({ message: error.message, code: error.code, detail: error.detail, where: error.where, stack: error.code === "ERR_ASSERTION" || !error.code ? error.stack : undefined }, null, 2));

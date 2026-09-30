@@ -3,7 +3,7 @@ import { CheckCircle2, CircleAlert, Equal, Loader2, MessageSquarePlus, Minus, Pl
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { counterAllocationState, counterShareUnits, equalCounterShares } from "@/lib/counterOffer";
 import { workspaceInitials } from "@/lib/workspaceOverview";
-import type { SplitVersion } from "@/lib/splitSheetNegotiation";
+import { splitTakeLabel, type SplitVersion } from "@/lib/splitSheetNegotiation";
 import "./counter-offer.css";
 
 type Props = {
@@ -52,7 +52,7 @@ export default function CounterOfferDialog(props: Props) {
       onEscapeKeyDown={(event) => { if (sending) event.preventDefault(); }}>
       <form className="counter-offer-form" noValidate onSubmit={(event) => { event.preventDefault(); if (!blocked && allocation.valid && changed) props.onSubmit(); }}>
         <header className="counter-offer-header">
-          <div><DialogTitle>Counter offer</DialogTitle><DialogDescription>{props.title} <span className="counter-version">v{version.version}</span></DialogDescription></div>
+          <div><DialogTitle>Counter offer</DialogTitle><DialogDescription>{props.title} <span className="counter-version">Based on {splitTakeLabel(version.version).toLowerCase()}</span></DialogDescription></div>
           <button type="button" className="counter-icon-button split-press" aria-label="Close counter offer" title="Close counter offer" disabled={sending} onClick={props.onClose}><X size={18} /></button>
         </header>
 

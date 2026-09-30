@@ -34,6 +34,21 @@ function completePersonalPage() {
 }
 
 describe("AccountAccess registration flow", () => {
+  it("moves focus to the new step and retains mandatory phone validation", () => {
+    renderAccountAccess();
+    completePersonalPage();
+    expect(screen.getByRole("heading", { name: "Professional information" })).toHaveFocus();
+    fireEvent.click(screen.getByRole("button", { name: "Back" }));
+    expect(screen.getByRole("heading", { name: "Personal information" })).toHaveFocus();
+    fireEvent.change(screen.getByRole("textbox", { name: /phone number/i }), { target: { value: "12" } });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    expect(screen.getByRole("alert")).toHaveTextContent(/valid phone number/);
+    fireEvent.change(screen.getByRole("textbox", { name: /phone number/i }), { target: { value: "" } });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    expect(screen.getByRole("textbox", { name: /phone number/i })).toBeRequired();
+    expect(screen.getByRole("heading", { name: "Personal information" })).toBeInTheDocument();
+  });
+
   it("returns to the taken username without losing profile fields and can retry with a new handle", async () => {
     const create = vi.fn().mockRejectedValueOnce(new profileStorage.AccountAccessError("username_unavailable", "That username is already taken."))
       .mockResolvedValueOnce({ needsEmailConfirmation: true });

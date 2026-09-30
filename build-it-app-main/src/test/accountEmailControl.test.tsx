@@ -7,7 +7,7 @@ import { createEmptyProfile } from "@/lib/userProfile";
 
 const mocks = vi.hoisted(() => ({ load: vi.fn(), request: vi.fn(), resend: vi.fn(), unsubscribe: vi.fn(), onAuthStateChange: vi.fn() }));
 vi.mock("@/lib/accountEmail", () => ({ loadAccountEmail: mocks.load, requestAccountEmailChange: mocks.request, resendAccountEmailChange: mocks.resend }));
-vi.mock("@/integrations/supabase/client", () => ({ isSupabaseConfigured: true, supabase: { auth: { onAuthStateChange: mocks.onAuthStateChange } } }));
+vi.mock("@/integrations/supabase/client", () => ({ isSupabaseConfigured: true, supabase: { auth: { onAuthStateChange: mocks.onAuthStateChange, getUser: async () => ({ data: { user: { id: "account-a", phone_confirmed_at: null } } }) } } }));
 const current = { userId: "account-a", email: "current@example.test", pendingEmail: null };
 const pending = { ...current, pendingEmail: "new@example.test" };
 beforeEach(() => {

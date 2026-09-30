@@ -545,6 +545,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      my_phone_verification_status: { Args: Record<string, never>; Returns: Json }
+      sync_my_verified_phone: { Args: { p_country_code: string; p_national_number: string }; Returns: undefined }
+      load_split_invitation_delivery: { Args: { p_split_sheet_id: string }; Returns: Json }
+      retry_split_invitation_email: { Args: { p_job_id: string }; Returns: boolean }
       is_signup_username_available: {
         Args: { p_username: string }
         Returns: boolean

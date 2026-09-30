@@ -137,14 +137,15 @@ function AccountSettings({ userProfile, onViewOnboardingAgain }: SettingsPagePro
                   </>}
 
                   {id === "notifications" && <>
-                    <ToggleRow label="Signature emails" description="Unavailable: email delivery is not connected" checked={false} disabled />
-                    <ToggleRow label="Proposal emails" description="Unavailable: email delivery is not connected" checked={false} disabled />
+                    <SettingRow label="Invitation emails" description="Sent when you are invited to a split"><span className="text-sm text-muted-foreground">Automatic</span></SettingRow>
+                    <ToggleRow label="Signature emails" description="Not available during beta; updates appear in SPLIT" checked={false} disabled />
+                    <ToggleRow label="Proposal emails" description="Not available during beta; updates appear in SPLIT" checked={false} disabled />
                     <ToggleRow label="Remind unsigned parties" description="Unavailable: scheduled reminders are not connected" checked={false} disabled />
                   </>}
 
                   {id === "privacy" && <>
                     <ToggleRow label="Hide contact details" description="Phone numbers and addresses stay private during beta" checked disabled />
-                    <ToggleRow label="Approve external sharing" description="Unavailable: external delivery is not connected" checked disabled />
+                    <ToggleRow label="Approve external sharing" description="Automatic PDF and contract delivery is not available during beta" checked disabled />
                   </>}
 
                   {id === "documents" && <ToggleRow label="Include signature audit trail" description="Signing activity and version history in your PDF exports. Signatures are always included." checked={settings.includeAuditTrail} disabled={disabled} onCheckedChange={(checked) => update("includeAuditTrail", checked)} />}

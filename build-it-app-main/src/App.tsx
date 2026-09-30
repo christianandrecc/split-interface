@@ -8,6 +8,7 @@ import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import AccountAccess from "@/components/AccountAccess";
 import NewUserOnboarding from "@/components/NewUserOnboarding";
+import PhoneVerificationGate from "@/components/PhoneVerificationGate";
 import { normalizeUserProfile, type UserProfile } from "@/lib/userProfile";
 import {
   createSupabaseAccountProfile,
@@ -419,10 +420,9 @@ const App = () => {
       <TooltipProvider>
         <Toaster />
         <Sonner />
-        {userProfile && !showAccountCreation && !passwordRecoveryActive && showNewUserOnboarding ? (
-          <NewUserOnboarding onComplete={completeNewUserOnboarding} />
-        ) : userProfile && !showAccountCreation && !passwordRecoveryActive ? (
-          <BrowserRouter>
+        {userProfile && !showAccountCreation && !passwordRecoveryActive ? (
+          <PhoneVerificationGate profile={userProfile} onSignOut={handleSignOut}>
+          {showNewUserOnboarding ? <NewUserOnboarding onComplete={completeNewUserOnboarding} /> : <BrowserRouter>
             <Routes>
               <Route
                 path="/"
@@ -442,7 +442,8 @@ const App = () => {
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
             </Routes>
-          </BrowserRouter>
+          </BrowserRouter>}
+          </PhoneVerificationGate>
         ) : (
           <AccountAccess
             key={sessionRequest.revision}

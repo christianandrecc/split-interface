@@ -2,7 +2,26 @@
 
 Use this before sharing a new beta build. The command covers automated checks; the manual flow catches real Supabase, auth, and Vercel behavior.
 
-## Current Progress: September 14, 2026
+## September 29 Contact and Delivery Follow-Up
+
+Local implementation, not yet a production rollout:
+
+- Email/@username-only beta invitation entry and database enforcement.
+- Creator-only email status, signed delivery/bounce receipts, failure notifications
+  and guarded retries. See [invitation rollout](split-invitation-emails.md).
+- Required signup phone with staged Supabase phone verification. An SMS provider
+  and live tests are still needed; enforcement remains disabled. See
+  [phone activation](beta-phone-verification.md).
+- Updated invitation-email copy; signature emails, reminders and automatic PDF
+  delivery remain unavailable. Phone verification is not SMS invitations or MFA.
+- Apply the two new migrations before deploying this frontend. Configure the
+  Resend webhook/signing secret before claiming live delivery receipts. Do not
+  enable mandatory verification until real SMS checks pass.
+
+The notes below are historical. In particular, Resend SMTP and invitation emails
+were subsequently connected and the owner confirmed actual inbox receipt.
+
+## Historical Progress: September 14, 2026
 
 Latest authorized rollout: both pending Supabase migrations are now applied
 (25 total), with no differences in existing agreement/signature/audit checksums.

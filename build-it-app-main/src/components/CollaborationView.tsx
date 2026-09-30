@@ -3,18 +3,20 @@ import {
   ArrowLeft,
   Check,
   CheckCircle2,
+  CircleX,
+  Clock3,
+  FileText,
   FileSignature,
   GitBranch,
-  Lightbulb,
   Lock,
   PanelRightClose,
   PanelRightOpen,
   PenLine,
   Send,
-  Sparkles,
+  Search,
   X,
 } from "lucide-react";
-import splitLockup from "@/assets/split-navy-amber-lockup.png";
+import splitElephant from "@/assets/split-elephant-icon.png";
 import { addDocumentAuditTrail, type StoredSplitSheetDocument } from "@/components/contract-builder/document";
 import {
   documentBelongsToProfile,
@@ -29,6 +31,7 @@ import {
   allSplitSheetRequiredParticipantsAccepted,
   buildSplitSheetSignatureRecords,
   ensureSplitSheetCreatorApproval,
+  normalizeSplitSheetParticipantId,
 } from "@/lib/splitSheetParticipantState";
 import {
   appendSplitSheetChatMessage,
@@ -44,6 +47,7 @@ import {
   participantIdentityForProfile,
   participantMatchesViewer,
   proposalResponsePermissions,
+  splitTakeLabel,
   type DealParticipant,
   type NegotiationDeal,
   type NegotiationMessage,
@@ -52,12 +56,15 @@ import {
   type SplitVersion,
 } from "@/lib/splitSheetNegotiation";
 import type { UserProfile } from "@/lib/userProfile";
+import ConversationInvitations from "@/components/ConversationInvitations";
 import CounterOfferDialog from "@/components/CounterOfferDialog";
 import DealSummary from "@/components/DealSummary";
 import { counterAllocationState } from "@/lib/counterOffer";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import "./collaboration.css";
 
 type InviteResponseResult = { ok: true } | { ok: false; error: string };
 
@@ -97,7 +104,7 @@ export default function CollaborationView({ documents, userProfile, initialDealI
   const [counterSending, setCounterSending] = useState(false);
   const [counterError, setCounterError] = useState("");
   const counterInFlight = useRef(false);
-  const [contextOpen, setContextOpen] = useState(true);
+  const [contextOpen, setContextOpen] = useState(false);
   const [mobileChatOpen, setMobileChatOpen] = useState(false);
   const lastInitialDealIdRef = useRef<string | undefined>();
 
@@ -107,11 +114,11 @@ export default function CollaborationView({ documents, userProfile, initialDealI
   const composerText = composerDrafts[selectedDeal?.id ?? ""] ?? "";
   const currentVersion = selectedDeal?.splitVersions.find((version) => version.id === selectedDeal.currentVersionId) ?? selectedDeal?.splitVersions.at(-1);
   const readyToSign = Boolean(selectedDeal && dealReadyToSign(selectedDeal));
+  const viewerHasSigned = Boolean(selectedDeal?.signedBy.some((id) => participantMatchesViewer(selectedDeal, id)));
   const isFinalRecord = Boolean(selectedDeal && FINAL_NEGOTIATION_DOCUMENT_STATUSES.has(selectedDeal.document.status));
   const viewerIdentity = selectedDeal ? participantIdentityForProfile(selectedDeal.document, userProfile) : null;
   const viewerName = viewerIdentity?.name || getProfileDisplayName(userProfile);
   const viewerParticipantId = selectedDeal ? viewerIdentity?.id || firstViewerParticipantId(selectedDeal) : "";
-  const canCounter = Boolean(selectedDeal && proposalResponsePermissions(selectedDeal, currentVersion?.id).counter);
   const viewerInvite = selectedDeal && findInviteForProfile(selectedDeal.document, userProfile);
   const canMessage = Boolean(selectedDeal && !isFinalRecord && viewerInvite?.status !== "Declined");
 
@@ -514,7 +521,7 @@ export default function CollaborationView({ documents, userProfile, initialDealI
 
   if (!selectedDeal) {
     return (
-      <div className="flex h-full min-h-0 bg-background">
+      <div className="split-chat flex h-full min-h-0 bg-background">
         <ChatListSidebar
           deals={deals}
           selectedDealId=""
@@ -532,7 +539,7 @@ export default function CollaborationView({ documents, userProfile, initialDealI
   }
 
   return (
-    <div className="flex h-full min-h-0 bg-background">
+    <div className="split-chat flex h-full min-h-0 bg-background">
       <ChatListSidebar
         deals={deals}
         selectedDealId={selectedDeal.id}
@@ -547,17 +554,16 @@ export default function CollaborationView({ documents, userProfile, initialDealI
         <ChatHeader
           deal={selectedDeal}
           currentVersion={currentVersion}
-          readyToSign={readyToSign}
           contextOpen={contextOpen}
           onBack={() => setMobileChatOpen(false)}
           onToggleContext={() => setContextOpen((open) => !open)}
-          onSign={signDeal}
-          saving={savingWrite}
+          onOpenCounter={() => openCounterComposer()}
         />
         <div className="deal-conversation-layout">
           <main className="flex min-h-0 min-w-0 flex-1 flex-col">
-            <div className="flex-1 overflow-y-auto px-4 py-5 md:px-6 xl:px-8">
-              <div className="mx-auto max-w-5xl space-y-4">
+            <div className="split-chat-feed flex-1 overflow-y-auto px-4 py-4 md:px-5" aria-label="Conversation">
+              <div className="split-chat-timeline mx-auto max-w-3xl">
+                <ConversationStart deal={selectedDeal} deliveryUserId={documentBelongsToProfile(selectedDeal.document, userProfile) ? userProfile.authUserId : undefined} />
                 <InvitePrompt key={`${selectedDeal.id}-${viewerParticipantId}`} deal={selectedDeal} onAccept={acceptInvite} onDecline={declineInvite} busy={savingWrite} />
 
                 {selectedDeal.messages.map((message) => (
@@ -572,15 +578,15 @@ export default function CollaborationView({ documents, userProfile, initialDealI
                 ))}
 
                 {readyToSign && selectedDeal.status !== "signed" && (
-                  <div className="rounded-lg border border-[hsl(var(--split-verified)/0.25)] bg-[hsl(var(--split-verified)/0.08)] p-4">
+                  <div className="split-chat-consensus">
                     <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                       <div>
-                        <div className="text-sm font-bold text-[hsl(var(--split-verified))]">Consensus reached</div>
+                        <div className="text-sm font-bold text-[hsl(var(--split-verified))]">{viewerHasSigned ? "Your signature is saved" : "Ready for signatures"}</div>
                         <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                          Everyone accepted the current proposal. Sign here in Messages to lock this split sheet.
+                          Everyone accepted this split. {selectedDeal.signedBy.length}/{selectedDeal.requiredSignerIds.length} signed.
                         </p>
                       </div>
-                      <button
+                      {!viewerHasSigned && <button
                         type="button"
                         onClick={signDeal}
                         disabled={savingWrite}
@@ -589,7 +595,7 @@ export default function CollaborationView({ documents, userProfile, initialDealI
                       >
                         <FileSignature className="h-4 w-4" />
                         Sign
-                      </button>
+                      </button>}
                     </div>
                   </div>
                 )}
@@ -625,8 +631,10 @@ export default function CollaborationView({ documents, userProfile, initialDealI
                 <p className="min-w-0 break-words">{writeFailure.message}</p>
                 {onReloadDocuments && <Button type="button" variant="outline" disabled={reloading || savingWrite} onClick={onReloadDocuments}>Reload latest</Button>}
               </div>}
-              <div className="mx-auto flex max-w-5xl items-end gap-2">
+              {canMessage ? <div className="mx-auto flex max-w-3xl items-end gap-2">
                 <textarea
+                  aria-label="Message the collaborators"
+                  rows={2}
                   value={composerText}
                   disabled={!canMessage}
                   onChange={(event) => {
@@ -635,46 +643,33 @@ export default function CollaborationView({ documents, userProfile, initialDealI
                     chatAttempts.current.delete(selectedDeal.id);
                   }}
                   onKeyDown={(event) => {
-                    if (event.key === "Enter" && !event.shiftKey) {
+                    if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
                       event.preventDefault();
                       void sendTextMessage();
                     }
                   }}
                   placeholder={canMessage ? "Message the collaborators..." : "This conversation is read-only"}
-                  className="min-h-[44px] flex-1 resize-none rounded-xl border border-border bg-background px-3 py-3 text-sm outline-none placeholder:text-muted-foreground/60 focus:ring-2 focus:ring-ring/30"
-                />
-                <button
-                  type="button"
-                  onClick={() => openCounterComposer()}
-                  disabled={!canCounter || savingWrite}
-                  aria-label="Counter"
-                  title={canCounter ? "Counter the current proposal" : "Waiting for another collaborator's proposal"}
-                  className="flex h-11 flex-shrink-0 items-center justify-center gap-2 rounded-xl border border-border px-3 text-xs font-bold text-muted-foreground hover:bg-secondary disabled:cursor-default disabled:opacity-40"
-                >
-                  <GitBranch className="h-4 w-4" />
-                  <span className="hidden sm:inline">Counter</span>
-                </button>
-                <ElephantAssistantButton
-                  key={selectedDeal.id}
-                  deal={selectedDeal}
-                  currentVersion={currentVersion}
-                  onOpenCounter={() => openCounterComposer()}
+                  className="min-h-[44px] min-w-0 flex-1 resize-none rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none placeholder:text-muted-foreground/60 focus:ring-2 focus:ring-ring/30"
                 />
                 <button
                   type="button"
                   onClick={() => void sendTextMessage()}
                   disabled={!canMessage || !composerText.trim() || savingWrite}
                   aria-busy={savingWrite}
-                  className="split-press flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-40"
+                  className="split-press flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-40"
                   aria-label="Send message"
+                  title="Send message"
                 >
                   <Send className="h-4 w-4" />
                 </button>
-              </div>
+              </div> : <div className="split-chat-closed mx-auto max-w-3xl">
+                <span><Lock size={15} />{isFinalRecord ? "Signed split. Conversation closed." : "Invitation declined. Conversation closed."}</span>
+                {onOpenAgreement && <button type="button" onClick={() => onOpenAgreement(selectedDeal.id)}><FileText size={16} />View split sheet</button>}
+              </div>}
             </div>
           </main>
 
-          {contextOpen && <DealSummary key={selectedDeal.id} deal={selectedDeal} currentVersion={currentVersion} onOpenAgreement={onOpenAgreement} />}
+          {contextOpen && <DealSummary key={selectedDeal.id} initiallyExpanded deal={selectedDeal} currentVersion={currentVersion} onOpenAgreement={onOpenAgreement} />}
         </div>
       </section>
     </div>
@@ -692,11 +687,22 @@ function ChatListSidebar({
   onSelect: (dealId: string) => void;
   mobileChatOpen: boolean;
 }) {
+  const [filter, setFilter] = useState<"All" | "Your turn" | "Signed">("All");
+  const [search, setSearch] = useState("");
+  const query = search.trim().toLocaleLowerCase();
+  const visibleDeals = deals.filter((deal) => {
+    const matchesFilter = filter === "All" || (filter === "Your turn" ? deal.pendingActionCount > 0 : deal.status === "signed");
+    return matchesFilter && (!query || [deal.title, deal.artist, ...deal.participants.map((person) => person.name)].some((value) => value.toLocaleLowerCase().includes(query)));
+  });
+
   return (
-    <aside className={`${mobileChatOpen ? "hidden" : "flex"} h-full min-h-0 w-full flex-col border-r border-border bg-card md:flex md:w-[340px] md:flex-shrink-0 xl:w-[360px]`}>
+    <aside aria-label="Split conversations" className={`split-chat-sidebar ${mobileChatOpen ? "hidden" : "flex"} h-full min-h-0 w-full flex-col border-r border-border bg-card md:flex md:w-[280px] md:flex-shrink-0 xl:w-[300px]`}>
       <div className="border-b border-border px-4 py-4">
-        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">Messages</p>
-        <h1 className="mt-1 text-lg font-bold">Deal chats</h1>
+        <h1 className="text-lg font-bold">Messages</h1>
+        <label className="split-chat-search"><Search size={16} aria-hidden="true" /><input type="search" aria-label="Search splits" placeholder="Search splits" value={search} onChange={(event) => setSearch(event.target.value)} /></label>
+        <div className="split-chat-filters" role="group" aria-label="Filter conversations">
+          {(["All", "Your turn", "Signed"] as const).map((item) => <button key={item} type="button" aria-pressed={filter === item} onClick={() => setFilter(item)}>{item}</button>)}
+        </div>
       </div>
       <div className="flex-1 overflow-y-auto">
         {deals.length === 0 ? (
@@ -709,7 +715,10 @@ function ChatListSidebar({
               Sent split sheets will appear here as negotiation rooms.
             </p>
           </div>
-        ) : deals.map((deal) => {
+        ) : visibleDeals.length === 0 ? <div className="px-4 py-8 text-center">
+          <p className="text-sm font-semibold">No matching splits</p>
+          <button type="button" className="mt-2 min-h-11 text-xs font-semibold underline underline-offset-4" onClick={() => { setFilter("All"); setSearch(""); }}>Clear filters</button>
+        </div> : visibleDeals.map((deal) => {
           const active = deal.id === selectedDealId;
           const latestMessage = deal.messages.at(-1);
           const primaryParticipant = deal.participants.find((participant) => !deal.viewerParticipantIds.has(participant.id)) ?? deal.participants[0];
@@ -719,18 +728,17 @@ function ChatListSidebar({
               key={deal.id}
               type="button"
               onClick={() => onSelect(deal.id)}
-              className={`w-full border-b border-border px-4 py-3 text-left transition-colors ${
-                active ? "bg-primary/10" : "hover:bg-secondary/50"
-              }`}
+              aria-current={active ? "true" : undefined}
+              className={`split-chat-list-item ${active ? "active" : ""}`}
             >
               <div className="flex items-start gap-3">
-                <Avatar participant={primaryParticipant} />
+                <Avatar participant={primaryParticipant} small />
                 <div className="min-w-0 flex-1 pt-0.5">
                   <div className="flex items-center justify-between gap-2">
-                    <div className="truncate text-sm font-bold">{primaryParticipant.name}</div>
-                    <span className={`text-[10px] font-semibold ${deal.pendingActionCount > 0 ? "text-primary" : "text-muted-foreground"}`}>{deal.updatedAt}</span>
+                    <div className="truncate text-sm font-bold" title={deal.title}>{deal.title}</div>
+                    <span className="shrink-0 text-[10px] text-muted-foreground">{deal.updatedAt}</span>
                   </div>
-                  <div className="mt-0.5 truncate text-xs font-semibold text-foreground/80">{deal.title}</div>
+                  <div className="mt-0.5 truncate text-xs text-muted-foreground">{primaryParticipant?.name ?? deal.artist}</div>
                   <div className="mt-1 flex items-center justify-between gap-2">
                     <p className="min-w-0 truncate text-xs text-muted-foreground">{latestMessage?.body ?? "No messages yet"}</p>
                     {deal.pendingActionCount > 0 && (
@@ -768,66 +776,52 @@ function EmptyMessagesPanel() {
 function ChatHeader({
   deal,
   currentVersion,
-  readyToSign,
   contextOpen,
   onBack,
   onToggleContext,
-  onSign,
-  saving,
+  onOpenCounter,
 }: {
   deal: NegotiationDeal;
   currentVersion?: SplitVersion;
-  readyToSign: boolean;
   contextOpen: boolean;
   onBack: () => void;
   onToggleContext: () => void;
-  onSign: () => void;
-  saving: boolean;
+  onOpenCounter: () => void;
 }) {
   return (
-    <header className="flex min-h-[68px] items-center justify-between gap-3 border-b border-border bg-background px-4 py-3 md:px-6">
+    <header className="split-chat-header">
       <div className="flex min-w-0 items-center gap-3">
         <button
           type="button"
           onClick={onBack}
           aria-label="Back to deal chats"
-          className="inline-flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-secondary md:hidden"
+          className="inline-flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-secondary md:hidden"
         >
           <ArrowLeft className="h-4 w-4" />
         </button>
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <h2 className="truncate text-base font-bold">{deal.title}</h2>
+            <h2 className="break-words text-base font-bold" title={deal.title}>{deal.title}</h2>
             <DealStatus status={deal.status} />
           </div>
           <p className="mt-1 truncate text-xs text-muted-foreground">
-            {deal.artist} · current version v{currentVersion?.version ?? 1} · {deal.acceptedBy.length}/{deal.requiredSignerIds.length} accepted
+            {deal.participants.map((person) => participantMatchesViewer(deal, person.id) ? "You" : person.name).join(" · ")}
           </p>
         </div>
       </div>
-      <div className="flex items-center gap-2">
-        {readyToSign && deal.status !== "signed" && (
-          <button
-            type="button"
-            onClick={onSign}
-            disabled={saving}
-            aria-busy={saving}
-            className="split-press hidden items-center gap-2 rounded-lg bg-[hsl(var(--split-verified))] px-3 py-2 text-xs font-bold text-white hover:opacity-90 sm:flex"
-          >
-            <FileSignature className="h-3.5 w-3.5" />
-            Sign
-          </button>
-        )}
+      <div className="split-chat-header-tools">
         <button
           type="button"
           onClick={onToggleContext}
-          aria-label={contextOpen ? "Hide deal summary" : "Show deal summary"}
-          title={contextOpen ? "Hide deal summary" : "Show deal summary"}
+          aria-label={contextOpen ? "Hide split" : "View split"}
+          title={contextOpen ? "Hide split" : "View split"}
           aria-expanded={contextOpen}
-          className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border text-muted-foreground hover:bg-secondary"
+          className="split-chat-details-toggle"
         >
           {contextOpen ? <PanelRightClose className="h-4 w-4" /> : <PanelRightOpen className="h-4 w-4" />}
+          <span>{contextOpen ? "Hide split" : "View split"}</span>
         </button>
+        <ElephantAssistantButton key={deal.id} deal={deal} currentVersion={currentVersion} onOpenCounter={onOpenCounter} />
       </div>
     </header>
   );
@@ -918,6 +912,16 @@ function InvitePrompt({ deal, onAccept, onDecline, busy }: {
   );
 }
 
+function ConversationStart({ deal, deliveryUserId }: { deal: NegotiationDeal; deliveryUserId?: string }) {
+  const startedAt = deal.document.sentAt || deal.document.createdAt;
+  const creator = deal.participants.find(person => person.id === "creator")?.name || getProfileDisplayName(deal.document.creatorProfile);
+
+  return <section className="split-chat-start" aria-label="Conversation start">
+    <div className="split-chat-start-heading"><p>Started by <strong>{creator}</strong></p><time dateTime={startedAt}>{formatNegotiationDateTime(startedAt)}</time></div>
+    <ConversationInvitations deal={deal} userId={deliveryUserId} />
+  </section>;
+}
+
 function MessageRow({
   message,
   deal,
@@ -931,17 +935,27 @@ function MessageRow({
   onCounter: (proposalId: string) => void;
   busy: boolean;
 }) {
+  // Responses live on their version's shares; invitation state lives at the start.
+  if (message.type === "accept" || message.type === "reject") return null;
   const sender = deal.participants.find((participant) => participant.id === message.senderId)
     ?? { id: "unknown", name: "Unknown collaborator", initials: "?", handle: "", role: "" };
   const fromMe = participantMatchesViewer(deal, sender.id);
   const version = message.proposedSplitId ? deal.splitVersions.find((item) => item.id === message.proposedSplitId) : undefined;
 
-  if (message.type !== "text") {
+  const isProposal = message.type === "proposal" || message.type === "counter";
+  if (message.type !== "text" && !isProposal) {
+    const Icon = message.type === "sign" ? CheckCircle2 : PenLine;
+    const content = <><Icon size={15} aria-hidden="true" /><span className="split-chat-event-body" title={version ? `${message.body} ${splitTakeLabel(version.version)}.` : undefined}>{message.body}{version && <span className="sr-only"> {splitTakeLabel(version.version)}.</span>}</span><time dateTime={message.createdAt} title={formatNegotiationDateTime(message.createdAt)}>{formatNegotiationDateTime(message.createdAt)}</time></>;
+    return <div data-message-id={message.id} className={`split-chat-event ${message.type}`}>
+      <div className="split-chat-event-line">{content}</div>
+    </div>;
+  }
+
+  if (isProposal) {
     return (
-      <div data-message-id={message.id} className={`flex gap-3 ${fromMe ? "justify-end" : ""}`}>
-        {!fromMe && <Avatar participant={sender} />}
-        <div className={`max-w-[860px] ${fromMe ? "order-first" : ""}`}>
-          <MessageMeta sender={sender} createdAt={message.createdAt} fromMe={fromMe} />
+      <div data-message-id={message.id} className={`flex min-w-0 ${fromMe ? "justify-end" : ""}`}>
+        <div className="split-chat-proposal-message">
+          {message.type !== "proposal" && <MessageMeta sender={sender} createdAt={message.createdAt} fromMe={fromMe} />}
           <StructuredMessageCard
             message={message}
             version={version}
@@ -952,24 +966,31 @@ function MessageRow({
             onAccept={() => { if (version) onAccept(version.id); }}
             onCounter={() => { if (version) onCounter(version.id); }}
           />
+          {version && <ProposalNote version={version} deal={deal} />}
         </div>
-        {fromMe && <Avatar participant={sender} />}
       </div>
     );
   }
 
   return (
-    <div className={`flex gap-3 ${fromMe ? "justify-end" : ""}`}>
-      {!fromMe && <Avatar participant={sender} />}
-      <div className={`max-w-[82%] ${fromMe ? "order-first" : ""}`}>
+    <div data-message-id={message.id} className={`flex gap-3 ${fromMe ? "justify-end" : ""}`}>
+      <div className={`split-chat-text-message ${fromMe ? "outgoing" : ""}`}>
         <MessageMeta sender={sender} createdAt={message.createdAt} fromMe={fromMe} />
-        <div className={`rounded-2xl px-4 py-3 text-sm leading-6 shadow-sm ${fromMe ? "rounded-tr-md bg-primary text-primary-foreground" : "rounded-tl-md border border-border bg-card text-foreground"}`}>
+        <div className={`split-chat-bubble ${fromMe ? "outgoing" : ""}`}>
           {message.body}
         </div>
       </div>
-      {fromMe && <Avatar participant={sender} />}
     </div>
   );
+}
+
+function ProposalNote({ version, deal }: { version: SplitVersion; deal: NegotiationDeal }) {
+  const note = version.note.trim();
+  if (!note || ["Split proposal", "Initial split proposal", "Counter-offer from Messages"].includes(note)) return null;
+  const author = deal.participants.find(person => person.id === version.createdByParticipantId)?.name || version.createdBy.trim() || "Collaborator";
+  const fromMe = Boolean(version.createdByParticipantId && participantMatchesViewer(deal, version.createdByParticipantId));
+
+  return <p className={`split-chat-bubble split-proposal-note ${fromMe ? "outgoing" : ""}`}><strong>{author}:</strong>{" "}<span>{version.note}</span></p>;
 }
 
 function ElephantAssistantButton({
@@ -987,33 +1008,23 @@ function ElephantAssistantButton({
   const total = currentVersion?.allocations.reduce((sum, allocation) => sum + allocation.percent, 0) ?? 0;
 
   return (
-    <div className="relative flex-shrink-0">
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
       <button
         type="button"
         aria-label="Open Elephant private read"
         aria-expanded={open}
         title="Elephant's private read"
-        onClick={() => setOpen((current) => !current)}
-        className={`group flex h-11 items-center justify-center gap-2 rounded-xl border px-2.5 text-xs font-bold shadow-sm transition ${
-          open
-            ? "border-primary/45 bg-primary/10 text-foreground"
-            : "border-[hsl(var(--split-pending)/0.3)] bg-[hsl(var(--split-bone))] text-foreground hover:border-primary/50 hover:bg-primary/10"
-        }`}
+        className="split-chat-elephant"
       >
-        <span className="flex h-7 w-7 overflow-hidden rounded-lg border border-primary/20 bg-primary/10">
-          <img src={splitLockup} alt="" className="h-full w-full object-cover object-left" />
-        </span>
-        <span className="hidden lg:inline">Elephant</span>
-        <Sparkles className="hidden h-3.5 w-3.5 text-primary sm:block" />
+        <img src={splitElephant} alt="" className="h-7 w-7 object-contain" />
       </button>
-
-      {open && (
-        <div className="absolute bottom-full right-0 z-40 mb-3 w-[340px] max-w-[calc(100vw-2rem)] rounded-2xl border border-[hsl(var(--split-pending)/0.25)] bg-white/90 p-3 text-left shadow-[0_24px_70px_hsl(var(--split-amended)/0.18)] backdrop-blur-xl">
-          <span className="absolute -bottom-2 right-8 h-4 w-4 rotate-45 border-b border-r border-[hsl(var(--split-pending)/0.25)] bg-white/90" />
+      </PopoverTrigger>
+        <PopoverContent align="end" side="bottom" sideOffset={8} aria-label="Elephant private read" className="split-chat-assistant w-[320px] max-w-[calc(100vw-2rem)] rounded-lg p-4">
           <div className="relative">
             <div className="flex items-center gap-3">
-              <span className="flex h-9 w-9 overflow-hidden rounded-xl border border-primary/20 bg-[hsl(var(--split-bone))] shadow-sm">
-                <img src={splitLockup} alt="" className="h-full w-full object-cover object-left" />
+              <span className="flex h-9 w-9 shrink-0">
+                <img src={splitElephant} alt="" className="h-full w-full object-contain" />
               </span>
               <div className="min-w-0">
                 <div className="text-sm font-bold text-foreground">Elephant's private read</div>
@@ -1025,7 +1036,7 @@ function ElephantAssistantButton({
             </div>
 
             {isLocked ? (
-              <div className="mt-3 rounded-xl border border-[hsl(var(--split-verified)/0.24)] bg-[hsl(var(--split-verified)/0.08)] p-3">
+              <div className="mt-4 border-t border-border pt-3">
                 <div className="flex items-center gap-2 text-sm font-bold text-[hsl(var(--split-verified))]">
                   <Lock className="h-4 w-4" />
                   Signed and locked
@@ -1036,10 +1047,9 @@ function ElephantAssistantButton({
               </div>
             ) : (
               <>
-                <div className="mt-3 rounded-xl border border-[hsl(var(--split-pending)/0.28)] bg-[hsl(var(--split-bone))] p-3">
+                <div className="mt-4 border-t border-border pt-3">
                   <div className="mb-2 flex items-center justify-between gap-3">
                     <div className="flex items-center gap-2 text-sm font-bold text-foreground">
-                      <Lightbulb className="h-4 w-4 text-primary" />
                       Split read
                     </div>
                     <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold tabular-nums ${Math.round(total) === 100 ? "bg-[hsl(var(--split-verified)/0.12)] text-[hsl(var(--split-verified))]" : "bg-destructive/10 text-destructive"}`}>
@@ -1058,7 +1068,7 @@ function ElephantAssistantButton({
                     setOpen(false);
                     onOpenCounter();
                   }}
-                  className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-3 py-2.5 text-xs font-bold text-primary-foreground hover:bg-primary/90 disabled:cursor-default disabled:opacity-40"
+                  className="mt-3 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-primary px-3 py-2.5 text-xs font-bold text-primary-foreground hover:bg-primary/90 disabled:cursor-default disabled:opacity-40"
                 >
                   <GitBranch className="h-4 w-4" />
                   Suggest a counter
@@ -1070,15 +1080,14 @@ function ElephantAssistantButton({
               <button
                 type="button"
                 onClick={() => setOpen(false)}
-                className="mt-3 inline-flex w-full items-center justify-center rounded-xl border border-border bg-background px-3 py-2.5 text-xs font-bold text-foreground hover:bg-secondary"
+                className="mt-3 inline-flex min-h-11 w-full items-center justify-center rounded-lg border border-border bg-background px-3 py-2.5 text-xs font-bold text-foreground hover:bg-secondary"
               >
                 Got it
               </button>
             )}
           </div>
-        </div>
-      )}
-    </div>
+        </PopoverContent>
+    </Popover>
   );
 }
 
@@ -1101,56 +1110,44 @@ function StructuredMessageCard({
   onCounter: () => void;
   busy: boolean;
 }) {
-  const tone = {
-    proposal: "border-primary/25 bg-primary/5",
-    counter: "border-[hsl(var(--split-amended)/0.3)] bg-[hsl(var(--split-amended)/0.08)]",
-    accept: "border-[hsl(var(--split-verified)/0.25)] bg-[hsl(var(--split-verified)/0.08)]",
-    reject: "border-destructive/25 bg-destructive/5",
-    sign: "border-[hsl(var(--split-verified)/0.25)] bg-[hsl(var(--split-verified)/0.08)]",
-    system: "border-border bg-secondary/50",
-    text: "border-border bg-card",
-  }[message.type];
-  const Icon = message.type === "accept" || message.type === "sign"
-    ? CheckCircle2
-    : message.type === "reject"
-      ? X
-      : message.type === "counter"
-        ? GitBranch
-        : PenLine;
   const isProposal = message.type === "proposal" || message.type === "counter";
   const permissions = proposalResponsePermissions(deal, version?.id);
   const actionable = isProposal && permissions.counter;
+  const isCurrent = version?.id === deal.currentVersionId;
+  const heading = isCurrent ? deal.status === "signed" ? "Final split" : "Proposed split"
+    : message.type === "proposal" ? "Initial split" : "Previous split";
+  const total = version?.allocations.reduce((sum, allocation) => sum + allocation.percent, 0) ?? 0;
 
   return (
-    <div className={`rounded-xl border p-4 shadow-sm ${tone}`}>
-      <div className="flex items-start gap-3">
-        <span className="mt-0.5 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-background text-primary">
-          <Icon className="h-4 w-4" />
-        </span>
-        <div className="min-w-0 flex-1">
-          <div className="text-sm font-bold">{message.body}</div>
+    <div className={`split-proposal-card ${isCurrent ? "" : "historical"}`} aria-label={version ? `Split proposal: ${splitTakeLabel(version.version)}` : "Split proposal unavailable"}>
+          <div className="split-proposal-heading"><h3>{heading}</h3>{version && <span title={`Revision ${version.version}`}>{splitTakeLabel(version.version)}</span>}</div>
           {version && (
-            <div className="mt-3 rounded-lg border border-border bg-background p-3">
-              <div className="mb-2 flex items-center justify-between gap-3">
-                <div className="text-xs font-bold">Version {version.version}: {version.title}</div>
-                <time dateTime={version.createdAt} title={version.createdAt} className="text-[10px] font-semibold text-muted-foreground">{formatNegotiationDateTime(version.createdAt)}</time>
+            <>
+              <ul className="split-proposal-shares">
+                {version.allocations.map((allocation, index) => <li key={allocation.participantId}>
+                  <span className={`split-proposal-dot split-allocation-${index % 5 + 1}`} aria-hidden="true" />
+                  <span className="split-proposal-person"><span>{allocation.name}{participantMatchesViewer(deal, allocation.participantId) && <span className="split-proposal-you"> (you)</span>}</span><ProposalApproval deal={deal} version={version} allocation={allocation} /></span>
+                  <strong>{allocation.percent}<span>%</span></strong>
+                </li>)}
+              </ul>
+              <div className="split-proposal-bar" aria-hidden="true">
+                {version.allocations.map((allocation, index) => <span key={allocation.participantId} className={`split-allocation-${index % 5 + 1}`} style={{ width: `${Math.max(0, allocation.percent) / Math.max(100, total) * 100}%` }} />)}
               </div>
-              <SplitBars allocations={version.allocations} />
-              <p className="mt-3 text-xs leading-5 text-muted-foreground">{version.note}</p>
-            </div>
+            </>
           )}
           {actionable && (
-            <div className="mt-3 flex flex-wrap gap-2">
+            <div className="split-proposal-actions">
               <button
                 type="button"
                 onClick={onAccept}
                 disabled={!permissions.accept || busy}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-[hsl(var(--split-verified))] px-3 py-2 text-xs font-bold text-white disabled:cursor-default disabled:opacity-50"
+                aria-busy={busy}
+                className="split-press split-proposal-accept"
               >
                 <Check className="h-3.5 w-3.5" />
                 {alreadyAccepted ? "Accepted" : "Accept"}
               </button>
-              <button type="button" onClick={onCounter} disabled={busy} className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-2 text-xs font-bold text-foreground hover:bg-secondary disabled:cursor-default disabled:opacity-50">
+              <button type="button" onClick={onCounter} disabled={busy} className="split-press split-proposal-counter">
                 <GitBranch className="h-3.5 w-3.5" />
                 Counter
               </button>
@@ -1159,10 +1156,21 @@ function StructuredMessageCard({
           {isProposal && fromMe && version?.id === deal.currentVersionId && deal.status === "negotiating" && (
             <p className="mt-3 text-xs text-muted-foreground">Your proposal. Awaiting collaborators.</p>
           )}
-        </div>
-      </div>
     </div>
   );
+}
+
+function ProposalApproval({ deal, version, allocation }: { deal: NegotiationDeal; version: SplitVersion; allocation: SplitAllocation }) {
+  const participantId = normalizeSplitSheetParticipantId(deal.document, allocation.participantId);
+  const approval = deal.document.splitApprovals.find(item => item.proposalVersionId === version.id
+    && normalizeSplitSheetParticipantId(deal.document, item.collaboratorId) === participantId);
+  const state = approval?.status === "Approved" ? "accepted" : approval?.status === "Rejected" ? "rejected" : "pending";
+  const label = state === "accepted" ? "Accepted" : state === "rejected" ? "Not accepted" : "Awaiting response";
+  const description = `${allocation.name}: ${label} (${splitTakeLabel(version.version)})`;
+  const Icon = state === "accepted" ? CheckCircle2 : state === "rejected" ? CircleX : Clock3;
+  const date = state !== "pending" && approval?.respondedAt ? ` - ${formatNegotiationDateTime(approval.respondedAt)}` : "";
+
+  return <span role="img" aria-label={description} title={`${description}${date}`} className="split-proposal-response" data-state={state}><Icon size={14} aria-hidden="true" /></span>;
 }
 
 function SplitBars({ allocations }: { allocations: SplitAllocation[] }) {
@@ -1200,9 +1208,9 @@ function Avatar({ participant, small }: { participant: DealParticipant; small?: 
 
 function MessageMeta({ sender, createdAt, fromMe }: { sender: DealParticipant; createdAt: string; fromMe: boolean }) {
   return (
-    <div className={`mb-1 flex items-center gap-2 text-[11px] text-muted-foreground ${fromMe ? "justify-end" : ""}`}>
-      <span className="font-semibold text-foreground">{fromMe ? "You" : sender.name}</span>
-      <span>{formatNegotiationDateTime(createdAt)}</span>
+    <div className={`mb-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground ${fromMe ? "justify-end" : ""}`}>
+      <span className="min-w-0 font-semibold text-foreground [overflow-wrap:anywhere]">{fromMe ? "You" : sender.name}</span>
+      <time className="shrink-0" dateTime={createdAt}>{formatNegotiationDateTime(createdAt)}</time>
     </div>
   );
 }

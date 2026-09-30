@@ -28,7 +28,8 @@ describe("invitation responses", () => {
     const onUpdateDocument = vi.fn();
     render(<CollaborationView documents={[pendingInvite()]} userProfile={viewer} onUpdateDocument={onUpdateDocument} />);
     expect(screen.getByRole("button", { name: "Accept invite" })).toBeEnabled();
-    expect(screen.getByText(/1\/2 accepted/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "View split" }));
+    expect(screen.getByText("1 of 2 accepted")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Accept" })).not.toBeInTheDocument();
     const trigger = screen.getByRole("button", { name: "Decline invite" });
     trigger.focus();
@@ -58,12 +59,13 @@ describe("invitation responses", () => {
     view.rerender(<CollaborationView documents={[{ ...updated, serverRevision: 5 }]} userProfile={viewer} onUpdateDocument={onUpdateDocument} />);
     expect(screen.getByText("You declined this invitation")).toBeInTheDocument();
     expect(screen.queryByText("Negotiating")).not.toBeInTheDocument();
-    expect(screen.getAllByText("Invite declined").length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByText("Invite declined")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Accept invite|Decline invite|^Sign$/ })).not.toBeInTheDocument();
-    expect(screen.getByPlaceholderText("This conversation is read-only")).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Send message" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Counter" })).toBeDisabled();
-    expect(screen.queryByText("Consensus reached")).not.toBeInTheDocument();
+    expect(screen.getByText("Invitation declined. Conversation closed.")).toBeInTheDocument();
+    expect(screen.queryByRole("textbox", { name: "Message the collaborators" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Send message" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Counter" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Ready for signatures")).not.toBeInTheDocument();
   });
 
   it("prevents accept/decline races and only confirms success after persistence", async () => {

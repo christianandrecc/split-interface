@@ -59,7 +59,7 @@ describe("CollaborationView document-backed negotiation", () => {
       respondedAt: document.updatedAt, notes: "Earlier feedback" };
     const onUpdateDocument = vi.fn().mockResolvedValue(undefined);
     render(<CollaborationView documents={[document]} userProfile={makeCollaboratorProfile()} onUpdateDocument={onUpdateDocument} />);
-    expect(screen.getAllByText(/disputed this split version/).find(element => element.closest("[data-message-id]"))).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "Maya Rios: Not accepted (First take)" })).toHaveAttribute("data-state", "rejected");
     expect(screen.queryByRole("button", { name: "Dispute" })).not.toBeInTheDocument();
     fireEvent.click(screen.getAllByRole("button", { name: choice })[0]);
     if (choice === "Counter") {
@@ -85,7 +85,7 @@ describe("CollaborationView document-backed negotiation", () => {
     expect(onUpdateDocument.mock.calls[1][0]).toBe(onUpdateDocument.mock.calls[0][0]);
   });
 
-  it("blocks both signature controls until the pending signature is confirmed", async () => {
+  it("has one signature control and blocks repeated signing until persistence finishes", async () => {
     const document = makeDocument();
     document.sentAt = document.createdAt;
     document.splitApprovals = document.splitApprovals.map(item => ({ ...item, status: "Approved" as const }));
@@ -93,9 +93,9 @@ describe("CollaborationView document-backed negotiation", () => {
     const onUpdateDocument = vi.fn(() => new Promise<void>(resolve => { resolveSave = resolve; }));
     render(<CollaborationView documents={[document]} userProfile={makeCreatorProfile()} onUpdateDocument={onUpdateDocument} />);
     const buttons = screen.getAllByRole("button", { name: "Sign" });
-    expect(buttons).toHaveLength(2);
+    expect(buttons).toHaveLength(1);
     fireEvent.click(buttons[0]);
-    fireEvent.click(buttons[1]);
+    fireEvent.click(buttons[0]);
     expect(onUpdateDocument).toHaveBeenCalledOnce();
     buttons.forEach(button => expect(button).toBeDisabled());
     await act(async () => resolveSave());
@@ -168,13 +168,12 @@ describe("CollaborationView document-backed negotiation", () => {
     const document = makeCounterDocument();
     const onUpdateDocument = vi.fn();
     render(<CollaborationView documents={[document]} userProfile={makeCollaboratorProfile()} onUpdateDocument={onUpdateDocument} />);
-    const message = screen.getAllByText("Maya Alexandra Rios proposed split version 2.").find((item) => item.closest("[data-message-id]"))!.closest("[data-message-id]") as HTMLElement;
+    const message = screen.getByLabelText("Split proposal: Take 2").closest("[data-message-id]") as HTMLElement;
     expect(within(message).getByText("You")).toBeInTheDocument();
     expect(within(message).getByText("Your proposal. Awaiting collaborators.")).toBeInTheDocument();
     expect(within(message).queryByRole("button", { name: /Accept|Counter|Dispute/ })).not.toBeInTheDocument();
     expect(screen.queryByText(/accepted this split version/)).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Counter" })).toBeDisabled();
-    fireEvent.click(screen.getByRole("button", { name: "Counter" }));
+    expect(screen.queryByRole("button", { name: "Counter" })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Open Elephant private read" }));
     expect(screen.getByRole("button", { name: "Suggest a counter" })).toBeDisabled();
     expect(onUpdateDocument).not.toHaveBeenCalled();
@@ -184,9 +183,9 @@ describe("CollaborationView document-backed negotiation", () => {
     const document = makeCounterDocument();
     const onUpdateDocument = vi.fn().mockResolvedValue(undefined);
     render(<CollaborationView documents={[document]} userProfile={makeCreatorProfile()} onUpdateDocument={onUpdateDocument} />);
-    const old = screen.getByText("Chori sent the initial split proposal.").closest("[data-message-id]") as HTMLElement;
+    const old = screen.getByLabelText("Split proposal: First take").closest("[data-message-id]") as HTMLElement;
     expect(within(old).queryByRole("button")).not.toBeInTheDocument();
-    const current = screen.getAllByText("Maya Alexandra Rios proposed split version 2.").find((item) => item.closest("[data-message-id]"))!.closest("[data-message-id]") as HTMLElement;
+    const current = screen.getByLabelText("Split proposal: Take 2").closest("[data-message-id]") as HTMLElement;
     expect(within(current).getAllByText("Maya Rios").length).toBeGreaterThan(0);
     fireEvent.click(within(current).getByRole("button", { name: "Accept" }));
     await waitFor(() => expect(onUpdateDocument).toHaveBeenCalledOnce());
@@ -205,10 +204,10 @@ describe("CollaborationView document-backed negotiation", () => {
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     const updated = onUpdateDocument.mock.calls[0][0];
     view.rerender(<CollaborationView documents={[updated]} userProfile={makeCreatorProfile()} onUpdateDocument={onUpdateDocument} />);
-    const message = screen.getAllByText("Chori proposed split version 3.").find((item) => item.closest("[data-message-id]"))!.closest("[data-message-id]") as HTMLElement;
+    const message = screen.getByLabelText("Split proposal: Take 3").closest("[data-message-id]") as HTMLElement;
     expect(within(message).getByText("You")).toBeInTheDocument();
     expect(within(message).queryByRole("button")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Counter" })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: "Counter" })).not.toBeInTheDocument();
     expect(screen.queryByText(/accepted this split version/)).not.toBeInTheDocument();
     expect(updated.splitApprovals.at(-1).status).toBe("Pending");
   });
@@ -329,9 +328,10 @@ describe("CollaborationView document-backed negotiation", () => {
       />,
     );
 
-    expect(screen.getAllByText(/2\/2 accepted/).length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Ready to sign")).toHaveLength(2);
-    expect(screen.getAllByRole("button", { name: "Sign" }).length).toBeGreaterThan(0);
+    expect(screen.getByText("Ready for signatures")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Sign" })).toBeEnabled();
+    fireEvent.click(screen.getByRole("button", { name: "View split" }));
+    expect(screen.getByText("2 of 2 accepted")).toBeInTheDocument();
   });
 
   it("sends chat messages as the invited collaborator when creator data also matches the account", async () => {
@@ -594,7 +594,7 @@ describe("CollaborationView document-backed negotiation", () => {
       />,
     );
 
-    expect(screen.getAllByText("Maya Rios proposed split version 2.").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Maya Rios shared take 2.").length).toBeGreaterThan(0);
     expect(screen.getAllByRole("heading", { name: "Night Swim" }).length).toBeGreaterThan(0);
   });
 
@@ -639,6 +639,6 @@ describe("CollaborationView document-backed negotiation", () => {
 
     expect(screen.getByText("Signed and locked")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Suggest a counter" })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Counter" })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: "Counter" })).not.toBeInTheDocument();
   });
 });

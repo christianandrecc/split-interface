@@ -174,7 +174,7 @@ describe("ContractBuilder", () => {
   it("suggests recent collaborators and fills the invite with their username", () => {
     render(<StepPartiesSearchHarness />);
 
-    const inviteInput = screen.getByPlaceholderText("Search @username, email, or phone") as HTMLInputElement;
+    const inviteInput = screen.getByPlaceholderText("Search @username or email") as HTMLInputElement;
 
     fireEvent.focus(inviteInput);
     expect(screen.getByText("Recent collaborators")).toBeInTheDocument();

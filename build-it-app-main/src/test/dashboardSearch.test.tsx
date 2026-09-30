@@ -129,7 +129,7 @@ describe("dashboard global search", () => {
     fireEvent.click(screen.getByRole("button", { name: "Open in Messages" }));
 
     const signButtons = screen.getAllByRole("button", { name: /^Sign$/ });
-    expect(signButtons).toHaveLength(2);
+    expect(signButtons).toHaveLength(1);
     signButtons.forEach((button) => expect(button).not.toBeDisabled());
   });
 });

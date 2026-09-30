@@ -380,12 +380,13 @@ function InviteWriter({
           onChange={(event) => onInviteChange(event.target.value)}
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
-          placeholder="Search @username, email, or phone"
+          placeholder="Search @username or email"
           className="field-input h-11 py-2 pl-9"
           aria-autocomplete="list"
           aria-expanded={dropdownOpen}
         />
       </div>
+      {party.inviteMethod === "phone" && <p role="alert" className="mt-2 text-xs text-destructive">Use an email address or @username. Phone invitations are unavailable during beta.</p>}
       {dropdownOpen && (
         <div
           className="absolute left-0 right-0 top-full z-30 mt-1 max-h-72 overflow-y-auto rounded-lg border border-border bg-card p-2 shadow-lg"
@@ -427,7 +428,7 @@ function InviteWriter({
 
           {recentMatches.length === 0 && ecosystemMatches.length === 0 && !searchingEcosystem && searchQuery.trim().length >= 2 && (
             <div className="px-3 py-5 text-center text-xs leading-5 text-muted-foreground">
-              No matching SPLIT users. Email and phone entries only match verified accounts; no email or SMS is sent.
+              No matching SPLIT users. Use an email address to invite someone who has not joined yet. Invitation emails are sent when you send the split.
             </div>
           )}
         </div>
@@ -555,7 +556,7 @@ function getBlockedSuggestionKeys(parties: Party[], currentPartyId: string, curr
 function getMissingWriterItems(party: Party) {
   const missing: string[] = [];
 
-  if (!hasWriterIdentity(party)) missing.push("username, email, or phone invite");
+  if (!hasWriterIdentity(party)) missing.push("valid email or @username invitation");
   if (Number(party.percent) <= 0) missing.push("split share");
 
   return missing;

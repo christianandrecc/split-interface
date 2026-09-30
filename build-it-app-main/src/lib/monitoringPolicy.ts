@@ -9,6 +9,7 @@ export const failureCodes = [
   "auth_signup_failure", "auth_signin_failure", "auth_signout_failure",
   "auth_confirmation_failure", "auth_recovery_failure", "auth_password_failure",
   "notifications_load_failure", "notifications_read_failure",
+  "invitation_status_failure", "invitation_retry_failure",
 ] as const;
 export type FailureCode = typeof failureCodes[number];
 const failureKinds = ["unknown", "network", "server", "delivery", "rate_limit", "access", "conflict", "validation"] as const;

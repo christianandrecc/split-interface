@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "@/App";
 import { profileSessionMatchesSignIn } from "@/lib/profileSessionCache";
 import { createEmptyProfile, type UserProfile } from "@/lib/userProfile";
@@ -72,10 +72,25 @@ function emitAuth(event: string, userId: string | null) {
 }
 
 describe("App profile session loading", () => {
+  beforeEach(() => vi.stubEnv("VITE_PHONE_VERIFICATION_ENABLED", undefined));
   afterEach(() => {
     window.localStorage.clear();
     window.history.replaceState({}, "", "/");
     vi.clearAllMocks();
+    vi.unstubAllEnvs();
+  });
+
+  it("opens a signed-in account without the undeployed phone RPC while SMS is paused", async () => {
+    const profile = makeProfile({ authUserId: "current-user", displayName: "Preview Artist" });
+    mocks.loadProfileSessionForActiveSession.mockResolvedValue({ userId: "current-user", profile });
+    markOnboardingComplete("current-user");
+    render(<App />);
+    expect(await screen.findByText("Preview Artist")).toBeInTheDocument();
+    expect(screen.queryByText("Verify your phone")).not.toBeInTheDocument();
+    expect(supabase.rpc).not.toHaveBeenCalledWith("my_phone_verification_status");
+    fireEvent.click(screen.getByRole("button", { name: "Sign out" }));
+    expect(await screen.findByRole("heading", { name: "Sign in to SPLIT" })).toBeInTheDocument();
+    expect(screen.queryByText("Preview Artist")).not.toBeInTheDocument();
   });
 
   it("routes a validated recovery session to password reset before the dashboard", async () => {

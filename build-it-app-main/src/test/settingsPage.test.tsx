@@ -92,7 +92,8 @@ describe("account Settings", () => {
   it("keeps contact details private and unsupported delivery controls unavailable", async () => {
     await setup(); openCategory("Notifications");
     for (const el of screen.getAllByRole("switch")) { expect(el).toBeDisabled(); expect(el).not.toBeChecked(); }
-    expect(screen.getByRole("switch", { name: "Signature emails" })).toHaveAccessibleDescription(/not connected/);
+    expect(screen.getByRole("switch", { name: "Signature emails" })).toHaveAccessibleDescription(/Not available during beta/);
+    expect(screen.getByText("Invitation emails")).toBeInTheDocument();
     openCategory("Privacy & sharing");
     expect(screen.getByRole("switch", { name: "Hide contact details" })).toBeChecked();
     expect(screen.getByRole("switch", { name: "Hide contact details" })).toBeDisabled();
