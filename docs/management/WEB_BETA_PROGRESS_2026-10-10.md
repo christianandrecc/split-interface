@@ -19,18 +19,26 @@ Native reload warning remains **inconclusive**: fixture beforeunload event check
 
 Detailed session artifacts: `/tmp/split-web-beta-qa/QA_REPORT_a5add19.md`, `verification_a5add19.json`, independent test source/results and screenshots. These temporary artifacts are not durable release sign-off. The bounded corrections were delivered to **Web Development Agent (SPLIT)** through the supported chat tool, with a distinct commit and independent retest required.
 
-## GM-05 signing evidence: independent review active
+## GM-05 original signing evidence: corrections required
 
 Exact candidate: `06317a59ac8a600268db3da0fb7676484397f081`, branch `codex/web-beta-signing-evidence`, stacked on GM-03/02. Changes gate missing signing names through profile completion, distinguish original confirmed/incomplete/local record evidence in detail and PDF, and describe actual any-order signing. Historical records are preserved.
 
-Developer reports: **812 web tests**, typecheck/lint/build pass; **166 disposable database checks** pass; synthetic desktop/mobile and PDF visual checks pass. These are developer results. Independent QA was assigned through `followup_task` and acknowledged an isolated exact-SHA review; acceptance is pending.
+Developer reported **812 web tests** and **166 disposable database checks** passing. Independent original-candidate review subsequently **failed**: 88/88 focused candidate tests/typecheck pass, but 19/22 adversarial checks pass with three failures representing two P2 findings. Detail labels select the first conflicting approval instead of a neutral ambiguity state; a control-only supplied signing name sanitizes to empty in PDF while still certifying. The actual PDF contradiction was reproduced locally. No Auth bypass is asserted. Report: `/tmp/split-web-beta-qa/QA_REPORT_06317a5.md`.
 
 Review criteria: absent profile, wrong/missing signer IDs or names, unsupported methods, local/legacy final status, ambiguous/duplicate/stale evidence, valid current bound signatures, detail/PDF counts and labels, profile navigation and historical immutability. This consistency review does not establish real-world identity or legal enforceability. Versioned consent and legacy name provenance remain separate review gaps.
 
+## Delivered corrections and active retest
+
+- Creation correction `2fd0c24f6bc7658606b89823fabef70c9cd754e0` preserves invalid share strings at builder lifetime and restores discard-cancel/Escape focus to each opener.
+- Signing correction `c57f8b200046f2074c38e3c8cd4f82395478e49b` neutralizes ambiguous approvals and rejects render-empty signing-name evidence, retaining original historical data.
+- Developer reports 844 full web tests/typecheck/lint/build, creation 23/23 and signing 22/22 QA-case reruns, 166 disposable DB checks and desktop/mobile/PDF checks passing. These remain attributed developer results.
+- Independent combined retest at detached exact `c57f8b2` was dispatched and acknowledged. Original independent cases and additional meaningful edge/visual checks are being rerun; acceptance is pending. Correction commits do not erase the original failures above.
+- GM-02 current compatible dependency-remediation/options investigation was delivered to the web chat and is active. No force Tailwind major, unreviewed fork, audit suppression or threshold reduction is approved.
+
 ## Next sequence and remaining gates
 
-1. Commit the two GM-03 corrections and independently retest the exact correction SHA.
-2. Complete independent GM-05 review and correct any acceptance findings.
+1. Complete independent GM-03 correction acceptance at the exact candidate.
+2. Complete GM-05 correction acceptance, preserving consent/provenance and hosted limits.
 3. Expand local full-lifecycle checks: create, invite, counter, approve, sign, retrieve/export; permission denials, stale/duplicate requests, retry/session fixtures and responsive/accessibility behavior.
 4. Resolve GM-02's remaining dependency gate. Partial remediation leaves five high entries in the braces dependency chain; no audit threshold or rule was changed.
 5. Review delivered synthetic recovery and legal/support/closure preparation. Hosted Auth, actual inbox/receipt/alerts, current backup/restore and operating approval remain future beta gates.

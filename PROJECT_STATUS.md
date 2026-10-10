@@ -19,24 +19,24 @@ See [initial audit](docs/management/INITIAL_AUDIT.md) for source evidence, iOS c
 
 ## Immediate priorities
 
-1. Correct the two independently reproduced creation regressions, retest that commit, and independently review the signing/PDF candidate `06317a5`. [GM-03/05](AGENT_TASKS.md).
-2. Build native creation/owned drafts, then secure incomplete-draft recovery; independently review GM-04 negotiation/message candidate `c8839cd`. [GM-04/06](AGENT_TASKS.md), [native beta checklist](docs/management/IOS_BETA_CHECKLIST.md).
+1. Independently accept web corrections `2fd0c24` / `c57f8b2`, and complete the resumed compatible dependency-remediation/options review. [GM-02/03/05](AGENT_TASKS.md).
+2. Independently review native creation/recovery `5e81d6d` / `084220d` while the native agent completes current auth/invitation continuation. GM-04 now passes bounded local acceptance; integration remains open. [GM-04/06/11](AGENT_TASKS.md), [native beta checklist](docs/management/IOS_BETA_CHECKLIST.md).
 3. Continue local lifecycle/permissions/UX review and resolve the dependency gate; review delivered recovery and legal/support preparation. Hosted account/inbox tests remain deferred under the founder's local-only decision. [GM-02/08/09/10](AGENT_TASKS.md).
 
 ## Unmerged web-beta progress
 
 - GM-02 partial remediation `c8a06ed` reduced the dependency report from eight entries to five high entries; the configured gate still fails. No threshold was lowered.
-- GM-03 `a5add19` **failed independent acceptance**: invalid share text disappears after internal Back/return, and cancelling discard loses keyboard focus. Candidate 81/81 relevant tests pass; independent cases 21/23 pass with both failures reproduced in the browser. Corrections have been assigned. Actual native reload-warning behavior remains inconclusive.
-- GM-05 signing identity/detail/PDF candidate `06317a5` is committed and pushed. Developer reports 812 web tests and 166 disposable database checks passing; independent review is active in a separate exact-SHA checkout. Acceptance is pending.
+- GM-03 original `a5add19` failed independent acceptance for lost editing text/focus. Correction `2fd0c24` is committed/pushed, with independent retest active on descendant `c57f8b2`. Actual native browser reload-warning proof remains open.
+- GM-05 original `06317a5` failed independent acceptance for arbitrary conflicting-approval labels and control-only signing-name certification. Correction `c57f8b2` is committed/pushed and under independent retest. Developer reports 844 web tests/typecheck/lint/build and 166 disposable DB checks passing; independent acceptance remains pending.
 - Backend `dd74071` delivers a synthetic-only environment/recovery harness; GM independently reran ten focused tests successfully. Operations delivered a sanitized review packet with nine open gates. Neither establishes hosted recovery or legal/operating approval.
 
 [Candidate review record](docs/management/WEB_BETA_PROGRESS_2026-10-10.md). These results do not replace the verified `main` baseline above or authorize release.
 
 ## Unmerged native-beta progress
 
-- GM-04 `c8839cd` separates Accept/Counter eligibility and reconciles uncertain trimmed messages without erasing new typing. Developer reports 41 code/intercepted-HTTP tests, four Simulator UI tests and a fixture build/launch passing. Independent acceptance is active; real device/Keychain/session/VoiceOver/hosted evidence remains open.
-- GM-06A native creation and owned drafts is active in `22b2` / `codex/ios-development`: four-step editor, exact shares, canonical document/RPC fidelity, stable retries and protected exits. GM-06B account-scoped protected recovery follows as a separate candidate. No creation/persistence completion is claimed.
-- Auth/invitation continuation, complete agreement review/signing, finalized PDF viewing/sharing and native accessibility/release gates are explicitly queued. [Ordered checklist](docs/management/IOS_BETA_CHECKLIST.md).
+- GM-04 `c8839cd` **passes independent local acceptance**: 41 candidate XCTest, 75 additional adversarial checks and unsigned build. Supplied developer UI artifact confirms 4/4, without independent UI rerun. P2 invalid-frame warning needs polish triage; real device/Keychain/session/VoiceOver/hosted and integration remain open.
+- GM-06A creation `5e81d6d` and GM-06B protected recovery `084220d` are committed. Developer reports 54 creation host tests and 65 combined host tests after persistence, plus fixture UI/small-phone/app-relaunch evidence. Independent review is active at pinned `084220d`; acceptance is pending.
+- GM-11A auth/invitation continuation is actively implemented/tested under the founder's direct continuation. Full review/signing, PDF sharing and native accessibility/release gates follow. [Native progress](docs/management/IOS_BETA_PROGRESS_2026-10-10.md), [ordered checklist](docs/management/IOS_BETA_CHECKLIST.md).
 
 Recovery for the current Vault-backed scheduler and legal/support/closure readiness also block a release recommendation. [Risks](RISKS.md), [roadmap](ROADMAP.md), [release gates](LAUNCH_CHECKLIST.md).
 
@@ -55,4 +55,4 @@ Recovery for the current Vault-backed scheduler and legal/support/closure readin
 - SPLIT organization selected; proposed separate `split-integration` in `us-east-1` quoted $0/month on Free. Founder chose local testing for now; hosted setup is deferred and no target created. [Environment record](docs/management/INTEGRATION_ENVIRONMENT_PLAN.md). Hosted/inbox/recovery evidence remains required before beta approval.
 - Resolve review of legal documents, operating support/closure ownership, recovery budget, and paused SMS/password protection before applicable release gates. No purchase or publication is authorized by these records.
 
-No continuing GM schedule has been created. One existing weekly SMS reminder is active in the web chat; an account-closure reminder is paused. They are reminders, not continuous project supervision.
+Founder requested continuing GM monitoring and meaningful progress notifications; the interval is pending under the selected-cadence rule. No GM automation has been created yet. Existing weekly SMS/account-closure reminders are separate and unchanged.
