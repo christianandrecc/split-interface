@@ -37,7 +37,7 @@ Recovery for the current Vault-backed scheduler and legal/support/closure readin
 ## Founder decisions open
 
 - Founder directed execution toward web beta. Native development continues separately and is not a web-beta release gate; no native/public release is implied.
-- Select/approve hosted staging and provider isolation only after the environment proposal and cost are prepared (GM-01).
+- SPLIT organization selected; proposed separate `split-integration` in `us-east-1` quoted $0/month on Free. Founder chose local testing for now; hosted setup is deferred and no target created. [Environment record](docs/management/INTEGRATION_ENVIRONMENT_PLAN.md). Hosted/inbox/recovery evidence remains required before beta approval.
 - Resolve review of legal documents, operating support/closure ownership, recovery budget, and paused SMS/password protection before applicable release gates. No purchase or publication is authorized by these records.
 
 No continuing GM schedule has been created. One existing weekly SMS reminder is active in the web chat; an account-closure reminder is paused. They are reminders, not continuous project supervision.
