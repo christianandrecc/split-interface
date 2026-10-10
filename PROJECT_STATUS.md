@@ -1,6 +1,6 @@
 # SPLIT project status
 
-Last reviewed: October 10, 2026 (America/New_York). **Overall: At Risk.** Founder selected a combined web + iOS beta. The web app has substantial working code and fresh passing local checks; the native app has an integration foundation and delivered negotiation fixes, with creation/signing/export still in development. Closed beta is not yet verified. No target launch date is asserted.
+Last reviewed: October 10, 2026, 2:25 PM (America/New_York). **Overall: At Risk.** Founder selected a combined web + iOS beta. Web corrections and native negotiation/creation/protected recovery pass bounded independent local acceptance. Native auth/invitation continuation is delivered for independent QA; native review/signing has started, with PDF sharing next. Closed beta is not yet verified. No target launch date is asserted.
 
 ## Verified baseline
 
@@ -20,12 +20,13 @@ See [initial audit](docs/management/INITIAL_AUDIT.md) for source evidence, iOS c
 ## Immediate priorities
 
 1. Resolve remaining web dependency options and actual browser reload verification. Creation/focus and signing-evidence corrections now independently pass locally; integration/consent/hosted gates remain open. [GM-02/03/05](AGENT_TASKS.md).
-2. Complete and independently review current native auth/invitation continuation, then full review/signing/PDF. Negotiation, creation and protected editing now pass bounded local acceptance; integration/device/hosted evidence remains open. [GM-04/06/11](AGENT_TASKS.md), [native beta checklist](docs/management/IOS_BETA_CHECKLIST.md).
+2. Independently review native auth/invitation candidate `b80a751` while implementing full review/own-party signing, then PDF sharing. Negotiation, creation and protected editing pass bounded local acceptance; integration/device/hosted evidence remains open. [GM-04/06/11](AGENT_TASKS.md), [native beta checklist](docs/management/IOS_BETA_CHECKLIST.md).
 3. Continue local lifecycle/permissions/UX review and resolve the dependency gate; review delivered recovery and legal/support preparation. Hosted account/inbox tests remain deferred under the founder's local-only decision. [GM-02/08/09/10](AGENT_TASKS.md).
 
 ## Unmerged web-beta progress
 
 - GM-02 partial remediation `c8a06ed` reduced the dependency report from eight entries to five high entries; the configured gate still fails. No threshold was lowered.
+- The 2:20 PM heartbeat found the prior GM-02 turn ended without its dependency deliverable. A corrective bounded handoff was delivered; compact status confirms active disposable compatibility/options probes, with no approved major upgrade or fork.
 - GM-03 original `a5add19` failed for lost editing text/focus. Corrections pass independent local acceptance at descendant `c57f8b2`; actual native browser reload-warning cancel/confirm remains inconclusive/open.
 - GM-05 original `06317a5` failed for conflicting-approval labels and control-only name certification. Corrections independently pass at `c57f8b2`: combined 68 new/original independent cases,151 focused candidate checks and typecheck. Developer 844 full web/166 DB evidence remains separately attributed; integration/hosted signing/consent remain open.
 - Backend `dd74071` delivers a synthetic-only environment/recovery harness; GM independently reran ten focused tests successfully. Operations delivered a sanitized review packet with nine open gates. Neither establishes hosted recovery or legal/operating approval.
@@ -36,7 +37,8 @@ See [initial audit](docs/management/INITIAL_AUDIT.md) for source evidence, iOS c
 
 - GM-04 `c8839cd` **passes independent local acceptance**: 41 candidate XCTest, 75 additional adversarial checks and unsigned build. Supplied developer UI artifact confirms 4/4, without independent UI rerun. P2 invalid-frame warning needs polish triage; real device/Keychain/session/VoiceOver/hosted and integration remain open.
 - GM-06A creation and GM-06B protected recovery **pass independent local acceptance at `084220d`**: 65 candidate XCTest,119 additional adversarial checks and unsigned build. Origin `5e81d6d` diff reviewed, with execution at its descendant; developer UI/relaunch/maximum-text evidence inspected separately. Physical protection/backup/Keychain/minimum OS/VoiceOver/hosted and integration remain open.
-- GM-11A auth/invitation continuation is actively implemented/tested under the founder's direct continuation. Full review/signing, PDF sharing and native accessibility/release gates follow. [Native progress](docs/management/IOS_BETA_PROGRESS_2026-10-10.md), [ordered checklist](docs/management/IOS_BETA_CHECKLIST.md).
+- GM-11A `b80a7514361526330f0b7353b6b0b32da63517b2` delivers native confirmation/recovery, guarded callbacks/session restoration and explicit invitation continuation. Developer reports 86 code/HTTP tests, 13 Simulator journeys and unsigned build; independent exact-candidate QA is dispatched, not yet accepted. Registration/profile/consent remains a web handoff; actual inbox/OS callback/device/hosted proof remains open.
+- GM-06C full review/own-party signing handoff was delivered and compact status confirms active implementation. PDF sharing follows as a separate candidate. [Native progress](docs/management/IOS_BETA_PROGRESS_2026-10-10.md), [ordered checklist](docs/management/IOS_BETA_CHECKLIST.md).
 
 Recovery for the current Vault-backed scheduler and legal/support/closure readiness also block a release recommendation. [Risks](RISKS.md), [roadmap](ROADMAP.md), [release gates](LAUNCH_CHECKLIST.md).
 

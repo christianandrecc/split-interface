@@ -27,20 +27,19 @@ Developer reported **812 web tests** and **166 disposable database checks** pass
 
 Review criteria: absent profile, wrong/missing signer IDs or names, unsupported methods, local/legacy final status, ambiguous/duplicate/stale evidence, valid current bound signatures, detail/PDF counts and labels, profile navigation and historical immutability. This consistency review does not establish real-world identity or legal enforceability. Versioned consent and legacy name provenance remain separate review gaps.
 
-## Delivered corrections and active retest
+## Delivered corrections and bounded local acceptance
 
 - Creation correction `2fd0c24f6bc7658606b89823fabef70c9cd754e0` preserves invalid share strings at builder lifetime and restores discard-cancel/Escape focus to each opener.
 - Signing correction `c57f8b200046f2074c38e3c8cd4f82395478e49b` neutralizes ambiguous approvals and rejects render-empty signing-name evidence, retaining original historical data.
 - Developer reports 844 full web tests/typecheck/lint/build, creation 23/23 and signing 22/22 QA-case reruns, 166 disposable DB checks and desktop/mobile/PDF checks passing. These remain attributed developer results.
 - Independent combined retest at detached exact `c57f8b2` **passes bounded local correction acceptance**: 68/68 independent cases (45 unchanged original bodies +23 new),151/151 focused candidate checks and typecheck. Desktop/mobile strict editing/focus, neutral approvals and actual control/invisible/Unicode PDF cases pass; historical data preserved. Creation executed at the descendant, without a separate `2fd0c24` run. Actual native browser reload cancel/confirm remains inconclusive/open, so GM-03 is not complete. Hosted signing/consent/integration gates remain open. Report: `/tmp/split-web-beta-qa/QA_REPORT_c57f8b2.md`, `verification_c57f8b2.json`. Corrections do not erase the original failures above.
-- GM-02 current compatible dependency-remediation/options investigation was delivered to the web chat and is active. No force Tailwind major, unreviewed fork, audit suppression or threshold reduction is approved.
+- GM-02 current compatible dependency-remediation/options investigation was delivered to the web chat. The 2:20 PM heartbeat found that turn ended without its requested deliverable and without a new human scope change. A corrective bounded handoff was delivered; compact status confirms active disposable Tailwind 3 patch and Tailwind 4 manifest comparison probes. These probes do not authorize an app dependency migration, force major upgrade, fork, audit suppression or threshold reduction. Gate remains open.
 
 ## Next sequence and remaining gates
 
-1. Complete independent GM-03 correction acceptance at the exact candidate.
-2. Complete GM-05 correction acceptance, preserving consent/provenance and hosted limits.
-3. Expand local full-lifecycle checks: create, invite, counter, approve, sign, retrieve/export; permission denials, stale/duplicate requests, retry/session fixtures and responsive/accessibility behavior.
-4. Resolve GM-02's remaining dependency gate. Partial remediation leaves five high entries in the braces dependency chain; no audit threshold or rule was changed.
-5. Review delivered synthetic recovery and legal/support/closure preparation. Hosted Auth, actual inbox/receipt/alerts, current backup/restore and operating approval remain future beta gates.
+1. Deliver GM-02 compatible remediation or concrete architecture-preserving/migration options for review. Partial remediation leaves five high entries in the braces dependency chain; no audit threshold or rule was changed.
+2. Resolve GM-03 actual browser reload-warning cancel/confirm evidence. Editing/focus correction acceptance already passed locally at `c57f8b2`.
+3. Expand local full-lifecycle checks: create, invite, counter, approve, sign, retrieve/export; permission denials, stale/duplicate requests, retry/session fixtures and responsive/accessibility behavior. GM-05 corrected evidence acceptance already passed locally; consent/provenance and hosted limits remain.
+4. Review delivered synthetic recovery and legal/support/closure preparation. Hosted Auth, actual inbox/receipt/alerts, current backup/restore and operating approval remain future beta gates.
 
 SPLIT is the selected organization for a future isolated environment. Founder deferred its creation; no cost confirmation, target provisioning, hosted writes or mail are authorized by this record. No production merge/deployment, external contact or legal publication occurred.

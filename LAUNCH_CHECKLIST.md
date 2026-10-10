@@ -9,7 +9,7 @@ October 10, 2026. Check only with linked evidence for the exact candidate. Histo
 - [x] Disposable database: 166 checks, 30 migrations replayed, two scheduler/transport migrations explicitly excluded.
 - [x] Native `bf9723e`: 31 host tests and unsigned generic Simulator build pass; no device/app launch.
 - [ ] Resolve fresh dependency audit failure at configured threshold (GM-02).
-- [ ] Correct percentages/dirty-builder loss, native parity/reconciliation where applicable, and identity/legacy/export claims (GM-03–05). GM-03 independent acceptance failed pending editing-text/focus corrections; GM-05 `06317a5` is under independent review ([record](docs/management/WEB_BETA_PROGRESS_2026-10-10.md)).
+- [ ] Integrate locally accepted percentages/dirty-builder, native parity/reconciliation and identity/legacy/export corrections (GM-03–05). Independent web corrections pass at `c57f8b2` and native parity passes at `c8839cd`; actual browser reload protection, consent/provenance and hosted/integration gates remain open ([web record](docs/management/WEB_BETA_PROGRESS_2026-10-10.md), [native record](docs/management/IOS_BETA_PROGRESS_2026-10-10.md)).
 - [ ] Approve and validate isolated integration target with synthetic accounts and outbound delivery disabled (GM-01).
 - [ ] Verify complete lifecycle using A (creator), B (participant), C (outsider); extend to 3+ contributors, unknown email/@username, duplicate identities and declined invites (GM-08).
 - [ ] Exercise real Auth signup/confirmation/resend/recovery/email change, expired callbacks/session refresh, account switching and native links where applicable.
