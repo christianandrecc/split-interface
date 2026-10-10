@@ -14,6 +14,7 @@ import { AlertDialog, AlertDialogContent, AlertDialogDescription, AlertDialogFoo
 import { createSplitSheetDocument, addDocumentAuditTrail, type StoredSplitSheetDocument } from "./document";
 import type { UserProfile } from "@/lib/userProfile";
 import { prepareSplitInvite } from "@/lib/splitSheetWorkflow";
+import { splitShareState } from "@/lib/splitShare";
 import {
   STEPS,
   type StepId,
@@ -22,7 +23,6 @@ import {
   DEFAULT_CONTRACT,
   getTodayDateInputValue,
   makeParty,
-  sumPercents,
   isWriterReady,
 } from "./types";
 import { toast } from "sonner";
@@ -58,6 +58,8 @@ export default function ContractBuilder({
   const [step, setStep] = useState<StepId>(initialDocument ? "review" : "metadata");
   const [furthestStep, setFurthestStep] = useState(initialDocument ? STEPS.length - 1 : 0);
   const [data, setData] = useState<ContractData>(() => initialDocument?.data ?? createInitialContract(userProfile, settings));
+  const initialData = useRef(JSON.stringify(data));
+  const [pendingExit, setPendingExit] = useState<(() => void) | null>(null);
   const [sampleTrack, setSampleTrack] = useState<AppleMusicTrack | null>(null);
   const documentRef = useRef<StoredSplitSheetDocument | null>(initialDocument ?? null);
   const inFlight = useRef(false);
@@ -68,7 +70,25 @@ export default function ContractBuilder({
   const [deleting, setDeleting] = useState(false);
   const savingDocument = saving !== null || deleting;
   const canFinish = Boolean(data.songTitle.trim() && data.sampleStatus && data.parties.length
-    && data.parties.every(isWriterReady) && Math.abs(sumPercents(data.parties) - 100) < 0.01);
+    && data.parties.every(isWriterReady) && splitShareState(data.parties.map((party) => party.percent)).valid);
+  const dirty = JSON.stringify(data) !== initialData.current;
+  const warnOnExit = !completed && (dirty || savingDocument);
+
+  const requestExit = (leave: () => void) => {
+    if (inFlight.current || deleting) return;
+    if (warnOnExit) setPendingExit(() => leave);
+    else leave();
+  };
+
+  useEffect(() => {
+    if (!warnOnExit) return;
+    const beforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", beforeUnload);
+    return () => window.removeEventListener("beforeunload", beforeUnload);
+  }, [warnOnExit]);
 
   const stepIdx = STEPS.findIndex((s) => s.id === step);
   const contentRef = useContentEntrance<HTMLDivElement>(step);
@@ -86,7 +106,7 @@ export default function ContractBuilder({
     switch (target) {
       case "metadata": return !!data.songTitle.trim();
       case "clauses": return !!data.sampleStatus;
-      case "parties": return data.parties.length >= 1 && writersReady && Math.abs(sumPercents(data.parties) - 100) < 0.01;
+      case "parties": return writersReady && splitShareState(data.parties.map((party) => party.percent)).valid;
       case "review": return canFinish;
       default: return false;
     }
@@ -118,7 +138,7 @@ export default function ContractBuilder({
   const finishDocument = async (mode: "draft" | "send") => {
     if (inFlight.current || completed || deleting) return;
     if (!canFinish) {
-      setSaveError("Review the work details, collaborator addresses, and shares. Ownership must total 100%.");
+      setSaveError("Review the work details, collaborator addresses, and shares. Use up to 2 decimal places per share and a total of exactly 100%.");
       return;
     }
     if (initialDocument && (initialDocument.status !== "Draft" || initialDocument.sentAt)) {
@@ -185,7 +205,7 @@ export default function ContractBuilder({
           <div className="flex min-w-0 items-center gap-3">
             <button
               type="button"
-              onClick={onBack}
+              onClick={() => requestExit(onBack)}
               aria-label="Back"
               disabled={savingDocument}
               title="Back"
@@ -197,7 +217,7 @@ export default function ContractBuilder({
               type="button"
               aria-label="Go to Dashboard"
               disabled={savingDocument}
-              onClick={onHome ?? onBack}
+              onClick={() => requestExit(onHome ?? onBack)}
               className="hidden h-11 shrink-0 items-center rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30 sm:inline-flex"
             >
               <img src={splitLockup} alt="SPLIT" className="h-8 w-auto object-contain" />
@@ -241,7 +261,7 @@ export default function ContractBuilder({
             {saveError && !confirmSend && <p role="alert" className="mt-4 text-sm text-destructive">{saveError}</p>}
             <div className="sticky bottom-0 z-20 mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-border bg-background py-4">
               <button
-                onClick={stepIdx === 0 ? onBack : prev}
+                onClick={stepIdx === 0 ? () => requestExit(onBack) : prev}
                 className="inline-flex min-h-11 items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors font-medium"
               >
                 <ArrowLeft className="h-4 w-4" />{stepIdx === 0 ? "Cancel" : "Back"}
@@ -288,6 +308,18 @@ export default function ContractBuilder({
             </div>
           </fieldset>
       </main>
+      <AlertDialog open={pendingExit !== null} onOpenChange={(open) => { if (!open) setPendingExit(null); }}>
+        <AlertDialogContent className="w-[calc(100%-2rem)] max-w-md rounded-lg">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Leave without saving?</AlertDialogTitle>
+            <AlertDialogDescription>Your unsaved changes will be lost. Stay here to finish and save your split.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep editing</AlertDialogCancel>
+            <Button variant="destructive" onClick={() => { const leave = pendingExit; setPendingExit(null); leave?.(); }}>Leave without saving</Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

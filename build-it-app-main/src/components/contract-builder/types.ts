@@ -1,4 +1,5 @@
 import { isSupportedInvitation } from "../../lib/inviteIdentity.ts";
+import { splitShareUnits } from "../../lib/splitShare.ts";
 
 export const STEPS = [
   { id: "metadata", label: "Work", num: 1 },
@@ -255,7 +256,7 @@ export function hasWriterIdentity(party: Party) {
 }
 
 export function isWriterReady(party: Party) {
-  return hasWriterIdentity(party) && Number(party.percent) > 0;
+  return hasWriterIdentity(party) && splitShareUnits(party.percent) !== null;
 }
 
 export function makeParty(overrides: Partial<Party> = {}): Party {

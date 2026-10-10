@@ -1,12 +1,7 @@
 import type { SplitAllocation } from "@/lib/splitSheetNegotiation";
+import { splitShareUnits } from "./splitShare";
 
-export function counterShareUnits(value: string): number | null {
-  if (!value.trim()) return null;
-  const percent = Number(value);
-  const units = Math.round(percent * 100);
-  if (!Number.isFinite(percent) || percent < 0 || percent > 100 || Math.abs(percent * 100 - units) > 0.000001) return null;
-  return units;
-}
+export const counterShareUnits = splitShareUnits;
 
 export function counterAllocationState(allocations: SplitAllocation[], values: Record<string, string>) {
   const units = allocations.map((allocation) => counterShareUnits(values[allocation.participantId] ?? ""));

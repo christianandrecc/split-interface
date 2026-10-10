@@ -4,11 +4,11 @@ import {
   hasWriterIdentity,
   makeParty,
   partyDisplayName,
-  sumPercents,
   type ContractData,
   type Party,
 } from "./types";
 import type { UserProfile } from "@/lib/userProfile";
+import { splitShareState, splitShareUnits } from "@/lib/splitShare";
 import { searchPublicProfiles, type PublicProfileSearchResult } from "@/lib/globalSearch";
 import { filterCollaboratorSuggestions, type CollaboratorSuggestion } from "@/lib/collaboratorSuggestions";
 import { AtSign, AlertCircle, CheckCircle2, Loader2, Mail, Phone, Plus, Search, User, X } from "lucide-react";
@@ -62,19 +62,12 @@ function normalizeInviteValue(value: string, method: string) {
   return trimmed;
 }
 
-function clampPercent(value: string) {
-  const next = Number(value);
-  if (!Number.isFinite(next)) return 0;
-  return Math.min(100, Math.max(0, next));
-}
-
 export default function StepParties({ data, onChange, recentCollaborators = [], currentProfile }: Props) {
   const { parties } = data;
   const [percentDrafts, setPercentDrafts] = useState<Record<string, string>>({});
   const activeSplitType = data.splitType === "Equal" ? "Equal" : "Custom";
   const isEqualSplit = activeSplitType === "Equal";
-  const total = useMemo(() => sumPercents(parties), [parties]);
-  const valid = Math.abs(total - 100) < 0.01;
+  const { total, valid, complete } = splitShareState(parties.map((party) => party.percent));
   const incompleteWriters = parties
     .map((party, index) => ({
       label: partyDisplayName(party) === "Invited collaborator" ? `Collaborator ${index + 1}` : partyDisplayName(party),
@@ -86,28 +79,9 @@ export default function StepParties({ data, onChange, recentCollaborators = [], 
     onChange({ parties: parties.map((p) => (p.id === id ? { ...p, [field]: val } : p)) });
 
   const updatePercent = (id: string, rawValue: string) => {
-    if (rawValue.trim() === "") {
-      setPercentDrafts((current) => ({ ...current, [id]: "" }));
-      update(id, "percent", 0);
-      return;
-    }
-
-    const numericValue = Number(rawValue);
-    const displayValue = numericValue > 100 ? "100" : numericValue < 0 ? "0" : rawValue;
-
-    setPercentDrafts((current) => ({ ...current, [id]: displayValue }));
-    update(id, "percent", clampPercent(displayValue));
-  };
-
-  const commitPercent = (id: string) => {
-    const rawValue = percentDrafts[id];
-    if (rawValue === undefined) return;
-
-    update(id, "percent", rawValue.trim() === "" ? 0 : clampPercent(rawValue));
-    setPercentDrafts((current) => {
-      const { [id]: _discarded, ...rest } = current;
-      return rest;
-    });
+    setPercentDrafts((current) => ({ ...current, [id]: rawValue }));
+    // Invalid input remains editable but cannot pass the parent review/save gate.
+    update(id, "percent", splitShareUnits(rawValue) === null ? NaN : Number(rawValue));
   };
 
   const updateInvite = (id: string, rawValue: string) => {
@@ -182,6 +156,7 @@ export default function StepParties({ data, onChange, recentCollaborators = [], 
     const nextParties = parties
       .filter((p) => p.id !== id)
       .map((p, index) => ({ ...p, signingOrder: index + 1 }));
+    if (isEqualSplit || nextParties.length === 1) setPercentDrafts({});
 
     onChange({
       parties:
@@ -214,7 +189,7 @@ export default function StepParties({ data, onChange, recentCollaborators = [], 
               {valid ? <CheckCircle2 className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
               {total}% <span className="font-normal text-muted-foreground">/ 100%</span>
             </span>
-            {!valid && <p className="mt-1 text-xs text-destructive">{total > 100 ? `Over by ${(total - 100).toFixed(2)}%` : `${(100 - total).toFixed(2)}% remaining`}</p>}
+            {!valid && complete && <p className="mt-1 text-xs text-destructive">{total > 100 ? `Over by ${(total - 100).toFixed(2)}%` : `${(100 - total).toFixed(2)}% remaining`}</p>}
           </div>
         </div>
       </div>
@@ -262,17 +237,18 @@ export default function StepParties({ data, onChange, recentCollaborators = [], 
                   <div className="relative">
                     <input type="number" aria-label={`Split Share for ${partyDisplayName(p)}`}
                       min={0} max={100} step="0.01"
-                      value={isEqualSplit ? p.percent : percentDrafts[p.id] ?? String(p.percent)}
+                      value={isEqualSplit ? p.percent : percentDrafts[p.id] ?? (Number.isFinite(p.percent) ? String(p.percent) : "")}
+                      aria-invalid={splitShareUnits(p.percent) === null}
+                      aria-describedby={missingItems.length ? `share-error-${p.id}` : undefined}
                       disabled={isEqualSplit}
                       onFocus={(event) => event.currentTarget.select()}
                       onChange={(event) => updatePercent(p.id, event.target.value)}
-                      onBlur={() => commitPercent(p.id)}
                       className={`field-input h-11 py-2 pr-7 tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none ${isEqualSplit ? "cursor-not-allowed bg-secondary/60 text-muted-foreground" : ""}`} />
                     <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">%</span>
                   </div>
                 </InputCell>
               </div>
-              {missingItems.length > 0 && <p className="mt-2 flex items-start gap-1.5 text-xs text-destructive"><AlertCircle className="h-3.5 w-3.5 shrink-0" />Required: {missingItems.join(", ")}</p>}
+              {missingItems.length > 0 && <p id={`share-error-${p.id}`} className="mt-2 flex items-start gap-1.5 text-xs text-destructive"><AlertCircle className="h-3.5 w-3.5 shrink-0" />Required: {missingItems.join(", ")}</p>}
             </section>
           );
         })}
@@ -557,7 +533,7 @@ function getMissingWriterItems(party: Party) {
   const missing: string[] = [];
 
   if (!hasWriterIdentity(party)) missing.push("valid email or @username invitation");
-  if (Number(party.percent) <= 0) missing.push("split share");
+  if (splitShareUnits(party.percent) === null) missing.push("a share from 0 to 100%, with up to 2 decimal places");
 
   return missing;
 }

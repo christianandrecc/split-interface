@@ -1,5 +1,6 @@
 import { addDocumentAuditTrail, type StoredSplitSheetDocument } from "@/components/contract-builder/document";
 import { normalizeSplitSheetParticipantId } from "@/lib/splitSheetParticipantState";
+import { splitShareState } from "./splitShare";
 
 export const SPLIT_PERCENT_EPSILON = 0.01;
 
@@ -24,11 +25,13 @@ export function validateSplitPercentages(percentages: Array<number | string>): S
   const missing = roundSplitPercent(Math.max(0, 100 - total));
   const overage = roundSplitPercent(Math.max(0, total - 100));
   const errors: string[] = [];
+  const shares = splitShareState(percentages);
 
   if (percentages.length === 0) errors.push("Add at least one collaborator.");
   if (percentages.some((value) => Number(value) < 0)) errors.push("Ownership percentages cannot be negative.");
   if (percentages.some((value) => Number(value) > 100)) errors.push("A collaborator cannot own more than 100%.");
-  if (Math.abs(total - 100) > SPLIT_PERCENT_EPSILON) {
+  if (!shares.complete) errors.push("Each share needs a value from 0 to 100%, with up to 2 decimal places.");
+  if (shares.complete && !shares.valid) {
     errors.push(total > 100 ? `Ownership is over by ${overage}%.` : `Ownership is missing ${missing}%.`);
   }
 
