@@ -19,7 +19,7 @@ Current beta scope: **web + iOS**, selected directly by the founder and recorded
 
 - **Objective/behavior:** establish a creator account through confirmed email; sign in, refresh, recover and switch accounts without leaking prior state. Required data: canonical user ID/email, password, username, supplied legal/professional names, required phone, versioned signup acknowledgements.
 - **Permissions/errors:** account-owner session/profile only; reject unavailable username/invalid input, expired callback, incorrect credentials, and missing profile; retry confirmation/recovery without treating API success as inbox receipt. Do not infer legal identity from an email local part for signing (GM-05).
-- **Platforms/completion:** web signup/login/recovery exists; native `b80a751` passes local core WITH P2 raw-path/restored-grant/late-account corrections, committed for independent retest at `f7fc8e6`. Registration/profile/consent still uses web. Stricter boundary assertions have nine failures; real inbox/server PKCE settings, warm/cold OS delivery, Keychain/device and hosted session behavior remain unverified. Pass corrected local boundaries and genuine account/recovery/session/invitation journeys for combined beta.
+- **Platforms/completion:** web signup/login/recovery exists; native auth hardening `f7fc8e6` passes independent local acceptance, closing raw-path/restored-grant/late-account findings with 111 XCTest + 147 additional assertions/build. Registration/profile/consent still uses web. Real inbox/server PKCE settings, warm/cold OS delivery, Keychain/device and hosted session behavior remain unverified. Genuine account/recovery/session/invitation journeys remain required for combined beta.
 
 ## User profiles and account settings
 
@@ -43,7 +43,7 @@ Current beta scope: **web + iOS**, selected directly by the founder and recorded
 
 - **Objective/behavior:** sent-sheet participants receive in-app access and eligible invitation email; explicitly accept/decline before proposal participation. Unknown username recipients wait for a confirmed account address; notification receipt is distinct from participation.
 - **Data/permissions/errors:** canonical invitation/membership, sheet ID, immutable email job identity, current recipient binding and status. Creator-only diagnostics/retry; service-only worker and signed receipts. Cancel accepted/declined/changed-recipient jobs, bound expiry/retries, protect duplicate/ambiguous sends, and handle expired/unauthorized links without leaking documents.
-- **Platforms/completion:** web invitation response/delivery UI exists; native creation/response exists and account/invitation continuation `b80a751` is in local QA. Native receipt diagnostics and actual delivery remain unverified. Prove approved controlled-inbox receipt, correct authenticated continuation/acceptance/decline, creator-only failures/retry, and unrelated-account denial. No SMS invitation capability.
+- **Platforms/completion:** web invitation response/delivery UI exists; native creation/response and account/invitation continuation `f7fc8e6` pass bounded local QA. Native receipt diagnostics and actual delivery remain unverified. Prove approved controlled-inbox receipt, correct authenticated continuation/acceptance/decline, creator-only failures/retry, and unrelated-account denial. No SMS invitation capability.
 
 ## Negotiation and agreement revisions
 
@@ -73,7 +73,7 @@ Current beta scope: **web + iOS**, selected directly by the founder and recorded
 
 - **Objective/behavior:** same account sees the same canonical work/current proposal, invitations, signatures and audit events on web/iOS. Poll/focus/foreground refresh should recover stale views.
 - **Data/permissions/errors:** canonical IDs, revisions, proposal identity, participant projection and notification recipient. Expired sessions, offline/uncertain results and rapid competing actions must not mix accounts or duplicate writes.
-- **Platforms/completion:** shared RPCs, separate native/web models and polling exist; native auth/invitation local core passes with three P2 corrections active, while actual OS/hosted callback proof and notification/push remain open. Test web-created agreement in iOS, native counter in web, current-proposal response/signature invalidation, refresh/signout, and outsider denial on an approved isolated target.
+- **Platforms/completion:** shared RPCs, separate native/web models and polling exist; native auth/invitation hardening passes local QA at f7fc8e6, while actual OS/hosted callback proof and notification/push remain open. Test web-created agreement in iOS, native counter in web, current-proposal response/signature invalidation, refresh/signout, and outsider denial on an approved isolated target.
 
 ## Account closure and sensitive-record retention
 

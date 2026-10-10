@@ -2,12 +2,12 @@
 
 Baseline: October 10, 2026; web `4bf5a2a`, iOS `bf9723e`. Status vocabulary: **Not started, Planned, In progress, Implemented, Tested, Blocked, Deferred**. Implemented means inspected code exists. Tested denotes the stated local scope only; no row certifies a hosted multi-account journey or release. Backend status includes local RPC verification plus migration presence, not hosted behavioral certification.
 
-Current unmerged candidates: web correction `c57f8b2`, native negotiation `c8839cd` and creation/protected recovery `084220d` pass bounded independent local acceptance. Auth/invitation core accepted WITH P2; correction `f7fc8e6` awaits independent retest. Signing `e1ec61d` failed independent acceptance, hardening active and PDF blocked. Rows include candidate states without replacing baseline or certifying hosted behavior. [Ordered native checklist](docs/management/IOS_BETA_CHECKLIST.md), [web evidence](docs/management/WEB_BETA_PROGRESS_2026-10-10.md).
+Current unmerged candidates: web correction `c57f8b2`, native negotiation `c8839cd`, creation/protected recovery `084220d` and auth hardening `f7fc8e6` pass bounded independent local acceptance. Separate web orphan-evidence correction is active. Signing `e1ec61d` failed independent acceptance, hardening active and PDF blocked. Rows include candidate states without replacing baseline or certifying hosted behavior. [Ordered native checklist](docs/management/IOS_BETA_CHECKLIST.md), [web evidence](docs/management/WEB_BETA_PROGRESS_2026-10-10.md).
 
 | Feature | Web | iOS | Backend | Priority / dependency and validation |
 | --- | --- | --- | --- | --- |
 | Email/password sign-in/session isolation | Tested | Tested | Implemented | P1; local UI and native intercepted-HTTP/domain tests; Keychain/session/device and hosted refresh/recovery open |
-| Signup/email confirmation/recovery | Tested | Tested | Implemented | P1 GM-11A; `b80a751` local core accepted WITH three P2 corrections; stricter path/grant/late-account boundaries not passing; registration remains web; inbox/OS/hosted open |
+| Signup/email confirmation/recovery | Tested | Tested | Implemented | P1 GM-11A; f7fc8e6 auth hardening independently passes 111 XCTest + 147 additional assertions/build; three prior P2 findings closed locally; registration remains web; inbox/OS/device/hosted open |
 | Profiles and account settings | Tested | In progress | Tested | P1; native reads exist, edits/settings use web; local privacy tests |
 | Split creation and owned drafts | Tested | Tested | Tested | P1 GM-03/06A; native local acceptance at `084220d`; web corrections accepted at `c57f8b2`, actual browser reload protection open; integration/hosted proof open |
 | Protected incomplete editing recovery | Not started | Tested | Deferred | P1 GM-06B; native local acceptance at `084220d`; actual locked-device protection/backup/Keychain proof open; server persistence/queued actions excluded |
