@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { makeSignedDocument } from "@/test/fixtures/splitSheet";
 import { splitSigningEvidence } from "@/lib/splitSigningEvidence";
@@ -60,6 +60,7 @@ describe("account-bound signing evidence", () => {
     expect(screen.getByText("0 / 2")).toBeInTheDocument();
     expect(screen.queryByText("All signed")).not.toBeInTheDocument();
     expect(screen.queryByText("Approved")).not.toBeInTheDocument();
+    expect(screen.getAllByText("Unconfirmed")).toHaveLength(2);
     expect(screen.getAllByText("Not recorded")).toHaveLength(2);
   });
 
@@ -81,6 +82,61 @@ describe("account-bound signing evidence", () => {
     expect(splitSigningEvidence(rounded, "server").signed).toBe(false);
   });
 
+  it.each(["Approved", "Rejected", "Pending"] as const)("shows duplicate %s approvals as unconfirmed in either order", status => {
+    const doc = makeSignedDocument();
+    doc.splitApprovals.push({ ...doc.splitApprovals[0], id: "duplicate", collaboratorId: "creator-party", status });
+    const before = JSON.stringify(doc);
+    const view = render(<AgreementDetail agreement={documentToAgreement(doc)} viewerProfile={doc.creatorProfile} />);
+    for (const candidate of [doc, { ...doc, splitApprovals: [...doc.splitApprovals].reverse() }]) {
+      view.rerender(<AgreementDetail agreement={documentToAgreement(candidate)} viewerProfile={candidate.creatorProfile} />);
+      const row = within(screen.getByText("Chori").closest("div.grid.gap-3.px-4.py-4") as HTMLElement);
+      expect(row.getByText("Unconfirmed")).toBeInTheDocument();
+      expect(row.queryByText("Approved")).not.toBeInTheDocument();
+      expect(row.queryByText("Rejected")).not.toBeInTheDocument();
+      expect(row.queryByText("Pending")).not.toBeInTheDocument();
+      const model = buildSplitSheetPdfModel(candidate, candidate.creatorProfile, undefined, "server");
+      expect(model).toMatchObject({ signed: false, verified: false });
+      expect(model.people[0].approved).toBe(false);
+      expect(model.people[1].approved).toBe(true);
+    }
+    expect(JSON.stringify(doc)).toBe(before);
+  });
+
+  it.each(["Approved", "Rejected", "Pending"] as const)("preserves an unambiguous %s approval and ignores other proposals", status => {
+    const doc = makeSignedDocument(); doc.splitApprovals[0].status = status;
+    doc.splitApprovals.push({ ...doc.splitApprovals[0], id: "historical", status: "Rejected", proposalVersionId: "old" });
+    render(<AgreementDetail agreement={documentToAgreement(doc)} viewerProfile={doc.creatorProfile} />);
+    const row = within(screen.getByText("Chori").closest("div.grid.gap-3.px-4.py-4") as HTMLElement);
+    expect(row.getByText(status)).toBeInTheDocument();
+    expect(row.queryByText("Unconfirmed")).not.toBeInTheDocument();
+    expect(buildSplitSheetPdfModel(doc, doc.creatorProfile, undefined, "server").people[0].approved).toBe(status === "Approved");
+  });
+
+  it.each([undefined, "", " \t\n ", "\u0001", "\u0000\u007f\u0085", " \t\n\u0001 ", "\u200b\u200d\u2060", "\u00ad"])(
+    "does not count a non-rendering supplied name %j or replace it with a roster name", name => {
+      const doc = makeSignedDocument(); doc.splitSignatures[0].signerLegalName = name;
+      const before = JSON.stringify(doc);
+      expect(splitSigningEvidence(doc, "server")).toMatchObject({ signed: false, verified: false, signedCount: 1 });
+      const model = buildSplitSheetPdfModel(doc, doc.creatorProfile, undefined, "server");
+      expect(model).toMatchObject({ signed: false, verified: false, signedCount: 1 });
+      expect(model.people[0].confirmed).toBe(false);
+      expect(model.people[0].legal).toBe("");
+      render(<AgreementDetail agreement={documentToAgreement(doc)} viewerProfile={doc.creatorProfile} />);
+      expect(screen.getByText("1 / 2")).toBeInTheDocument();
+      expect(screen.getByText("Evidence incomplete")).toBeInTheDocument();
+      expect(within(screen.getByText("Chori").closest("div.grid.gap-3.px-4.py-4") as HTMLElement).getByText("Unverified")).toBeInTheDocument();
+      expect(JSON.stringify(doc)).toBe(before);
+    },
+  );
+
+  it.each(["María José Núñez", "Jose\u0301", "\u0001Christian\u0002 Carrera"])("retains visible supplied name evidence %j without rewriting snapshots", name => {
+    const doc = makeSignedDocument(); doc.splitSignatures[0].signerLegalName = name;
+    const before = JSON.stringify(doc);
+    expect(splitSigningEvidence(doc, "server")).toMatchObject({ signed: true, verified: true, signedCount: 2 });
+    expect(buildSplitSheetPdfModel(doc, doc.creatorProfile, undefined, "server").people[0].legal).not.toBe("");
+    expect(JSON.stringify(doc)).toBe(before);
+  });
+
   it("retains recorded order metadata but describes the actual any-order behavior", () => {
     const doc = makeSignedDocument(); doc.data.signingOrderEnabled = true;
     const before = JSON.stringify(doc);
@@ -90,10 +146,10 @@ describe("account-bound signing evidence", () => {
     expect(JSON.stringify(doc)).toBe(before); expect(DEFAULT_CONTRACT.signingOrderEnabled).toBe(false);
   });
 
-  it("routes a missing signing name to profile completion without submitting a signature", () => {
+  it.each(["", "\u0001", "\u200b\u200d"])("routes a missing or non-rendering signing name %j to profile completion without submitting a signature", legalName => {
     const doc = makeSignedDocument(); doc.status = "Ready to Sign"; delete doc.verifiedAt;
     doc.splitSignatures = [];
-    const profile = { ...doc.creatorProfile, authUserId: doc.creatorUserId!, legalName: "", legalFirstName: "", legalLastName: "" };
+    const profile = { ...doc.creatorProfile, authUserId: doc.creatorUserId!, legalName, legalFirstName: "", legalLastName: "" };
     const onUpdateDocument = vi.fn(); const onCompleteSigningIdentity = vi.fn();
     render(<CollaborationView documents={[doc]} userProfile={profile} onUpdateDocument={onUpdateDocument} onCompleteSigningIdentity={onCompleteSigningIdentity} />);
     expect(screen.queryByRole("button", { name: "Sign" })).not.toBeInTheDocument();

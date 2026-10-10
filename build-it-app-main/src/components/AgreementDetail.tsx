@@ -76,7 +76,7 @@ type SummaryParticipant = {
   role: string;
   percent: number;
   inviteStatus?: "Pending" | "Accepted" | "Declined";
-  approvalStatus?: "Pending" | "Approved" | "Rejected";
+  approvalStatus?: "Pending" | "Approved" | "Rejected" | "Unconfirmed";
   signatureStatus?: "Pending" | "Signed" | "Unverified" | "Not recorded";
 };
 
@@ -168,12 +168,11 @@ export default function AgreementDetail({
   const invites = document?.collaboratorInvites ?? [];
   const inviteDeclined = !isFinalRecord && invites.some((invite) => invite.status === "Declined");
   const currentProposal = document?.splitProposalVersions.find((proposal) => proposal.id === document.currentProposalId) ?? document?.splitProposalVersions.at(-1);
-  const currentApprovals = document?.splitApprovals.filter((approval) => approval.proposalVersionId === currentProposal?.id) ?? [];
   const currentSignatures = document?.splitSignatures.filter((signature) => signature.proposalVersionId === currentProposal?.id) ?? [];
   const evidence = document ? splitSigningEvidence(document, isSupabaseConfigured ? "server" : "local") : undefined;
   const incompleteEvidence = isFinalRecord && !evidence?.signed;
   const canOpenMessages = Boolean(document?.sentAt && agreement.status !== "Draft" && onOpenMessages);
-  const participants = buildSummaryParticipants(agreement, currentProposal, currentApprovals, currentSignatures, evidence);
+  const participants = buildSummaryParticipants(agreement, currentProposal, currentSignatures, evidence);
   const totalPercent = Math.round(participants.reduce((s, p) => s + p.percent, 0) * 100) / 100;
   const signedCount = evidence?.signedCount ?? 0;
   const requiredSignatureCount = document?.data.parties.length ?? participants.length;
@@ -380,7 +379,6 @@ export default function AgreementDetail({
 function buildSummaryParticipants(
   agreement: Agreement,
   currentProposal: NonNullable<Agreement["document"]>["splitProposalVersions"][number] | undefined,
-  currentApprovals: NonNullable<Agreement["document"]>["splitApprovals"],
   visibleSignatures: NonNullable<Agreement["document"]>["splitSignatures"],
   evidence?: ReturnType<typeof splitSigningEvidence>,
 ): SummaryParticipant[] {
@@ -402,9 +400,7 @@ function buildSummaryParticipants(
       const invite = document.collaboratorInvites.find((item) => item.partyId === allocation.partyId || item.id === allocation.partyId);
       const participantId = party?.isCurrentUser ? "creator" : invite?.id || allocation.partyId;
       const name = party ? splitSheetPartyDisplayName(document, party, allocation.name) : allocation.name || "SPLIT user";
-      const approval = currentApprovals.find((item) =>
-        normalizeSplitSheetParticipantId(document, item.collaboratorId) === normalizeSplitSheetParticipantId(document, participantId)
-      );
+      const participantEvidence = evidence?.people.find((person) => person.partyId === allocation.partyId);
       const signature = visibleSignatures.find((item) =>
         normalizeSplitSheetParticipantId(document, item.collaboratorId) === normalizeSplitSheetParticipantId(document, participantId)
       );
@@ -416,8 +412,8 @@ function buildSummaryParticipants(
         role: allocation.role || party?.role || "Collaborator",
         percent: Number(allocation.percentage) || 0,
         inviteStatus: invite?.status,
-        approvalStatus: approval?.status,
-        signatureStatus: evidence?.people.find((person) => person.partyId === allocation.partyId)?.confirmed ? "Signed" : signature?.status === "Signed" ? "Unverified" : signature?.status,
+        approvalStatus: participantEvidence?.approval?.status ?? "Unconfirmed",
+        signatureStatus: participantEvidence?.confirmed ? "Signed" : signature?.status === "Signed" ? "Unverified" : signature?.status,
       };
     });
   }
@@ -779,8 +775,8 @@ function AlertBanner({
   );
 }
 
-function ApprovalStatus({ status }: { status: "Pending" | "Approved" | "Rejected" }) {
-  const tone = status === "Approved" ? "verified" : status === "Rejected" ? "amended" : "pending";
+function ApprovalStatus({ status }: { status: NonNullable<SummaryParticipant["approvalStatus"]> }) {
+  const tone = status === "Approved" ? "verified" : status === "Rejected" ? "amended" : status === "Unconfirmed" ? "neutral" : "pending";
   return <Chip tone={tone}>{status}</Chip>;
 }
 

@@ -2,6 +2,7 @@ import type { StoredSplitSheetDocument } from "@/components/contract-builder/doc
 import { normalizeSplitSheetParticipantId } from "./splitSheetParticipantState";
 import { splitShareState } from "./splitShare";
 import { VERIFIED_SPLIT_STATUSES } from "./splitWorkflow";
+import { hasRenderableRecordText } from "./splitRecordText";
 
 export type SigningEvidenceSource = "server" | "local";
 const hasText = (value?: string | null) => Boolean(value?.trim());
@@ -39,7 +40,7 @@ export function splitSigningEvidence(document: StoredSplitSheetDocument, source:
       normalizeSplitSheetParticipantId(document, signature.collaboratorId) === id && signature.status === "Signed");
     const recordedSignature = signatures[0];
     const confirmed = Boolean(serverRecord && distinctUsers && distinctParticipants && proposal && signatures.length === 1 && recordedSignature &&
-      recordedSignature.signerUserId === expectedUsers[index] && hasText(recordedSignature.signerLegalName) &&
+      recordedSignature.signerUserId === expectedUsers[index] && hasRenderableRecordText(recordedSignature.signerLegalName) &&
       hasDate(recordedSignature.signedAt) && recordedSignature.signatureMethod === "SPLIT in-app acknowledgement");
     const approvals = document.splitApprovals.filter((item) => proposal && item.proposalVersionId === proposal.id &&
       normalizeSplitSheetParticipantId(document, item.collaboratorId) === id);

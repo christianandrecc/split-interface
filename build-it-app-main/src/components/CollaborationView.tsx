@@ -56,6 +56,7 @@ import {
   type SplitVersion,
 } from "@/lib/splitSheetNegotiation";
 import type { UserProfile } from "@/lib/userProfile";
+import { hasRenderableRecordText } from "@/lib/splitRecordText";
 import ConversationInvitations from "@/components/ConversationInvitations";
 import CounterOfferDialog from "@/components/CounterOfferDialog";
 import DealSummary from "@/components/DealSummary";
@@ -87,7 +88,7 @@ type CollaborationViewProps = {
 };
 
 export default function CollaborationView({ documents, userProfile, initialDealId, onUpdateDocument, onOpenAgreement, onCompleteSigningIdentity, onReloadDocuments, reloading = false }: CollaborationViewProps) {
-  const hasSigningName = Boolean(userProfile.legalName?.trim());
+  const hasSigningName = hasRenderableRecordText(userProfile.legalName);
   const deals = useMemo(
     () => documents.map((document) => documentToNegotiationDeal(document, userProfile)).filter(Boolean) as NegotiationDeal[],
     [documents, userProfile],

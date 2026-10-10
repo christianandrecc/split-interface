@@ -133,6 +133,20 @@ describe("Studio Record PDF", () => {
     expect(model.people[1].legal).toBe("");
   });
 
+  it("does not certify or typeset a control-only legal snapshot as a signature", async () => {
+    const doc = signedDocument(); doc.splitSignatures[0].signerLegalName = "\u0001";
+    const before = JSON.stringify(doc);
+    const result = await renderSplitSheetPdf(doc, doc.creatorProfile, assets);
+    expect(result.model).toMatchObject({ signed: false, verified: false, signedCount: 1 });
+    expect(result.model.people[0]).toMatchObject({ legal: "", confirmed: false });
+    expect(text(result.layout)).toContain("Chori (legal name not recorded)");
+    expect(text(result.layout)).toContain("Unverified signing record");
+    expect(text(result.layout)).toContain("Signing evidence incomplete. Not certified.");
+    expect(text(result.layout)).not.toMatch(/FINAL VERSION|Signed\. Verified by SPLIT\./);
+    expect(JSON.stringify(doc)).toBe(before);
+    if (process.env.SPLIT_PDF_QA_CONTROL_NAME) writeFileSync(process.env.SPLIT_PDF_QA_CONTROL_NAME, result.bytes);
+  });
+
   it("uses current proposal shares and rejects missing allocations as final", () => {
     const doc = signedDocument();
     doc.data.parties[0].percent = 1;

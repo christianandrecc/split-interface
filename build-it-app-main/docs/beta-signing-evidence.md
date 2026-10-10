@@ -34,7 +34,7 @@ release authorization. Stacked on GM-03 `a5add19` and GM-02 `c8a06ed`.
   PDF describe actual behavior as any order after all approvals, while separately
   retaining the original order setting. Historical contract data is untouched.
 
-## Local verification
+## Original candidate verification (`06317a5`)
 
 `npm run verify:beta`: exit 0, 812 tests in 79 files, typecheck/lint/build passed.
 Seven existing Fast Refresh warnings and the existing large-bundle warning remain.
@@ -82,6 +82,67 @@ unconfirmed-PDF logo is still the old mark, a separate branding follow-up.
 Reproducible test sources are committed. Session-only logs/scripts/screenshots
 are outside Git under `/tmp/split-web-gm05-*`; no private agreements or tokens are
 part of the candidate.
+
+## Corrections after independent review
+
+Independent review of exact `06317a59ac8a600268db3da0fb7676484397f081` failed on
+QA-GM05-1/2. Its report is `/tmp/split-web-beta-qa/QA_REPORT_06317a5.md`.
+The original signing commit is unchanged. This bounded follow-up is stacked on
+the separate creation correction `2fd0c24f6bc7658606b89823fabef70c9cd754e0`.
+
+- QA-GM05-1: detail approval badges now use the same per-party, current-proposal
+  evidence result as PDF certification. Missing or duplicate responses display
+  neutral `Unconfirmed`, independent of array order; a unique recorded Approved,
+  Rejected or Pending response retains its actual label. Participant aliases are
+  included in duplicate detection. Historical approvals are not deleted/rewritten.
+- QA-GM05-2: evidence counts, reachable signing availability and PDF name display
+  share presentation-safe text-presence checks. Control-only, whitespace-only,
+  missing and default-ignorable-only names cannot confirm or certify a signature.
+  The original NFC/control-character display normalization is shared, not copied.
+  Valid accented/decomposed names and supplied historical snapshots remain usable.
+  This checks visible text presence, not real-world identity or name authenticity.
+- When an actual signing record lacks a usable legal-name snapshot, PDF display
+  no longer fills that snapshot from a later roster/profile name. It says legal
+  name not recorded and Unverified; original source fields remain unchanged.
+  No authoritative server identity rules, schema, legal copy, consent semantics,
+  historical snapshots or native contracts were changed.
+
+Twenty added regression cases cover participant-row labels in both duplicate
+orders, identical/conflicting/pending duplicates, unique response preservation,
+historical-proposal exclusion, missing/control/invisible names, valid Unicode
+names, reachable signing gates, and actual control-name PDF rendering. Eleven
+new cases failed before the product correction, reproducing the reported gaps.
+
+Verification for the follow-up:
+
+- `npm run verify:beta`: 844 tests / 79 files passed; typecheck/lint/build pass.
+  Seven pre-existing Fast Refresh warnings and the existing bundle warning remain.
+- Developer rerun of QA's 22 adversarial/identity cases: 22/22 pass. Assertion
+  bodies are unchanged; only PDF artifact paths in a copied test file point to
+  this developer's `/tmp` outputs, preserving QA's original evidence. The original
+  profile test is reused unchanged. Network-deny setup remains enabled. This is
+  developer evidence, not a new independent acceptance decision.
+- `npm run verify:database`: 166 checks / 30 migrations pass in disposable PGlite,
+  with the existing two hosted scheduler/transport exclusions. No hosted writes.
+- Audit exits 1 with the same five high braces-chain entries. The gate remains
+  enabled and unsuppressed; no dependency or threshold change is in this patch.
+- Browser plugin unavailable; isolated Playwright with installed Chrome at
+  `http://127.0.0.1:8187/gm05-corrections`, 1280x900 and 320x900. Real detail/chat
+  components and CSS, synthetic server-classified fixtures, stubbed client/download,
+  empty environment and foreign requests blocked; no hosted read is implied.
+  Canonical, both conflicting orders, missing approvals, control-only and invisible
+  names, and the control-name signing gate pass. Legal -> Advanced legal metadata
+  remains usable. Identity/nonblank/overlay/console/overflow checks pass, with zero
+  external requests. Screenshots inspected under `/tmp/split-web-gm05-corrections-*`.
+- Generated canonical/local/legacy/control-name PDFs and inspected first-page
+  Poppler renders: canonical names/counts/certification preserved; local and legacy
+  unconfirmed; control-only snapshot now 1/2, missing name, Unverified signing
+  record, no final badge/certification. Existing multipage/layout tests still pass;
+  this is focused visual review, not manual inspection of every PDF page.
+
+Both temporary browser servers were stopped. No real Sign/send action, deployment,
+production repair, new service/cost, shared backend change or contact occurred.
+Independent review of the correction SHA and all remaining gates below stay open.
 
 ## Consent evidence: coordinated review required
 

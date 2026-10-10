@@ -4,8 +4,9 @@ import type { UserProfile } from "@/lib/userProfile";
 import { formatSplitSheetAuditTrail, splitSheetPartyDisplayName } from "@/lib/splitSheetDisplay";
 import { normalizeSplitSheetParticipantId } from "@/lib/splitSheetParticipantState";
 import { splitSigningEvidence, type SigningEvidenceSource } from "./splitSigningEvidence";
+import { hasRenderableRecordText, recordText } from "./splitRecordText";
 
-export const recordText = (value: unknown) => String(value ?? "").normalize("NFC").replace(/\p{Cc}/gu, " ").trim();
+export { recordText } from "./splitRecordText";
 export const validRecordDate = (value?: string) => Boolean(value && Number.isFinite(Date.parse(value)));
 
 export function recordDate(value?: string, time = false) {
@@ -36,7 +37,8 @@ export function buildSplitSheetPdfModel(document: StoredSplitSheetDocument, view
       normalizeSplitSheetParticipantId(document, item.collaboratorId) === id);
     const signature = signatures.find((item) => item.status === "Signed");
     const confirmed = evidence.people.find((person) => person.partyId === party.id)?.confirmed ?? false;
-    const legal = recordText(signature?.signerLegalName || party.legalName || (party.isCurrentUser ? document.creatorProfile.legalName : ""));
+    const recordedLegal = signature ? signature.signerLegalName : party.legalName || (party.isCurrentUser ? document.creatorProfile.legalName : "");
+    const legal = hasRenderableRecordText(recordedLegal) ? recordText(recordedLegal) : "";
     const artist = recordText(signature?.signerArtistName || party.professionalName || splitSheetPartyDisplayName(document, party));
     const name = legal ? legal + (artist && artist !== legal ? ` (${artist})` : "") : `${artist} (legal name not recorded)`;
     const allocation = proposal?.allocations.find((item) => item.partyId === party.id);
