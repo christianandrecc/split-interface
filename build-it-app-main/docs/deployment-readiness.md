@@ -1,6 +1,8 @@
 # Deployment Readiness
 
-For the latest release checks and migration status, see
+Current management snapshot (October 10, 2026): [project status](../../PROJECT_STATUS.md), [initial audit](../../docs/management/INITIAL_AUDIT.md), and [launch checklist](../../LAUNCH_CHECKLIST.md). Vercel production is READY at `4bf5a2a` and hosted has all 32 recorded migrations, but the fresh dependency gate fails and live beta/recovery/operational checks remain open. The release notes below are historical evidence, not authorization for another production rollout.
+
+For the historical September 11 release checks and migration status, see
 [September 11 partner release](partner-release-2026-09-11.md).
 The report below is the historical September 10 baseline, not current counts.
 

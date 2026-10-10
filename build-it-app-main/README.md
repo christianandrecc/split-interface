@@ -10,6 +10,7 @@ Only public/publishable credentials belong in `VITE_*` variables. Never expose s
 
 ## Verification
 
+- Current management status (October 10, 2026): [project status](../PROJECT_STATUS.md), [initial audit](../docs/management/INITIAL_AUDIT.md), and [launch gates](../LAUNCH_CHECKLIST.md). These distinguish current verification from the historical release notes below.
 - `npm run verify:beta`: types, lint, all UI/unit tests, and local production build.
 - `npm run check:deploy`: production environment validation without printing secrets.
 - `npm run verify:database`: disposable local PostgreSQL migration and integrity checks, with no live database connection.
@@ -21,6 +22,6 @@ Only public/publishable credentials belong in `VITE_*` variables. Never expose s
 
 Use the checked-in `vercel.json` and Node 24. Configure separate Preview/Production Supabase variables and approved auth redirect origins. Apply reviewed migrations to staging before production; never reset a shared database.
 
-Partner testing uses in-app invitations and manual PDF downloads. External email/SMS contract delivery still needs a server-side worker; the contract queue alone does not send messages.
+Invitation emails have a server-side outbox/worker and hosted sending is enabled; the September 29 release notes record actual inbox receipt. Signed delivery-receipt setup and current hosted recipient workflows still need verification. Signature/proposal emails, SMS invitations, and automatic signed-PDF delivery remain unavailable; PDF downloads are manual. See [invitation status](docs/split-invitation-emails.md).
 
 See [workspace notes](docs/workspace-dashboard.md) for the dashboard data adapters and [deployment readiness](docs/deployment-readiness.md) for remaining requirements.
