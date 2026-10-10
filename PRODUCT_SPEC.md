@@ -33,7 +33,7 @@ Baseline: October 10, 2026. This is the inspected behavior and proposed beta acc
 
 ## Contributor management and ownership allocation
 
-- **Objective/behavior:** identify collaborators using confirmed email routing or exact @username; select/display legal/professional role data and allocate exact 100%. Data: party ID, canonical membership user ID, invite method/value, registration snapshot and share.
+- **Objective/behavior:** identify collaborators by explicit email invitation (including before signup) or exact @username, with access subsequently bound to the confirmed authenticated account; select/display legal/professional role data and allocate exact 100%. Data: party ID, canonical membership user ID, invite method/value, registration snapshot and share.
 - **Permissions/errors:** creator manages unsent parties; each account updates its own approved registration through guarded actions. Reject duplicates, ambiguous/unresolved identity claims, >2 decimal shares and totals above/below 100. Do not silently round ownership to achieve consensus.
 - **Platforms/completion:** web custom input currently accepts precision the server rejects (GM-03); native counters already use exact hundredths. Match UI/server cases including three-way allocation and attempted party substitution; outsider cannot bind another person's invite.
 
@@ -46,7 +46,7 @@ Baseline: October 10, 2026. This is the inspected behavior and proposed beta acc
 ## Negotiation and agreement revisions
 
 - **Objective/behavior:** view agreement/proposal comparison and communicate, accept or counter allocation. Counter creates a new current proposal, preserves history and requires fresh responses; earlier signatures must not finalize the new version.
-- **Data/permissions/errors:** current proposal ID/server revision, canonical party percentages, message body/author/time and response history. Only eligible accepted members act; finalized or declined participants cannot mutate. A participant cannot counter their own current proposal or act before their own invitation is accepted. Counters can remain available after earlier approval/rejection/signing while unfinished, according to the server. Reject stale race atomically and refresh uncertain message results without resending confirmed text.
+- **Data/permissions/errors:** current proposal ID/server revision, canonical party percentages, message body/author/time and response history. Pending invitees can read/chat; approval/counter/sign require invitation acceptance and their applicable author/consensus checks. Finalized or declined participants cannot mutate. A participant cannot counter their own current proposal or counter before their own invitation is accepted. Counters can remain available after earlier approval/rejection/signing while unfinished, according to the server. Reject stale race atomically and refresh uncertain message results without resending confirmed text.
 - **Platforms/completion:** both platforms implement chat/approval/counters; native combined action gate and whitespace reconciliation differ (GM-04). Pass the same eligibility table on web/iOS/server; preserve newly typed text and show revision history across reloads.
 
 ## Approval and electronic signing
