@@ -19,7 +19,7 @@ October 10, 2026. Check only with linked evidence for the exact candidate. Histo
 
 ## Closed beta
 
-- [x] Founder directs the current milestone toward web beta; native development remains separate. Cohort-facing supported capabilities/limitations still need verification before invitation.
+- [x] Founder selects a combined web + iOS beta and directs GM to continue native creation/polishing after the web handoff. Cohort-facing capabilities/limitations still need verification; [native beta gates](docs/management/IOS_BETA_CHECKLIST.md) are required before combined-cohort invitation.
 - [ ] Exact candidate commit/deployment/migrations match; no applicable unresolved P0/core P1; independent QA evidence attached.
 - [ ] Invitation sending, actual controlled inbox receipt, intended account acceptance/decline, signed delivered/bounced receipts and creator-only guarded retry verified (GM-07).
 - [ ] Web production monitoring/event ingestion and actionable operator alert receipt proved; native crash/error coverage if included. No sensitive contents in telemetry.
@@ -28,7 +28,7 @@ October 10, 2026. Check only with linked evidence for the exact candidate. Histo
 - [ ] Working support inbox/replies, closure operator/identity verification/session revocation procedure and incident escalation tested.
 - [ ] Cohort recruitment/access control, onboarding and feedback channel ready; custom-domain access/signup boundaries verified; no unauthorized outreach.
 - [ ] Provider capacity/rate limits/region/spend controls and beta load/failure evidence accepted; paused SMS decision remains explicit, collected numbers not called verified.
-- [ ] Native beta: approved bundle/team/icon/signing/backend config, auth/invite deep links, release archive, physical-device/minimum OS/accessibility evidence and TestFlight metadata (GM-11).
+- [ ] Native beta: independently accepted creation/draft recovery/review/signing/PDF candidates, approved bundle/team/icon/signing/backend config, auth/invite deep links, release archive, physical-device/minimum OS/accessibility evidence and TestFlight metadata (GM-04/06/11).
 - [ ] Rollback/recovery plan respects schema compatibility and installed native versions; operator and decision authority named.
 - [ ] Founder approves deployment/TestFlight distribution and cohort invitation. A READY production alias alone is not this approval.
 

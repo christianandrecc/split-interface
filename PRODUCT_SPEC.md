@@ -2,6 +2,8 @@
 
 Baseline: October 10, 2026. This is the inspected behavior and proposed beta acceptance contract. A completion criterion is a requirement to validate, not a claim it already passed. Platform status is in [FEATURE_MATRIX.md](FEATURE_MATRIX.md). Scope changes need a decision record.
 
+Current beta scope: **web + iOS**, selected directly by the founder and recorded in D-16. A phone must support native creation, participation/negotiation, full review/own-party signing and finalized retrieval/sharing on the same canonical records. [Native acceptance checklist](docs/management/IOS_BETA_CHECKLIST.md). Hosted integration remains deferred under the local-only testing decision.
+
 ## Shared rules
 
 - One Supabase Auth identity and one authoritative agreement state across platforms. Derive authority from the authenticated account and canonical membership, never editable profile claims or supplied actor labels.

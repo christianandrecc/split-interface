@@ -10,7 +10,7 @@ Current: repository/platform/cloud metadata audit and local checks complete; sha
 
 Founder authorized web-beta execution on October 10. Order: GM-02 dependency gate; GM-03 percentage validation/dirty-work protection; GM-05 truthful signer/export evidence; real auth/invitation verification; independent full web lifecycle and browser/accessibility checks. In parallel, prepare GM-01 environment isolation, GM-09 recovery design, GM-10 legal/support/closure review. [Execution tracker #3](https://github.com/christianandrecc/split-interface/issues/3), [active ownership](AGENT_TASKS.md).
 
-Native GM-04/06/11 continue as a separate platform track and do not block the web-beta milestone. Shared backend changes still require native compatibility review.
+Founder subsequently selected combined web + iOS beta and asked GM to coordinate native creation/polishing after the web handoff. GM-04 `c8839cd` is under independent review; GM-06A native creation/owned drafts is active, followed by GM-06B protected draft recovery, GM-11 auth/invitation continuation, GM-06C review/signing and GM-06D PDF sharing. Native layout/keyboard/Dynamic Type/accessibility review accompanies each milestone. Shared backend changes still require both platforms' compatibility review. Local implementation proceeds while hosted integration remains deferred.
 
 Exit: applicable platform can create an account, create/send a valid split, route contributors, revise/approve, sign the current proposal, preserve the final record, and retrieve/export it. All changed behavior has independent regression and permission evidence; no unresolved P0 and no core P1 defects. Preserve current architecture and deferred publishing/AI/SMS decisions.
 
@@ -36,7 +36,7 @@ Instrument privacy-reviewed activation, split creation success/time, invitation 
 
 ## Platform scope
 
-- **Current milestone — web beta:** close web/backend/operations gates; native runs its own development track and is not advertised as beta-complete. Founder authorized this execution scope.
-- **Later native/combined release:** same shared gates plus GM-06 and full native auth callbacks, real-device validation, distribution and cross-platform lifecycle evidence. Requires its own candidate and release approval; no date estimate yet.
+- **Current milestone — combined web + iOS beta:** close shared web/backend/operations gates plus native creation, signing/export, auth/invitation continuation, cross-platform and real-device/accessibility gates. Both development tracks are authorized; neither is advertised as beta-complete. [Native checklist](docs/management/IOS_BETA_CHECKLIST.md).
+- **Release:** exact platform candidates require independent acceptance and explicit deployment/TestFlight/cohort approval. Local-only testing remains the current environment decision; hosted proof and distribution remain open. No date estimate yet.
 
 No environment purchase, platform restructuring, provider activation, production rollout, or public announcement is implied by this roadmap.

@@ -1,6 +1,6 @@
 # SPLIT project status
 
-Last reviewed: October 10, 2026 (America/New_York). **Overall: At Risk.** The web app has substantial working code and fresh passing local checks; the native app has a tested integration foundation but essential creation/signing/export work remains. Closed beta is not yet verified. No target launch date is asserted.
+Last reviewed: October 10, 2026 (America/New_York). **Overall: At Risk.** Founder selected a combined web + iOS beta. The web app has substantial working code and fresh passing local checks; the native app has an integration foundation and delivered negotiation fixes, with creation/signing/export still in development. Closed beta is not yet verified. No target launch date is asserted.
 
 ## Verified baseline
 
@@ -20,8 +20,8 @@ See [initial audit](docs/management/INITIAL_AUDIT.md) for source evidence, iOS c
 ## Immediate priorities
 
 1. Correct the two independently reproduced creation regressions, retest that commit, and independently review the signing/PDF candidate `06317a5`. [GM-03/05](AGENT_TASKS.md).
-2. Continue local lifecycle, permissions, retry and responsive/accessibility verification, and resolve the remaining dependency gate. Hosted account/inbox tests are deferred under the founder's local-only decision. [GM-02/08](AGENT_TASKS.md).
-3. Review delivered synthetic recovery preparation and legal/support/closure decision packet alongside development. [GM-09/10](AGENT_TASKS.md).
+2. Build native creation/owned drafts, then secure incomplete-draft recovery; independently review GM-04 negotiation/message candidate `c8839cd`. [GM-04/06](AGENT_TASKS.md), [native beta checklist](docs/management/IOS_BETA_CHECKLIST.md).
+3. Continue local lifecycle/permissions/UX review and resolve the dependency gate; review delivered recovery and legal/support preparation. Hosted account/inbox tests remain deferred under the founder's local-only decision. [GM-02/08/09/10](AGENT_TASKS.md).
 
 ## Unmerged web-beta progress
 
@@ -31,6 +31,12 @@ See [initial audit](docs/management/INITIAL_AUDIT.md) for source evidence, iOS c
 - Backend `dd74071` delivers a synthetic-only environment/recovery harness; GM independently reran ten focused tests successfully. Operations delivered a sanitized review packet with nine open gates. Neither establishes hosted recovery or legal/operating approval.
 
 [Candidate review record](docs/management/WEB_BETA_PROGRESS_2026-10-10.md). These results do not replace the verified `main` baseline above or authorize release.
+
+## Unmerged native-beta progress
+
+- GM-04 `c8839cd` separates Accept/Counter eligibility and reconciles uncertain trimmed messages without erasing new typing. Developer reports 41 code/intercepted-HTTP tests, four Simulator UI tests and a fixture build/launch passing. Independent acceptance is active; real device/Keychain/session/VoiceOver/hosted evidence remains open.
+- GM-06A native creation and owned drafts is active in `22b2` / `codex/ios-development`: four-step editor, exact shares, canonical document/RPC fidelity, stable retries and protected exits. GM-06B account-scoped protected recovery follows as a separate candidate. No creation/persistence completion is claimed.
+- Auth/invitation continuation, complete agreement review/signing, finalized PDF viewing/sharing and native accessibility/release gates are explicitly queued. [Ordered checklist](docs/management/IOS_BETA_CHECKLIST.md).
 
 Recovery for the current Vault-backed scheduler and legal/support/closure readiness also block a release recommendation. [Risks](RISKS.md), [roadmap](ROADMAP.md), [release gates](LAUNCH_CHECKLIST.md).
 
@@ -45,7 +51,7 @@ Recovery for the current Vault-backed scheduler and legal/support/closure readin
 
 ## Founder decisions open
 
-- Founder directed execution toward web beta. Native development continues separately and is not a web-beta release gate; no native/public release is implied.
+- Founder selected combined web + iOS beta in the mobile chat and explicitly asked GM to coordinate continued native work. Web and native progress have separate candidates; the combined cohort must meet both platforms' applicable gates. No native/public release or TestFlight distribution is approved.
 - SPLIT organization selected; proposed separate `split-integration` in `us-east-1` quoted $0/month on Free. Founder chose local testing for now; hosted setup is deferred and no target created. [Environment record](docs/management/INTEGRATION_ENVIRONMENT_PLAN.md). Hosted/inbox/recovery evidence remains required before beta approval.
 - Resolve review of legal documents, operating support/closure ownership, recovery budget, and paused SMS/password protection before applicable release gates. No purchase or publication is authorized by these records.
 
