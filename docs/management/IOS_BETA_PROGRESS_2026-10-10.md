@@ -29,4 +29,4 @@ GM-11A signup/recovery/auth callback/invitation continuation is actively impleme
 
 Next: commit/review the auth candidate, then complete full agreement review/own-party signing and fresh finalized PDF viewing/sharing aligned with independently accepted shared evidence rules. Carry small-phone/keyboard/large-text/VoiceOver/device polish through those milestones. Shared dependency, consent/legal/support, hosted isolation/delivery/alerts and current recovery gates remain open.
 
-Founder requested GM monitoring with meaningful change notifications; cadence selection is pending. Existing direct agent instructions are valid and take precedence over stale queue notes. No automatic shared memory or continuous supervision is claimed.
+Founder selected hourly GM monitoring with meaningful change notifications. ACTIVE heartbeat `monitor-split-web-and-ios-development` is saved in the GM chat and its interval/target/quiet-when-unchanged behavior verified. Existing direct agent instructions are valid and take precedence over stale queue notes; the monitor reads accessible new directions. Hourly checks do not imply automatic shared memory or continuous supervision.
