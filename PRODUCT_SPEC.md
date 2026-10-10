@@ -19,7 +19,7 @@ Current beta scope: **web + iOS**, selected directly by the founder and recorded
 
 - **Objective/behavior:** establish a creator account through confirmed email; sign in, refresh, recover and switch accounts without leaking prior state. Required data: canonical user ID/email, password, username, supplied legal/professional names, required phone, versioned signup acknowledgements.
 - **Permissions/errors:** account-owner session/profile only; reject unavailable username/invalid input, expired callback, incorrect credentials, and missing profile; retry confirmation/recovery without treating API success as inbox receipt. Do not infer legal identity from an email local part for signing (GM-05).
-- **Platforms/completion:** web signup/login/recovery exists; native confirmation/recovery/callback/invitation candidate `b80a751` is in independent local QA, with registration/profile/consent still using web. Real inbox/server PKCE settings, warm/cold OS delivery, Keychain/device and hosted session behavior remain unverified. Pass fresh-account and recovery inbox flows, signout/account switch/refresh, and native continuation for combined beta.
+- **Platforms/completion:** web signup/login/recovery exists; native `b80a751` passes local core WITH P2 raw-path/restored-grant/late-account corrections, committed for independent retest at `f7fc8e6`. Registration/profile/consent still uses web. Stricter boundary assertions have nine failures; real inbox/server PKCE settings, warm/cold OS delivery, Keychain/device and hosted session behavior remain unverified. Pass corrected local boundaries and genuine account/recovery/session/invitation journeys for combined beta.
 
 ## User profiles and account settings
 
@@ -55,7 +55,7 @@ Current beta scope: **web + iOS**, selected directly by the founder and recorded
 
 - **Objective/behavior:** each authenticated party reviews and explicitly acknowledges the current agreement; approval alone is not signing. Data: proposal ID, canonical signer user/party identity, supplied legal-name snapshot, server time, acknowledgement method and audit event.
 - **Permissions/errors:** actor can sign only their own party; all current required parties must have joined/approved. Reject stale proposal, forged signer/time, duplicate signature, missing legal identity and finalized writes with no partial changes. Current server allows ready parties in any order; UI/export must not claim ordered enforcement (GM-05).
-- **Platforms/completion:** web signing/evidence corrections pass bounded local acceptance at `c57f8b2`; native full review/own-party signing GM-06C is in progress. Review actual signing presentation/consent with qualified counsel; verify explicit informed action, per-user identity, current-proposal consensus and denial cases. Technical tests do not establish legal enforceability.
+- **Platforms/completion:** web signing/evidence corrections pass bounded local acceptance at `c57f8b2`; native full review/own-party signing `e1ec61d` is delivered with developer 106 code/HTTP tests and independent acceptance failed with one P1/two P2; corrections and immutable retest required before PDF. Review actual signing presentation/consent with qualified counsel; verify explicit informed action, per-user identity, current-proposal consensus and denial cases. Technical tests do not establish legal enforceability.
 
 ## Finalized access, exports and history
 
@@ -73,7 +73,7 @@ Current beta scope: **web + iOS**, selected directly by the founder and recorded
 
 - **Objective/behavior:** same account sees the same canonical work/current proposal, invitations, signatures and audit events on web/iOS. Poll/focus/foreground refresh should recover stale views.
 - **Data/permissions/errors:** canonical IDs, revisions, proposal identity, participant projection and notification recipient. Expired sessions, offline/uncertain results and rapid competing actions must not mix accounts or duplicate writes.
-- **Platforms/completion:** shared RPCs, separate native/web models and polling exist; native auth/invitation callback candidate is in local QA, while actual OS/hosted callback proof and notification/push remain open. Test web-created agreement in iOS, native counter in web, current-proposal response/signature invalidation, refresh/signout, and outsider denial on an approved isolated target.
+- **Platforms/completion:** shared RPCs, separate native/web models and polling exist; native auth/invitation local core passes with three P2 corrections active, while actual OS/hosted callback proof and notification/push remain open. Test web-created agreement in iOS, native counter in web, current-proposal response/signature invalidation, refresh/signout, and outsider denial on an approved isolated target.
 
 ## Account closure and sensitive-record retention
 

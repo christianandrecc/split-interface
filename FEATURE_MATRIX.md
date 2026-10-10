@@ -2,12 +2,12 @@
 
 Baseline: October 10, 2026; web `4bf5a2a`, iOS `bf9723e`. Status vocabulary: **Not started, Planned, In progress, Implemented, Tested, Blocked, Deferred**. Implemented means inspected code exists. Tested denotes the stated local scope only; no row certifies a hosted multi-account journey or release. Backend status includes local RPC verification plus migration presence, not hosted behavioral certification.
 
-Current unmerged candidates: web correction `c57f8b2`, native negotiation `c8839cd` and creation/protected recovery `084220d` pass bounded independent local acceptance. Native auth/invitation continuation `b80a751` is in independent QA; full review/signing is active, PDF sharing next. Rows below include these candidate states without replacing the baseline or certifying hosted behavior. [Ordered native checklist](docs/management/IOS_BETA_CHECKLIST.md), [web evidence](docs/management/WEB_BETA_PROGRESS_2026-10-10.md).
+Current unmerged candidates: web correction `c57f8b2`, native negotiation `c8839cd` and creation/protected recovery `084220d` pass bounded independent local acceptance. Auth/invitation core accepted WITH P2; correction `f7fc8e6` awaits independent retest. Signing `e1ec61d` failed independent acceptance, hardening active and PDF blocked. Rows include candidate states without replacing baseline or certifying hosted behavior. [Ordered native checklist](docs/management/IOS_BETA_CHECKLIST.md), [web evidence](docs/management/WEB_BETA_PROGRESS_2026-10-10.md).
 
 | Feature | Web | iOS | Backend | Priority / dependency and validation |
 | --- | --- | --- | --- | --- |
 | Email/password sign-in/session isolation | Tested | Tested | Implemented | P1; local UI and native intercepted-HTTP/domain tests; Keychain/session/device and hosted refresh/recovery open |
-| Signup/email confirmation/recovery | Tested | Implemented | Implemented | P1 GM-11A; native confirmation/recovery `b80a751` in independent QA; registration/profile/consent uses web; actual inbox/OS/hosted callbacks open |
+| Signup/email confirmation/recovery | Tested | Tested | Implemented | P1 GM-11A; `b80a751` local core accepted WITH three P2 corrections; stricter path/grant/late-account boundaries not passing; registration remains web; inbox/OS/hosted open |
 | Profiles and account settings | Tested | In progress | Tested | P1; native reads exist, edits/settings use web; local privacy tests |
 | Split creation and owned drafts | Tested | Tested | Tested | P1 GM-03/06A; native local acceptance at `084220d`; web corrections accepted at `c57f8b2`, actual browser reload protection open; integration/hosted proof open |
 | Protected incomplete editing recovery | Not started | Tested | Deferred | P1 GM-06B; native local acceptance at `084220d`; actual locked-device protection/backup/Keychain proof open; server persistence/queued actions excluded |
@@ -17,8 +17,8 @@ Current unmerged candidates: web correction `c57f8b2`, native negotiation `c8839
 | Signed delivered/bounced receipt visibility/retry | Tested | Not started | Implemented | P1 GM-07; webhook deployment exists, provider secret/subscription/live events unverified |
 | Chat and proposal/history reads | Tested | Tested | Tested | P1; native append text/counter history exists; live sync/reload open |
 | Approval and counteroffers | Tested | Tested | Tested | P1 GM-04; `c8839cd` independent local acceptance passed; supplied developer UI readback separate; hosted/device parity open |
-| Authenticated current-proposal signing | Tested | In progress | Tested | P1 GM-05/06C; native review/signing active; web evidence/order corrections locally accepted, consent/provenance/hosted proof open |
-| Finalization/immutable agreement/history | Tested | In progress | Tested | P1; native reads/status exist, signing absent; hosted persistence/retrieval gate open |
+| Authenticated current-proposal signing | Tested | Implemented | Tested | P1 GM-05/06C; native `e1ec61d` delivered with developer 106 local tests, independent QA failed with one P1/two P2, hardening active; web corrections accepted; consent/provenance/hosted open |
+| Finalization/immutable agreement/history | Tested | Implemented | Tested | P1; native reads/history and signing candidate exist; independent signing/hosted persistence/retrieval gates open |
 | PDF generation/download | Tested | Not started | Tested | P1 GM-05/06; browser fetches authorized fresh record and renders PDF; no stored PDF bucket |
 | CSV/JSON export, PRO/MLC submission | Deferred | Deferred | Deferred | P3; leftover builder controls are not implementation proof |
 | Elephant guidance | Implemented | Implemented | Deferred | P2/P3; deterministic help/shortcuts; no AI inference or autonomous negotiation |
