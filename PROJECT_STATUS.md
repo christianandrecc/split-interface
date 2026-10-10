@@ -30,7 +30,8 @@ Recovery for the current Vault-backed scheduler and legal/support/closure readin
 - Dedicated current GM checkout placed on `management/split-gm`; web and iOS ownership preserved.
 - Bounded independent source audits delivered through supported subagents; fresh local web/database checks run by GM.
 - Existing chats and worktrees inspected; no additional permanent chats created.
-- Central specification, matrix, task records, decisions, risks, and measurable roadmap created; review/integration pending.
+- Nine core management documents, a dated audit/evidence record, and an isolated environment proposal committed and independently reviewed in [draft PR #2](https://github.com/christianandrecc/split-interface/pull/2); integration pending.
+- Existing web and iOS chats received bounded read-only review/planning handoffs through supported tools; both are active. This is delivered coordination, not implementation completion.
 - No production deployment, data/schema/settings mutation, outbound invitation, public launch, app submission, or new automation performed.
 
 ## Founder decisions open

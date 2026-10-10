@@ -7,10 +7,10 @@ Updated October 10, 2026. Lifecycle: `BACKLOG → READY → IN PROGRESS → REVI
 | Workstream | Existing chat | Checkout / branch | Coordination |
 | --- | --- | --- | --- |
 | GM | Inspect SPLIT project architecture (`01a125fd-72cf-7c71-9c0b-f08068b3bf6f`) | Current `3303` worktree / `management/split-gm` | Current roadmap, specification, review and independent QA |
-| Web | SPLIT UI (Front End) (`019f0b98-14e3-7d90-a54e-d00371aed1c9`) | Latest command evidence uses `/Users/christiancarrera/Documents/SPLIT INTERFACE (CODEX)` / `main`; app listing still reports older `New project 2` cwd | Must verify checkout before edits and create an implementation branch; main triggers production deployment |
+| Web | SPLIT UI (Front End) (`019f0b98-14e3-7d90-a54e-d00371aed1c9`) | Agent confirmed `/Users/christiancarrera/Documents/SPLIT INTERFACE (CODEX)` / `main` at the audited baseline; its old `New project 2` default cwd no longer exists | Preserve clean tracked files and existing untracked work; use an isolated implementation branch/worktree for edits; main triggers production deployment |
 | iOS | Continue SPLIT iOS development (`01a125ed-8d05-7b73-9d57-accc0338dfa5`) | `22b2` worktree / `codex/ios-development` at `bf9723e` | Preserve committed native milestone, shared RPC compatibility and design blueprint |
 
-Older chats “SPLIT UI (Mobile Version)” and “Build native SPLIT iPhone app” are historical context, not additional active owners. Web and native chats were idle/not loaded at inspection; they are not continuously working. GM audit specialists were temporary and read-only.
+Older chats “SPLIT UI (Mobile Version)” and “Build native SPLIT iPhone app” are historical context, not additional active owners. Web and native chats were idle/not loaded at initial inspection; both are now active on the bounded review handoffs below. They are not continuously working. GM audit specialists were temporary and read-only.
 
 ## Current queue
 
@@ -87,6 +87,8 @@ Problem/objective: mobile memory-only drafts and large web bundles increase fric
 ## Handoff and review ledger
 
 - Initial web/backend/native audit assignments: delivered through supported subagents; complete source reports received; root ran web/database gates and read back native logs. No claim of hosted workflow completion.
-- Persistent web/iOS implementation handoffs: pending delivery when the management commit is reviewable. Update this entry with tool receipt, exact task/scope and branch/PR reference.
-- GitHub search found no open issues/PRs on October 10. This document is the initial actionable queue; convert accepted tasks into issues as needed, referencing this single source rather than duplicating status across chats.
+- Management records: committed on `management/split-gm` and published as [draft PR #2](https://github.com/christianandrecc/split-interface/pull/2). Independent source/specification review completed; integration remains pending. The GitHub connector could not create the PR (integration permission denied); the existing authenticated browser created it successfully and the PR is attached to the GM chat.
+- Persistent web review handoff: delivered October 10 through `send_message_to_thread` to “SPLIT UI (Front End)”; supported wait snapshot confirms active review. Scope: verify checkout and independently review GM-02/03/05, returning isolated implementation plans and acceptance tests. No product edits or production actions authorized in this handoff. Implementation task states remain READY.
+- Persistent iOS review handoff: delivered October 10 through `send_message_to_thread` to “Continue SPLIT iOS development”; supported wait snapshot confirms active review. Scope: independently review GM-04 and outline conditional GM-06 dependencies. No source/backend/distribution changes authorized in this handoff. Implementation task states remain READY/BACKLOG.
+- GitHub search found no open issues/PRs at initial inspection. This document is the initial actionable queue; convert accepted tasks into issues as needed, referencing this single source rather than duplicating status across chats.
 - PR review → independent tests → founder-approved integration/release. `main` merge can cause production deployment. No merge authorized this session.
