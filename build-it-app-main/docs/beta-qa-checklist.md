@@ -2,6 +2,10 @@
 
 Use this before sharing a new beta build. The command covers automated checks; the manual flow catches real Supabase, auth, and Vercel behavior.
 
+## Current management snapshot — October 10, 2026
+
+Use [project status](../../PROJECT_STATUS.md) and the [current release gates](../../LAUNCH_CHECKLIST.md) for the latest audit. All 32 local migrations are recorded hosted; web production is READY at `4bf5a2a`. Fresh local checks passed 764 web tests and 166 disposable database checks; the fresh dependency audit fails with 8 reported package entries. Sending is enabled, SMS enforcement remains disabled, and signed receipt setup is unverified. Hosted multi-account/device, current recovery, legal/support and monitoring gates remain open. The dated sections below retain historical evidence and are not current deployment instructions.
+
 ## September 29 Contact and Delivery Follow-Up
 
 Local implementation, not yet a production rollout:

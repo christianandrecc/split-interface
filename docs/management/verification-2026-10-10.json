@@ -1,0 +1,75 @@
+{
+  "review_date": "2026-10-10",
+  "timezone": "America/New_York",
+  "web_commit": "4bf5a2ae5e3d37f51750990506533733d686f8b6",
+  "ios_commit": "bf9723e32f109d71083c02959535861f30257edc",
+  "runtime": { "node": "24.15.0", "xcode": "26.5", "swift": "6.3.2" },
+  "checks": [
+    {
+      "command": "npm run verify:beta",
+      "exit_code": 0,
+      "test_files": 75,
+      "tests_passed": 764,
+      "typecheck": "passed",
+      "lint_errors": 0,
+      "lint_warnings": 7,
+      "production_build": "passed",
+      "scope": "local UI, unit, PDF and mocked integration; no fresh hosted journey"
+    },
+    {
+      "command": "npm run verify:database",
+      "exit_code": 0,
+      "checks_passed": 166,
+      "migrations_replayed": 30,
+      "excluded_hosted_migrations": [
+        "20260929163923_schedule_split_invitation_emails.sql",
+        "20260929164820_restrict_invitation_scheduler_transport.sql"
+      ],
+      "scope": "disposable PGlite PostgreSQL and Auth claim shim; no live data"
+    },
+    {
+      "command": "npm audit --omit=dev --json",
+      "exit_code": 1,
+      "reported_package_entries": { "critical": 0, "high": 6, "moderate": 2, "low": 0, "info": 0, "total": 8 },
+      "advisory_ids": ["GHSA-vfj7-8cjw-p6xm", "GHSA-rj75-hqrm-r3gf", "GHSA-68fv-2mgg-jv7q"],
+      "scope": "locked dependency report; runtime exposure unverified; no automatic package update"
+    },
+    {
+      "command": "isolated native Swift XCTest host suite",
+      "exit_code": 0,
+      "tests_passed": 31,
+      "failures": 0,
+      "scope": "domain/store/intercepted HTTP; excludes WorkspaceSession, actual Keychain and SwiftUI/device tests"
+    },
+    {
+      "command": "isolated Debug generic iOS Simulator xcodebuild, CODE_SIGNING_ALLOWED=NO",
+      "exit_code": 0,
+      "result": "BUILD SUCCEEDED",
+      "scope": "compile only; no simulator launch, real device, archive, signing or backend calls"
+    },
+    {
+      "command": "temporary synthetic native whitespace reconciliation reproduction",
+      "result": "confirmed trimmed message left untrimmed old draft with needsRefresh false",
+      "scope": "existing source compiled against synthetic trimming repository; no network or tracked edits"
+    }
+  ],
+  "hosted_metadata": {
+    "writes_performed": false,
+    "supabase_status": "ACTIVE_HEALTHY",
+    "migration_versions_match_local": true,
+    "migration_count": 32,
+    "public_app_tables_rls_enabled": 9,
+    "private_app_tables_rls_enabled": 4,
+    "isolated_backend_found": false,
+    "invitation_sending_enabled": true,
+    "invitation_scheduler_active": true,
+    "phone_verification_required": false,
+    "storage_buckets_found": false,
+    "vault_secret_count_only_checked": true,
+    "legacy_finalized_signer_evidence_gap_found_in_aggregate": true,
+    "production_deployment": "dpl_9MWMTQuvygtSKaPnkQT5yioUkorP",
+    "production_state": "READY",
+    "production_commit_matches_web_baseline": true,
+    "live_multi_account_journey_rerun": false
+  }
+}
