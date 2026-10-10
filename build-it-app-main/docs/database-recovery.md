@@ -1,5 +1,23 @@
 # Local Database Recovery
 
+## Current beta preparation: October 10, 2026
+
+The receipt below remains a September snapshot, not a current production backup.
+The current migration set has 32 files and the invitation scheduler depends on
+Vault. The existing capture tool still fails closed when Vault/Storage is
+nonempty; no guard has been removed and no new live snapshot has been taken.
+
+[Backend beta preparation](backend-beta-readiness.md) and its
+[sanitized manifest](backend-beta-manifest.json) specify isolated target,
+callback/provider separation and recovery requirements. A synthetic-only local
+drill replays current application SQL with inert platform substitutes, restores
+signed evidence, replaces the fixture worker secret independently, rejects
+target/key/tamper/permission drift and proves outbound jobs remain disabled.
+It is not a hosted restore or proof of real Vault root-key recoverability.
+Organization/cost, backup destination/key custody, current capture and hosted
+recovery approvals remain open. Run instructions and precise limits are in that
+preparation document.
+
 ## Verified September 11, 2026
 
 The owner approved an encrypted local backup and isolated restore test, not a

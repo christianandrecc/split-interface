@@ -1,0 +1,309 @@
+{
+  "format": 1,
+  "state": "PREPARED_NOT_PROVISIONED",
+  "preparedOn": "2026-10-10",
+  "baselineCommit": "4bf5a2ae5e3d37f51750990506533733d686f8b6",
+  "productionProjectRef": "hpwquupkqssqqgqtwdyu",
+  "approval": {
+    "organizationId": null,
+    "costQuote": null,
+    "resourceCreationApproved": false,
+    "providerSpendingApproved": false,
+    "backupDestinationApproved": false,
+    "keyCustodyApproved": false
+  },
+  "target": {
+    "proposedName": "split-integration",
+    "resourceKind": "founder-selected fresh project or supported data-free branch",
+    "projectRef": null,
+    "branchId": null,
+    "regionPreference": "us-east-1",
+    "webOrigin": null,
+    "nativeCallback": null,
+    "disposalDate": null,
+    "operator": null
+  },
+  "isolation": {
+    "productionDataCopy": false,
+    "productionSecretCopy": false,
+    "productionUserImport": false,
+    "syntheticAccounts": [
+      "creator A",
+      "invitee B",
+      "outsider C"
+    ],
+    "testRecipients": [],
+    "credentialsInRepository": false
+  },
+  "schema": {
+    "migrationCount": 32,
+    "localApplicationSqlCount": 30,
+    "localInertPlatformCount": 2,
+    "migrations": [
+      {
+        "name": "20260219164539_32317732-daa9-454d-9110-1c3083c847f3.sql",
+        "sha256": "6e927a1aa9dd4fc93c0913d04754e05c3ea2400f03d114a230f6b5739ce12551",
+        "localMode": "application-sql"
+      },
+      {
+        "name": "20260806152000_profiles_username_payload.sql",
+        "sha256": "18ee347fbc8e8c1c714b705b7db7e8117a97356ffd93a5bc4f6a2fa88828b94f",
+        "localMode": "application-sql"
+      },
+      {
+        "name": "20260812120000_split_sheet_workflow.sql",
+        "sha256": "959d9521f93e7c7ee7c86ec8ef3d078078787636b5dcbd8e890db0ae2d622a06",
+        "localMode": "application-sql"
+      },
+      {
+        "name": "20260812152000_profile_phone_storage.sql",
+        "sha256": "60625a23ffcfc9b2e5b9fc78bc7b64d8cac7a112d9d5d188575f878df7c3118d",
+        "localMode": "application-sql"
+      },
+      {
+        "name": "20260812162000_account_consent_profile_fields.sql",
+        "sha256": "e310e7619eead22f190d869f805bcdbfc3f03e02b76cfcdff83681293bc1655f",
+        "localMode": "application-sql"
+      },
+      {
+        "name": "20260812222000_full_profile_signup_storage.sql",
+        "sha256": "44c7fa94c7921ecb34a410d89330469d2abc932d20bad1812e6be80594096fe3",
+        "localMode": "application-sql"
+      },
+      {
+        "name": "20260813122000_split_sheet_participant_routing.sql",
+        "sha256": "82dfe64aa565cc830fd7c46ad866a30152f06ce9788d969ae5df3c907dbb8658",
+        "localMode": "application-sql"
+      },
+      {
+        "name": "20260813133000_global_search.sql",
+        "sha256": "2fd4d88426c082248ad69f365b0508856366b1f3dface9597204c9cc3d8cc467",
+        "localMode": "application-sql"
+      },
+      {
+        "name": "20260813182000_split_sheet_message_payload_updates.sql",
+        "sha256": "15fe6e86d341ddead6008bfc31ec1f0eff67ca1fbeb9574cf933c4dd73150c2d",
+        "localMode": "application-sql"
+      },
+      {
+        "name": "20260814122000_split_sheet_account_isolation.sql",
+        "sha256": "5c19c516abcc553f6d93086ebf1254ba6487a59985ac84865d5521149007f443",
+        "localMode": "application-sql"
+      },
+      {
+        "name": "20260814183000_split_notifications.sql",
+        "sha256": "96dc94305c9ad7ba87a40b7427f06f274b64749969f7c76ae7e85ddf6c240955",
+        "localMode": "application-sql"
+      },
+      {
+        "name": "20260820143000_server_owned_split_sheet_saves.sql",
+        "sha256": "18a3732384bd2c1be098a8fd046c5ed0a7350b8cd901d6a5f333e026f10264fd",
+        "localMode": "application-sql"
+      },
+      {
+        "name": "20260820224500_split_sheet_rls_hardening.sql",
+        "sha256": "7ea77cdc202f932bddf6756f782080e811ac1ff12469826fdcbea460ebe1729a",
+        "localMode": "application-sql"
+      },
+      {
+        "name": "20260821022000_prevent_split_delivery_requeue.sql",
+        "sha256": "fc45c4533682b90d84bc21da813f3e167d0176ca34447f5306c807aa3701ff21",
+        "localMode": "application-sql"
+      },
+      {
+        "name": "20260821025000_split_sheet_server_identity_payload.sql",
+        "sha256": "a69e512e346dd53642c1f9d8bc0a1b8f3fbe6197138a788a7a44a14ed497f648",
+        "localMode": "application-sql"
+      },
+      {
+        "name": "20260910213449_restrict_client_function_execution.sql",
+        "sha256": "5847ea088ad276f7dbc594db34ece90efff4a5ceafb58fa6de2975ce3d1e6d98",
+        "localMode": "application-sql"
+      },
+      {
+        "name": "20260910220712_enforce_split_signature_ownership.sql",
+        "sha256": "d21ae6e4010e364b48957e6fe6ac597ef7f85fbf8e1a4b254017cda499bb9fb0",
+        "localMode": "application-sql"
+      },
+      {
+        "name": "20260911125522_enforce_proposal_response_ownership.sql",
+        "sha256": "2d525a625e5e4fb23b84eb89754df2d06a39a274314b1432ed663b894689b6c8",
+        "localMode": "application-sql"
+      },
+      {
+        "name": "20260911132604_allow_owned_draft_deletion.sql",
+        "sha256": "12bd2e60886beffc5607cfb8a4e35511592e28b68ee1f42ffdb2f84fd8770b6a",
+        "localMode": "application-sql"
+      },
+      {
+        "name": "20260911163414_enforce_split_profile_privacy.sql",
+        "sha256": "a7652296615afe026f09c351ff21d98a42dc5ed28e8be8647b14254216f26981",
+        "localMode": "application-sql"
+      },
+      {
+        "name": "20260911164913_capture_collaborator_registration.sql",
+        "sha256": "451b6d1425c37251d6413fd0acaa296318e2a3a7b11b92f429f3d9c1be87a680",
+        "localMode": "application-sql"
+      },
+      {
+        "name": "20260911173132_persist_account_settings.sql",
+        "sha256": "2f4a82fc8eea80af1c1e75ba605146056bfe8a0552f1c99aab60e2031f2d02d4",
+        "localMode": "application-sql"
+      },
+      {
+        "name": "20260911183758_sync_profile_account_email.sql",
+        "sha256": "69f91c3bc8efbffdd876cdab3306b3ae2086da6c3a7281e0bcfdc178a4dc58ae",
+        "localMode": "application-sql"
+      },
+      {
+        "name": "20260911195254_separate_in_app_split_delivery.sql",
+        "sha256": "e9658d8ca72e339219bcb06f7f0281ac95492da7bd9a8fa2bb5207c64351c861",
+        "localMode": "application-sql"
+      },
+      {
+        "name": "20260912021844_protect_signed_account_deletion.sql",
+        "sha256": "1ff31b5e5b487a135d7354a67b6e2f29fa4603599baa69a1553b110c282ad212",
+        "localMode": "application-sql"
+      },
+      {
+        "name": "20260915232436_signup_username_availability.sql",
+        "sha256": "c6f1d679e12d6229f79e733a995e66ea548f024ccaed3c7439156c60efd4d9fb",
+        "localMode": "application-sql"
+      },
+      {
+        "name": "20260929163912_split_invitation_email_outbox.sql",
+        "sha256": "b317cc61b785f11b3c37115fca97dde110910a5d78b73989974058c944cf1484",
+        "localMode": "application-sql"
+      },
+      {
+        "name": "20260929163923_schedule_split_invitation_emails.sql",
+        "sha256": "7693d4cd1c62455a3f8f38e0ae24e03af5c9d0e7b9eeb51eb3e5f54310205e81",
+        "localMode": "inert-platform-shim"
+      },
+      {
+        "name": "20260929164521_bound_waiting_invitation_email_jobs.sql",
+        "sha256": "a20384d97d303c8234cfdc1c9c21c0eab588da34190fc62d2d90491d36c4e204",
+        "localMode": "application-sql"
+      },
+      {
+        "name": "20260929164820_restrict_invitation_scheduler_transport.sql",
+        "sha256": "3edf1a886e4440d56ff77f5db231bbe59fb344a351c90daafbdd7c8fb684cd70",
+        "localMode": "inert-platform-shim"
+      },
+      {
+        "name": "20260930145527_beta_contact_verification.sql",
+        "sha256": "3c13e831147a236ed9c22512adc521257df89f19d62857dc3ac2d7ff304171b9",
+        "localMode": "application-sql"
+      },
+      {
+        "name": "20260930145529_invitation_delivery_visibility.sql",
+        "sha256": "6f2ac957dc27597bad7acc96d6d6d602df61af820bc7ab1347c99a338103d4c2",
+        "localMode": "application-sql"
+      }
+    ]
+  },
+  "dataApi": {
+    "exposedSchemas": [
+      "public"
+    ],
+    "excludedSchemas": [
+      "split_private",
+      "auth",
+      "vault",
+      "cron",
+      "net"
+    ],
+    "privateTables": "RLS enabled; client grants denied",
+    "rawDocumentColumns": "client SELECT revoked; participant-scoped RPC projection only",
+    "directSplitWrites": "client INSERT/UPDATE/DELETE revoked",
+    "anonymousDefinerRpc": [
+      "is_signup_username_available(text)"
+    ],
+    "authenticatedRpc": [
+      "search_split_profiles(text, integer)",
+      "is_split_sheet_creator(uuid)",
+      "is_split_sheet_participant(uuid)",
+      "load_my_split_sheets()",
+      "upsert_split_sheet_document(jsonb, text, text)",
+      "apply_split_sheet_participant_update(uuid, jsonb, text, text, text, text)",
+      "delete_split_sheet_draft(uuid, bigint)",
+      "load_my_split_notifications(integer)",
+      "mark_split_notifications_read(uuid[], uuid)",
+      "my_phone_verification_status()",
+      "sync_my_verified_phone(text, text)",
+      "load_split_invitation_delivery(uuid)",
+      "retry_split_invitation_email(uuid)"
+    ],
+    "serviceOnlyRpc": [
+      "verify_split_invitation_worker(text)",
+      "claim_split_invitation_emails(text)",
+      "prepare_split_invitation_email(text, uuid, uuid)",
+      "finish_split_invitation_email(text, uuid, uuid, text, text, text)",
+      "record_split_invitation_delivery(text, text, text, timestamp with time zone)"
+    ],
+    "requireEffectivePrivilegeReadback": true
+  },
+  "outbound": {
+    "invitationEnabled": false,
+    "cronActive": false,
+    "workerUrl": null,
+    "processingLeasePolicy": "quarantine synthetic restored pending jobs before enabling access; no automatic replay",
+    "networkRequestQueue": "empty; no active pg_net transport or external trigger",
+    "deliveryTestingApproved": false,
+    "receiptWebhookConfigured": false,
+    "workerDeployed": false,
+    "gatewayJwtVerificationForCustomAuthenticatedFunctions": false,
+    "independentTestSecretsOnly": true,
+    "noProductionWorkerTokenRecovery": true
+  },
+  "auth": {
+    "publicSignupInitiallyEnabled": false,
+    "accounts": "approved synthetic identities only; no mail during local harness",
+    "emailConfirmation": "required for real auth QA; inbox send requires separate bounded approval",
+    "phoneRequired": false,
+    "frontendPhoneVerification": false,
+    "integrationProductionRedirectFallback": false,
+    "webConfigNames": [
+      "VITE_SUPABASE_URL",
+      "VITE_SUPABASE_PUBLISHABLE_KEY",
+      "VITE_SUPABASE_PROJECT_ID",
+      "VITE_SUPABASE_AUTH_REDIRECT_URL"
+    ],
+    "nativeConfig": "separate ignored Debug configuration; validate dedicated HTTPS project before writes",
+    "callbackAllowlist": "dedicated web origin + explicit supported native callback only; no production wildcard"
+  },
+  "telemetry": {
+    "environment": "integration",
+    "projectRoute": null,
+    "productionTestEvents": false,
+    "operatorAlertVerified": false,
+    "creatorFailureReceiptVerified": false,
+    "pii": "sanitized operation/failure-kind only"
+  },
+  "recovery": {
+    "mode": "synthetic harness only; live capture guard unchanged",
+    "archive": "in-memory encrypted PGlite fixture; no production archive",
+    "sourceVaultRowsArchived": 0,
+    "replacementWorkerSecret": "fresh independently generated in-memory test secret; production custody remains founder decision",
+    "providerSecrets": "not recovered by database dump; independent provider configuration required",
+    "offDeviceCopyConfigured": false,
+    "independentKeyEscrowConfigured": false,
+    "cronOnRestore": "inactive before exposure; no dispatch URL; inert network shim denies direct transport",
+    "reactivationApproved": false
+  },
+  "verification": {
+    "localHarnessCommand": "node scripts/recovery/synthetic-current.mjs",
+    "localHarnessTestsCommand": "node --test scripts/recovery/safety.test.mjs scripts/recovery/synthetic-current.test.mjs",
+    "hostedClaims": false,
+    "openGates": [
+      "organization and exact quote approval",
+      "fresh isolated target and pre-write readback",
+      "real GoTrue callback/account A-B-C tests",
+      "hosted extension effective grants and no outbound dispatch",
+      "controlled inbox/receipt/operator alert proof",
+      "current live backup plus off-device copy/key custody",
+      "isolated hosted restore with jobs disabled",
+      "separate release approval"
+    ]
+  }
+}
