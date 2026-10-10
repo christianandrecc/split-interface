@@ -19,9 +19,18 @@ See [initial audit](docs/management/INITIAL_AUDIT.md) for source evidence, iOS c
 
 ## Immediate priorities
 
-1. Restore the dependency gate, protect creation/unsaved work, then make signer/export evidence truthful. Web implementation and independent QA have started. [GM-02/03/05](AGENT_TASKS.md).
-2. Establish an approved isolated integration target and validate the real A/B/C account lifecycle, invitation receipts, auth callbacks, and monitoring. [GM-01, GM-07, GM-08](AGENT_TASKS.md).
-3. Complete current recovery and legal/support/closure preparation alongside development. Backend and operations specialists have started bounded local preparation. [GM-09/10](AGENT_TASKS.md).
+1. Correct the two independently reproduced creation regressions, retest that commit, and independently review the signing/PDF candidate `06317a5`. [GM-03/05](AGENT_TASKS.md).
+2. Continue local lifecycle, permissions, retry and responsive/accessibility verification, and resolve the remaining dependency gate. Hosted account/inbox tests are deferred under the founder's local-only decision. [GM-02/08](AGENT_TASKS.md).
+3. Review delivered synthetic recovery preparation and legal/support/closure decision packet alongside development. [GM-09/10](AGENT_TASKS.md).
+
+## Unmerged web-beta progress
+
+- GM-02 partial remediation `c8a06ed` reduced the dependency report from eight entries to five high entries; the configured gate still fails. No threshold was lowered.
+- GM-03 `a5add19` **failed independent acceptance**: invalid share text disappears after internal Back/return, and cancelling discard loses keyboard focus. Candidate 81/81 relevant tests pass; independent cases 21/23 pass with both failures reproduced in the browser. Corrections have been assigned. Actual native reload-warning behavior remains inconclusive.
+- GM-05 signing identity/detail/PDF candidate `06317a5` is committed and pushed. Developer reports 812 web tests and 166 disposable database checks passing; independent review is active in a separate exact-SHA checkout. Acceptance is pending.
+- Backend `dd74071` delivers a synthetic-only environment/recovery harness; GM independently reran ten focused tests successfully. Operations delivered a sanitized review packet with nine open gates. Neither establishes hosted recovery or legal/operating approval.
+
+[Candidate review record](docs/management/WEB_BETA_PROGRESS_2026-10-10.md). These results do not replace the verified `main` baseline above or authorize release.
 
 Recovery for the current Vault-backed scheduler and legal/support/closure readiness also block a release recommendation. [Risks](RISKS.md), [roadmap](ROADMAP.md), [release gates](LAUNCH_CHECKLIST.md).
 
