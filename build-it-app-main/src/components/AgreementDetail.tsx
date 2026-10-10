@@ -9,7 +9,9 @@ import {
   splitSheetParticipantDisplayName,
   splitSheetPartyDisplayName,
 } from "@/lib/splitSheetDisplay";
-import { buildSplitSheetSignatureRecords } from "@/lib/splitSheetParticipantState";
+import { normalizeSplitSheetParticipantId } from "@/lib/splitSheetParticipantState";
+import { splitSigningEvidence } from "@/lib/splitSigningEvidence";
+import { isSupabaseConfigured } from "@/integrations/supabase/client";
 import { getSplitWorkflowLabel, VERIFIED_SPLIT_STATUSES } from "@/lib/splitWorkflow";
 import type { UserProfile } from "@/lib/userProfile";
 import { documentBelongsToProfile } from "@/lib/splitSheetStorage";
@@ -75,7 +77,7 @@ type SummaryParticipant = {
   percent: number;
   inviteStatus?: "Pending" | "Accepted" | "Declined";
   approvalStatus?: "Pending" | "Approved" | "Rejected";
-  signatureStatus?: "Pending" | "Signed";
+  signatureStatus?: "Pending" | "Signed" | "Unverified" | "Not recorded";
 };
 
 const CORE_METADATA_LABELS: Record<string, string[]> = {
@@ -107,10 +109,6 @@ function compactValue(value: unknown) {
   if (Array.isArray(value)) return value.length ? value.join(", ") : "Not provided";
   const text = String(value ?? "").trim();
   return text || "Not provided";
-}
-
-function sameLabel(a?: string, b?: string) {
-  return (a ?? "").trim().toLowerCase() === (b ?? "").trim().toLowerCase();
 }
 
 function sameCalendarDay(a: Date, b: Date) {
@@ -162,7 +160,8 @@ export default function AgreementDetail({
   const [showHistory, setShowHistory] = useState(false);
   const [showAudit, setShowAudit] = useState(false);
 
-  const document = agreement.document;
+  // The compatibility view can synthesize legacy entries; show original evidence.
+  const document = agreement.exportDocument ?? agreement.document;
   const isDraft = agreement.status === "Draft" && !document?.sentAt;
   const canEditDraft = isDraft && document && documentBelongsToProfile(document, viewerProfile) && onEditDraft;
   const isFinalRecord = FINAL_STATUSES.includes(agreement.status);
@@ -171,21 +170,13 @@ export default function AgreementDetail({
   const currentProposal = document?.splitProposalVersions.find((proposal) => proposal.id === document.currentProposalId) ?? document?.splitProposalVersions.at(-1);
   const currentApprovals = document?.splitApprovals.filter((approval) => approval.proposalVersionId === currentProposal?.id) ?? [];
   const currentSignatures = document?.splitSignatures.filter((signature) => signature.proposalVersionId === currentProposal?.id) ?? [];
-  const visibleSignatures = currentSignatures.length > 0
-    ? currentSignatures
-    : document && currentProposal && ["Ready to Sign", "Pending Signatures"].includes(agreement.status)
-      ? buildSplitSheetSignatureRecords(document, currentProposal.id).filter((signature) => signature.proposalVersionId === currentProposal.id)
-      : [];
+  const evidence = document ? splitSigningEvidence(document, isSupabaseConfigured ? "server" : "local") : undefined;
+  const incompleteEvidence = isFinalRecord && !evidence?.signed;
   const canOpenMessages = Boolean(document?.sentAt && agreement.status !== "Draft" && onOpenMessages);
-  const participants = buildSummaryParticipants(agreement, currentProposal, currentApprovals, visibleSignatures);
+  const participants = buildSummaryParticipants(agreement, currentProposal, currentApprovals, currentSignatures, evidence);
   const totalPercent = Math.round(participants.reduce((s, p) => s + p.percent, 0) * 100) / 100;
-  const approvedCount = isFinalRecord
-    ? participants.length
-    : participants.filter((participant) => participant.approvalStatus === "Approved").length;
-  const signedCount = isFinalRecord && visibleSignatures.length === 0
-    ? participants.length
-    : participants.filter((participant) => participant.signatureStatus === "Signed").length;
-  const requiredSignatureCount = visibleSignatures.length || participants.length;
+  const signedCount = evidence?.signedCount ?? 0;
+  const requiredSignatureCount = document?.data.parties.length ?? participants.length;
   const lastUpdatedAt = document?.verifiedAt || document?.updatedAt || agreement.updated;
   const versionItems = document?.splitProposalVersions.map((proposal) => ({
     version: proposal.versionNumber,
@@ -213,7 +204,7 @@ export default function AgreementDetail({
             {agreement.title}
           </h1>
           <div className="mt-3 flex flex-wrap items-center gap-2">
-            <RecordStatusPill status={agreement.status} inviteDeclined={inviteDeclined} />
+            {incompleteEvidence ? <Chip tone="neutral">Recorded status: {agreement.status}</Chip> : <RecordStatusPill status={agreement.status} inviteDeclined={inviteDeclined} />}
             <Chip tone="neutral">SPLIT</Chip>
             {isFinalRecord && (
               <Chip tone="lock">
@@ -247,6 +238,7 @@ export default function AgreementDetail({
       </div>
 
       {!isFinalRecord && <VerificationBanner status={agreement.status} inviteDeclined={inviteDeclined} />}
+      {incompleteEvidence && <p role="status" className="mt-3 text-sm text-muted-foreground">Signing evidence is incomplete or unconfirmed. The original record is preserved; its status alone does not verify signatures.</p>}
 
       <div className="mt-4 space-y-4">
         <SummaryStrip
@@ -255,6 +247,7 @@ export default function AgreementDetail({
           requiredSignatureCount={requiredSignatureCount}
           lastUpdatedAt={lastUpdatedAt}
           draftCollaboratorCount={isDraft ? participants.length : undefined}
+          incompleteEvidence={incompleteEvidence}
         />
 
         <section className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
@@ -288,10 +281,10 @@ export default function AgreementDetail({
                   ) : participant.inviteStatus === "Declined" && !isFinalRecord ? <Chip tone="neutral">Invite declined</Chip> : <>
                     {(participant.approvalStatus || participant.inviteStatus || isFinalRecord) && (
                       <ApprovalStatus
-                        status={participant.approvalStatus ?? (participant.inviteStatus === "Accepted" ? "Approved" : participant.inviteStatus === "Declined" ? "Rejected" : "Pending")}
+                        status={participant.approvalStatus ?? "Pending"}
                       />
                     )}
-                    {(participant.signatureStatus || isFinalRecord) && <SignatureRecordStatus status={participant.signatureStatus ?? "Signed"} />}
+                    {(participant.signatureStatus || isFinalRecord) && <SignatureRecordStatus status={participant.signatureStatus ?? "Not recorded"} />}
                   </>}
                 </div>
               </div>
@@ -376,7 +369,7 @@ export default function AgreementDetail({
         {isFinalRecord && (
           <div className="flex items-center justify-center gap-2 py-3 text-xs font-medium text-muted-foreground">
             <Lock className="h-4 w-4" />
-            This SPLIT is fully signed and locked. No changes can be made.
+            {evidence?.signed ? "This SPLIT is fully signed and locked. No changes can be made." : "This record is read-only. Original signing evidence is preserved."}
           </div>
         )}
       </div>
@@ -389,8 +382,9 @@ function buildSummaryParticipants(
   currentProposal: NonNullable<Agreement["document"]>["splitProposalVersions"][number] | undefined,
   currentApprovals: NonNullable<Agreement["document"]>["splitApprovals"],
   visibleSignatures: NonNullable<Agreement["document"]>["splitSignatures"],
+  evidence?: ReturnType<typeof splitSigningEvidence>,
 ): SummaryParticipant[] {
-  const document = agreement.document;
+  const document = agreement.exportDocument ?? agreement.document;
 
   if (document?.status === "Draft" && !document.sentAt) {
     return document.data.parties.map((party) => ({
@@ -409,14 +403,10 @@ function buildSummaryParticipants(
       const participantId = party?.isCurrentUser ? "creator" : invite?.id || allocation.partyId;
       const name = party ? splitSheetPartyDisplayName(document, party, allocation.name) : allocation.name || "SPLIT user";
       const approval = currentApprovals.find((item) =>
-        item.collaboratorId === participantId ||
-        item.collaboratorId === allocation.partyId ||
-        sameLabel(item.collaboratorName, name)
+        normalizeSplitSheetParticipantId(document, item.collaboratorId) === normalizeSplitSheetParticipantId(document, participantId)
       );
       const signature = visibleSignatures.find((item) =>
-        item.collaboratorId === participantId ||
-        item.collaboratorId === allocation.partyId ||
-        sameLabel(item.collaboratorName, name)
+        normalizeSplitSheetParticipantId(document, item.collaboratorId) === normalizeSplitSheetParticipantId(document, participantId)
       );
 
       return {
@@ -427,7 +417,7 @@ function buildSummaryParticipants(
         percent: Number(allocation.percentage) || 0,
         inviteStatus: invite?.status,
         approvalStatus: approval?.status,
-        signatureStatus: signature?.status,
+        signatureStatus: evidence?.people.find((person) => person.partyId === allocation.partyId)?.confirmed ? "Signed" : signature?.status === "Signed" ? "Unverified" : signature?.status,
       };
     });
   }
@@ -524,7 +514,7 @@ function buildRegistrationDisplayGroups(group: MetadataGroupDefinition | undefin
 }
 
 function buildDetailGroups(agreement: Agreement): MetadataGroupDefinition[] {
-  const document = agreement.document;
+  const document = agreement.exportDocument ?? agreement.document;
   const data = document?.data;
 
   return [
@@ -617,7 +607,8 @@ function buildDetailGroups(agreement: Agreement): MetadataGroupDefinition[] {
         { label: "Approval before submission", value: compactValue(data?.requireApprovalBeforeSubmission) },
         { label: "Designated submitter", value: compactValue(data?.allowDesignatedSubmitter) },
         { label: "Require all signatures", value: compactValue(data?.requireAllSignatures) },
-        { label: "Signing order", value: compactValue(data?.signingOrderEnabled) },
+        { label: "Signing sequence", value: "Any order after all approvals" },
+        { label: "Recorded signing-order setting", value: data?.signingOrderEnabled ? "Yes (not enforced)" : compactValue(data?.signingOrderEnabled) },
         { label: "Conditional signatures", value: compactValue(data?.conditionalSignatures) },
         { label: "Include audit trail", value: compactValue(data?.includeAuditTrail) },
       ],
@@ -631,12 +622,14 @@ function SummaryStrip({
   requiredSignatureCount,
   lastUpdatedAt,
   draftCollaboratorCount,
+  incompleteEvidence = false,
 }: {
   totalPercent: number;
   signedCount: number;
   requiredSignatureCount: number;
   lastUpdatedAt: string | undefined;
   draftCollaboratorCount?: number;
+  incompleteEvidence?: boolean;
 }) {
   return (
     <section className="grid overflow-hidden rounded-xl border border-border bg-card shadow-sm md:grid-cols-3">
@@ -644,7 +637,7 @@ function SummaryStrip({
       {draftCollaboratorCount !== undefined ? <SummaryStat label="Collaborators" value={String(draftCollaboratorCount)} detail="Invitations not sent" /> : <SummaryStat
         label="Signatures"
         value={`${signedCount} / ${requiredSignatureCount}`}
-        detail={signedCount === requiredSignatureCount ? "All signed" : "Waiting"}
+        detail={incompleteEvidence ? "Evidence incomplete" : requiredSignatureCount > 0 && signedCount === requiredSignatureCount ? "All signed" : "Awaiting confirmed signatures"}
         valueClassName="text-[hsl(var(--split-verified))]"
       />}
       <SummaryStat label="Last Updated" value={formatDisplayDate(lastUpdatedAt)} detail={relativeDateLabel(lastUpdatedAt)} last />
@@ -791,7 +784,7 @@ function ApprovalStatus({ status }: { status: "Pending" | "Approved" | "Rejected
   return <Chip tone={tone}>{status}</Chip>;
 }
 
-function SignatureRecordStatus({ status }: { status: "Pending" | "Signed" }) {
+function SignatureRecordStatus({ status }: { status: NonNullable<SummaryParticipant["signatureStatus"]> }) {
   return <Chip tone={status === "Signed" ? "verified" : "pending"}>{status}</Chip>;
 }
 

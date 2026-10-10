@@ -126,7 +126,7 @@ class RecordPdf {
     const dims = image.scaleToFit(74, 74);
     this.page.drawImage(image, { x: 38 + (74-dims.width)/2, y: H-17-dims.height, ...dims });
     if (section === "Finalized split sheet" || section === "Split sheet record") {
-      this.pill(this.model.signed ? "Signed" : "Not signed", 478, 40, 90, 28, this.model.signed ? C.mint : C.pale, this.model.signed ? C.green : C.muted, 9);
+      this.pill(this.model.signed ? "Signed" : "Unconfirmed", 478, 40, 90, 28, this.model.signed ? C.mint : C.pale, this.model.signed ? C.green : C.muted, 9);
     } else this.text(this.model.signed ? "FINAL VERSION" : "NOT FINAL", R, 54, 8, "bold", C.muted, "right");
     this.text(section.toUpperCase(), L, 98, 8, "bold", C.muted);
     const isSummary = section.toLowerCase().includes("split sheet");
@@ -156,7 +156,7 @@ class RecordPdf {
     [1, 2].forEach((i) => this.page.drawLine({ start: { x: L+col*i, y: H-202 }, end: { x: L+col*i, y: H-282 }, color: color(C.line), thickness: .7 }));
     const metrics = [
       ["SPLIT TOTAL", `${this.model.total}%`, this.model.total === 100 ? "Complete allocation" : "Incomplete allocation", C.navy, 26],
-      ["SIGNATURES", `${this.model.signedCount} / ${this.model.people.length}`, this.model.signed ? "All collaborators signed" : "Recorded acknowledgements", C.green, 26],
+      ["SIGNATURES", `${this.model.signedCount} / ${this.model.people.length}`, this.model.signed ? "All collaborators signed" : "Account-bound records", C.green, 26],
       [this.model.signed ? "FINALIZED" : "LAST UPDATED", recordDate(this.model.finalizedAt || this.model.document.updatedAt), this.model.signed ? "Signed record" : "Not a final signed record", C.navy, 17],
     ] as const;
     metrics.forEach(([label, value, caption, fill, size], i) => {
@@ -180,7 +180,7 @@ class RecordPdf {
         part.forEach((line, j) => this.text(line.text, 74, y+height/2+(j-(part.length-1)/2)*14, line.bold ? 11.5 : 9, line.bold ? "bold" : "regular", line.bold ? C.ink : C.muted));
         this.text(`${person.share}%`, 394, y+height/2, 21, "bold", accent, "center");
         this.text(person.approved ? "Approved" : "Not recorded", 506, y+height/2-9, 8.5, "bold", person.approved ? C.green : C.muted, "center");
-        this.text(person.signature ? "Signed" : "Not signed", 506, y+height/2+10, 9, "regular", person.signature ? C.green : C.muted, "center");
+        this.text(person.confirmed ? "Signed" : person.signature ? "Unverified" : "Not recorded", 506, y+height/2+10, 9, "regular", person.confirmed ? C.green : C.muted, "center");
         this.rule(y+height); y += height;
       }
     }
@@ -203,7 +203,7 @@ class RecordPdf {
   signature(person: PdfPerson, x: number, y: number, index: number, signatureSize: number) {
     const cx = x+125;
     this.text(`SIGNATURE ${String(index).padStart(2, "0")}`, cx, y+12, 8, "bold", C.muted, "center");
-    const useScript = Boolean(person.signature && person.legal);
+    const useScript = Boolean(person.confirmed && person.signature?.signerLegalName);
     // Typeset a recorded acknowledgement only; never manufacture a signature from status.
     if (useScript) {
       const face = this.faces.signature;
@@ -212,7 +212,7 @@ class RecordPdf {
       const size = Math.min(signatureSize, 24*230 / this.width(person.legal, 24, font));
       if (size >= 11) this.text(person.legal, cx, y+59, size, font, C.navy, "center");
       else this.paragraph(this.lines(person.legal, 238, 11, font).slice(0, 3), cx, y+35, 11, font, C.navy, 14, "center");
-    } else this.text(person.signature ? "Name not recorded at signing" : "Not signed", cx, y+59, 10, "regular", C.muted, "center");
+    } else this.text(person.signature ? "Unverified signing record" : "No signing record", cx, y+59, 10, "regular", C.muted, "center");
     this.rule(y+91, x, 250);
     const end = this.paragraph(this.lines(person.name, 246, 9.5, "bold"), cx, y+101, 9.5, "bold", C.ink, 12, "center");
     this.text(person.signature ? `${recordDate(person.signature.signedAt, true)} UTC` : "No recorded signing time", cx, end+10, 8, "regular", C.muted, "center");
@@ -363,7 +363,7 @@ class RecordPdf {
     const pages = this.pdf.getPages();
     this.page = pages[this.summaryPages.at(-1)];
     this.rect(L, 669, CW, 28, this.model.signed ? C.mint : C.pale, 4);
-    this.text(this.model.verified ? "Signed. Verified by SPLIT." : this.model.signed ? "Signed. Signing activity recorded." : "Not a final signed record.", 58, 683, 9, "bold", this.model.signed ? C.green : C.muted);
+    this.text(this.model.verified ? "Signed. Verified by SPLIT." : this.model.signed ? "Signed. Signing activity recorded." : this.model.source === "local" ? "Local copy. Signing evidence unconfirmed." : "Signing evidence incomplete. Not certified.", 58, 683, 9, "bold", this.model.signed ? C.green : C.muted);
     this.text(this.historyPage ? `Document history on page ${this.historyPage}` : "History omitted from this export", 554, 683, 8, "regular", C.green, "right");
     pages.forEach((page, index) => {
       this.page = page;
@@ -382,10 +382,10 @@ class RecordPdf {
   }
 }
 
-export type SplitPdfOptions = { includeAuditTrail?: boolean };
+export type SplitPdfOptions = { includeAuditTrail?: boolean; evidenceSource?: import("./splitSigningEvidence").SigningEvidenceSource };
 
 export async function renderSplitSheetPdf(document: StoredSplitSheetDocument, viewer: UserProfile, assets: SplitPdfAssets, exportedAt?: string, options: SplitPdfOptions = {}) {
-  const model = buildSplitSheetPdfModel(document, viewer, exportedAt);
+  const model = buildSplitSheetPdfModel(document, viewer, exportedAt, options.evidenceSource);
   const pdf = await PDFDocument.create();
   pdf.setTitle(`${model.title} - SPLIT Sheet`); pdf.setAuthor("SPLIT"); pdf.setCreator("SPLIT Studio Record Export");
   pdf.setSubject(model.signed ? "Final version / recorded signing acknowledgements" : "Not a final signed record");

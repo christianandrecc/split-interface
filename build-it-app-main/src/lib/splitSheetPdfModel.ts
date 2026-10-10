@@ -3,7 +3,7 @@ import type { Party } from "@/components/contract-builder/types";
 import type { UserProfile } from "@/lib/userProfile";
 import { formatSplitSheetAuditTrail, splitSheetPartyDisplayName } from "@/lib/splitSheetDisplay";
 import { normalizeSplitSheetParticipantId } from "@/lib/splitSheetParticipantState";
-import { VERIFIED_SPLIT_STATUSES } from "@/lib/splitWorkflow";
+import { splitSigningEvidence, type SigningEvidenceSource } from "./splitSigningEvidence";
 
 export const recordText = (value: unknown) => String(value ?? "").normalize("NFC").replace(/\p{Cc}/gu, " ").trim();
 export const validRecordDate = (value?: string) => Boolean(value && Number.isFinite(Date.parse(value)));
@@ -24,33 +24,29 @@ export function recordProfileName(profile: UserProfile) {
   return legal ? legal + (artist && artist !== legal ? ` (${artist})` : "") : artist || profile.username || "Name not recorded";
 }
 
-export function buildSplitSheetPdfModel(document: StoredSplitSheetDocument, viewer: UserProfile, exportedAt = new Date().toISOString()) {
+export function buildSplitSheetPdfModel(document: StoredSplitSheetDocument, viewer: UserProfile, exportedAt = new Date().toISOString(), source: SigningEvidenceSource = "local") {
+  const evidence = splitSigningEvidence(document, source);
   const proposal = document.currentProposalId
     ? document.splitProposalVersions.find((item) => item.id === document.currentProposalId)
     : document.splitProposalVersions.at(-1);
-  const allocationIds = new Set(proposal?.allocations.map((item) => item.partyId));
-  const validAllocationSet = Boolean(proposal && allocationIds.size === document.data.parties.length &&
-    proposal.allocations.length === allocationIds.size && document.data.parties.every((party) => allocationIds.has(party.id)));
   const people = document.data.parties.map((party) => {
     const invite = document.collaboratorInvites.find((item) => item.partyId === party.id);
     const id = normalizeSplitSheetParticipantId(document, party.isCurrentUser ? "creator" : invite?.id || party.id);
     const signatures = document.splitSignatures.filter((item) => item.proposalVersionId === proposal?.id &&
       normalizeSplitSheetParticipantId(document, item.collaboratorId) === id);
-    const signature = signatures.find((item) => item.status === "Signed" && validRecordDate(item.signedAt) && item.signatureMethod !== "SPLIT beta acknowledgement");
+    const signature = signatures.find((item) => item.status === "Signed");
+    const confirmed = evidence.people.find((person) => person.partyId === party.id)?.confirmed ?? false;
     const legal = recordText(signature?.signerLegalName || party.legalName || (party.isCurrentUser ? document.creatorProfile.legalName : ""));
     const artist = recordText(signature?.signerArtistName || party.professionalName || splitSheetPartyDisplayName(document, party));
     const name = legal ? legal + (artist && artist !== legal ? ` (${artist})` : "") : `${artist} (legal name not recorded)`;
     const allocation = proposal?.allocations.find((item) => item.partyId === party.id);
     const share = allocation ? Number(allocation.percentage) : Number(party.percent);
     if (!Number.isFinite(share) || share < 0 || share > 100) throw new Error("The split has an invalid percentage. Reopen the record before exporting.");
-    const approved = document.splitApprovals.some((item) => item.proposalVersionId === proposal?.id &&
-      normalizeSplitSheetParticipantId(document, item.collaboratorId) === id && item.status === "Approved");
-    return { id, party, legal, artist: artist === legal ? "" : artist, name, share, role: allocation?.role || party.role || "Collaborator", signature, approved };
+    const approved = evidence.people.find((person) => person.partyId === party.id)?.approval?.status === "Approved";
+    return { id, party, legal, artist: artist === legal ? "" : artist, name, share, role: allocation?.role || party.role || "Collaborator", signature, confirmed, approved };
   });
   const total = Math.round(people.reduce((sum, person) => sum + person.share, 0) * 100) / 100;
-  const signedCount = people.filter((person) => person.signature).length;
-  const signed = people.length > 0 && signedCount === people.length && total === 100 && validAllocationSet && VERIFIED_SPLIT_STATUSES.includes(document.status);
-  const verified = signed && validRecordDate(document.verifiedAt);
+  const { signedCount, signed, verified } = evidence;
   const signedDates = people.map((person) => person.signature?.signedAt).filter(validRecordDate).sort();
   const finalizedAt = signed ? document.verifiedAt || signedDates.at(-1) : undefined;
   const resolveActor = (actor: string) => {
@@ -63,7 +59,7 @@ export function buildSplitSheetPdfModel(document: StoredSplitSheetDocument, view
     return matches.length === 1 ? matches[0].name : recordText(actor) || "Actor not recorded";
   };
   return {
-    document, proposal, people, total, signedCount, signed, verified, finalizedAt, exportedAt,
+    document, proposal, people, total, signedCount, signed, verified, finalizedAt, exportedAt, source,
     title: recordText(document.data.songTitle || document.title || "Untitled work"),
     documentId: recordText(document.documentNumber) || "ID not recorded",
     creator: people.find((person) => person.party.isCurrentUser)?.name || recordProfileName(document.creatorProfile), viewer: recordProfileName(viewer), resolveActor,
@@ -90,6 +86,7 @@ export function supportingFields(model: SplitSheetPdfModel): Array<{ title: stri
     { title: "Work metadata", fields: fields([
       ["Work title", model.title], ["Work creation date", recordDate(d.creationDate)],
       ["Artist / project", model.resolveActor(d.artistProjectName || d.recordingArtist || "Not recorded")], ["Record created", `${recordDate(model.document.createdAt, true)} UTC`],
+      ["Recorded status", model.document.status],
       ["Alternate titles", d.alternateTitles], ["Composition type", d.compositionType], ["Language", d.lyricLanguage],
       ["Creation location", d.creationLocation], ["Studio", d.studioName], ["Work notes", d.workNotes], ["ISWC", d.iswc], ["Related ISRC", d.relatedIsrc],
     ]) },
@@ -115,7 +112,9 @@ export function supportingFields(model: SplitSheetPdfModel): Array<{ title: stri
       ["Export packet", yesNo(d.exportPacket)], ["Send to PRO", yesNo(d.sendToPRO)], ["Send to MLC", yesNo(d.sendToMLC)],
       ["Send to publisher / administrator", yesNo(d.sendToPublisherAdmin)], ["Approval before submission", yesNo(d.requireApprovalBeforeSubmission)],
       ["Designated submitter allowed", yesNo(d.allowDesignatedSubmitter)], ["All signatures required", yesNo(d.requireAllSignatures)],
-      ["Signing order", yesNo(d.signingOrderEnabled)], ["Conditional signatures", yesNo(d.conditionalSignatures)], ["Audit trail requested", yesNo(d.includeAuditTrail)],
+      ["Signing sequence", "Any order after all approvals"],
+      ["Recorded signing-order setting", d.signingOrderEnabled ? "Yes (not enforced)" : yesNo(d.signingOrderEnabled)],
+      ["Conditional signatures", yesNo(d.conditionalSignatures)], ["Audit trail requested", yesNo(d.includeAuditTrail)],
     ]) },
   ].filter((group) => group.fields.length);
 }

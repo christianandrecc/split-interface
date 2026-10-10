@@ -643,6 +643,7 @@ export default function Dashboard({
               onReloadDocuments={() => setReloadSplitSheets(current => current + 1)}
               reloading={loadingSplitSheets}
               onOpenAgreement={openAgreement}
+              onCompleteSigningIdentity={() => setActiveView("profile-edit")}
             />
           )}
           {activeView === "settings" && <SettingsPage userProfile={userProfile} onViewOnboardingAgain={onViewOnboardingAgain} />}

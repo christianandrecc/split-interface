@@ -2,25 +2,21 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { PDFDocument } from "pdf-lib";
-import { renderSplitSheetPdf, type SplitPdfAssets, type PdfLayoutItem } from "@/lib/splitSheetPdf";
-import { buildSplitSheetPdfModel, recordDate } from "@/lib/splitSheetPdfModel";
+import { renderSplitSheetPdf as renderPdf, type SplitPdfAssets, type PdfLayoutItem, type SplitPdfOptions } from "@/lib/splitSheetPdf";
+import { buildSplitSheetPdfModel as buildPdfModel, recordDate } from "@/lib/splitSheetPdfModel";
 import { documentToAgreement } from "@/lib/splitSheetAgreement";
-import { makeDocument } from "@/test/fixtures/splitSheet";
+import { makeSignedDocument as signedDocument } from "@/test/fixtures/splitSheet";
+import type { StoredSplitSheetDocument } from "@/components/contract-builder/document";
+import type { UserProfile } from "@/lib/userProfile";
 
 const read = (path: string) => new Uint8Array(readFileSync(resolve(path)));
 const assets: SplitPdfAssets = {
   regular: read("src/assets/pdf/Arimo-Regular.ttf"), bold: read("src/assets/pdf/Arimo-Bold.ttf"),
   signature: read("src/assets/pdf/NothingYouCouldDo.ttf"), verifiedBadge: read("src/assets/pdf/split-verified-badge.png"), logo: read("src/assets/split-logo.png"),
 };
-function signedDocument() {
-  const doc = makeDocument();
-  doc.status = "Verified and Stored"; doc.verifiedAt = doc.updatedAt;
-  doc.data.parties[1].legalName = "Maya Rios";
-  doc.splitApprovals.forEach((item) => { item.status = "Approved"; });
-  doc.splitSignatures = ["creator", "maya-invite"].map((id, index) => ({ id: `sig-${index}`, collaboratorId: id,
-    collaboratorName: index ? "Maya" : "Chori", proposalVersionId: doc.currentProposalId, status: "Signed", signedAt: doc.updatedAt, signatureMethod: "SPLIT in-app acknowledgement" }));
-  return doc;
-}
+const buildSplitSheetPdfModel = (doc: StoredSplitSheetDocument, viewer: UserProfile) => buildPdfModel(doc, viewer, undefined, "server");
+const renderSplitSheetPdf = (doc: StoredSplitSheetDocument, viewer: UserProfile, assets: SplitPdfAssets, exportedAt?: string, options: SplitPdfOptions = {}) =>
+  renderPdf(doc, viewer, assets, exportedAt, { evidenceSource: "server", ...options });
 const text = (items: PdfLayoutItem[]) => items.filter((item) => item.kind === "text").map((item) => item.text).join("\n");
 
 describe("Studio Record PDF", () => {
@@ -104,11 +100,33 @@ describe("Studio Record PDF", () => {
     expect(text(result.layout)).not.toContain("99999999999");
   });
 
+  it.each(["local", "legacy"] as const)("labels %s signing evidence without drawing inferred signatures", async (kind) => {
+    const doc = signedDocument();
+    doc.splitSignatures[0].signerLegalName = "Name At Signing";
+    if (kind === "legacy") doc.splitSignatures.forEach(signature => { signature.signatureMethod = "SPLIT beta acknowledgement"; });
+    const before = JSON.stringify(doc);
+    const result = await renderSplitSheetPdf(doc, doc.creatorProfile, assets, undefined, { evidenceSource: kind === "local" ? "local" : "server" });
+    expect(result.model).toMatchObject({ signedCount: 0, signed: false, verified: false });
+    expect(text(result.layout)).toContain("Unverified signing record");
+    expect(text(result.layout)).toContain("Name At Signing (Chori)");
+    expect(text(result.layout)).toContain("RECORDED STATUS");
+    expect(text(result.layout)).not.toMatch(/FINAL VERSION|Signed\. Verified by SPLIT\./);
+    expect(result.layout.filter(item => item.text === "Unverified signing record")).toHaveLength(2);
+    const notice = result.layout.find(item => item.kind === "text" && item.text.startsWith(kind === "local" ? "Local copy." : "Signing evidence incomplete."));
+    const history = result.layout.find(item => item.kind === "text" && item.text.startsWith("Document history on page"));
+    expect(notice).toBeDefined(); expect(history).toBeDefined();
+    expect(notice.x + notice.width + 8).toBeLessThan(history.x);
+    expect(JSON.stringify(doc)).toBe(before);
+    const output = kind === "local" ? process.env.SPLIT_PDF_QA_LOCAL : process.env.SPLIT_PDF_QA_LEGACY;
+    if (output) writeFileSync(output, result.bytes);
+  });
+
   it("keeps signing snapshots and does not guess missing legal names", () => {
     const doc = signedDocument();
     doc.splitSignatures[0].signerLegalName = "Name At Signing";
     doc.data.parties[0].legalName = "Changed Later";
     doc.data.parties[1].legalName = "";
+    doc.splitSignatures[1].signerLegalName = "";
     const model = buildSplitSheetPdfModel(doc, doc.creatorProfile);
     expect(model.people[0].legal).toBe("Name At Signing");
     expect(model.people[1].name).toContain("legal name not recorded");
@@ -125,6 +143,7 @@ describe("Studio Record PDF", () => {
 
   it("preserves accented names and calendar dates", async () => {
     const doc = signedDocument(); doc.data.songTitle = "Canción del Niño"; doc.data.parties[1].legalName = "María José Núñez";
+    doc.splitSignatures[1].signerLegalName = "María José Núñez";
     const result = await renderSplitSheetPdf(doc, doc.creatorProfile, assets);
     expect(text(result.layout)).toContain("María José Núñez");
     expect(text(result.layout)).toContain("Canción del Niño");

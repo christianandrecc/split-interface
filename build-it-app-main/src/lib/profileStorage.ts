@@ -691,8 +691,9 @@ export async function signInAndLoadSupabaseProfile(emailAddress: string, passwor
   const fallbackProfile = normalizeUserProfile({
     username: email.split("@")[0],
     displayName: email.split("@")[0],
-    legalName: email.split("@")[0],
-    legalFirstName: email.split("@")[0],
+    // A contact address is not a supplied legal identity. Complete it before signing.
+    legalName: "",
+    legalFirstName: "",
     emailAddress: email,
   });
 

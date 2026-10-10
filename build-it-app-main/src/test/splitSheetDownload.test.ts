@@ -28,7 +28,7 @@ describe("split sheet download integration", () => {
     const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
     await downloadSplitSheetRecord(doc, doc.creatorProfile);
     expect(mocks.settings).toHaveBeenCalledWith("viewer");
-    expect(mocks.render).toHaveBeenCalledWith(fresh, doc.creatorProfile, { includeAuditTrail: false });
+    expect(mocks.render).toHaveBeenCalledWith(fresh, doc.creatorProfile, { includeAuditTrail: false, evidenceSource: "local" });
     expect(click).toHaveBeenCalledOnce(); expect(document.querySelector("a[download]")).toBeNull();
     vi.runAllTimers(); expect(revokeObjectURL).toHaveBeenCalledWith("blob:test"); vi.useRealTimers();
   });

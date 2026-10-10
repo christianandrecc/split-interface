@@ -12,6 +12,7 @@ function makeCollaboratorProfile(): UserProfile {
     ...createEmptyProfile(),
     username: "mayarios",
     displayName: "Maya Rios",
+    legalName: "Maya Rios",
     emailAddress: "maya@example.com",
   };
 }
@@ -21,6 +22,7 @@ function makeCreatorProfile(): UserProfile {
     ...createEmptyProfile(),
     username: "chori",
     displayName: "Chori",
+    legalName: "Christian Carrera",
     emailAddress: "chori@example.com",
   };
 }

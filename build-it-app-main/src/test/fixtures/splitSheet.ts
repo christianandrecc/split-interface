@@ -1,5 +1,26 @@
 import type { StoredSplitSheetDocument } from "@/components/contract-builder/document";
 
+export function makeSignedDocument(): StoredSplitSheetDocument {
+  const doc = makeDocument();
+  doc.creatorUserId = "11111111-aaaa-4111-8111-111111111111";
+  doc.serverRevision = 5;
+  doc.sentAt = doc.createdAt;
+  doc.status = "Verified and Stored";
+  doc.verifiedAt = doc.updatedAt;
+  doc.collaboratorInvites[0].collaboratorUserId = "22222222-bbbb-4222-8222-222222222222";
+  doc.collaboratorInvites[0].status = "Accepted";
+  doc.data.parties[1].legalName = "Maya Rios";
+  doc.splitApprovals.forEach((item) => { item.status = "Approved"; });
+  doc.splitSignatures = ["creator", "maya-invite"].map((id, index) => ({
+    id: `sig-${index}`, collaboratorId: id, collaboratorName: index ? "Maya" : "Chori",
+    proposalVersionId: doc.currentProposalId!, status: "Signed", signedAt: doc.updatedAt,
+    signatureMethod: "SPLIT in-app acknowledgement",
+    signerUserId: index ? doc.collaboratorInvites[0].collaboratorUserId! : doc.creatorUserId,
+    signerLegalName: index ? "Maya Rios" : "Christian Carrera",
+  }));
+  return doc;
+}
+
 export function makeCounterDocument(): StoredSplitSheetDocument {
   const document = makeDocument();
   const createdAt = "2026-09-11T12:39:00.252753+00:00";

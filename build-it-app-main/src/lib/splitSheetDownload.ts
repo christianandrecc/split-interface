@@ -3,6 +3,7 @@ import type { UserProfile } from "@/lib/userProfile";
 import { loadSplitSheetDocumentForExport } from "@/lib/splitSheetStorage";
 import { loadAccountSettings } from "@/lib/accountSettings";
 import type { SplitPdfOptions } from "@/lib/splitSheetPdf";
+import { isSupabaseConfigured } from "@/integrations/supabase/client";
 
 export function buildSplitSheetDownloadFilename(document: StoredSplitSheetDocument) {
   const title = (document.data.songTitle || document.title || "split-sheet")
@@ -22,7 +23,10 @@ export async function downloadSplitSheetRecord(document: StoredSplitSheetDocumen
   if (!globalThis.document || !globalThis.URL?.createObjectURL) throw new Error("PDF downloads are not supported in this browser.");
   const source = await loadSplitSheetDocumentForExport(document);
   const preferences = viewer.authUserId ? await loadAccountSettings(viewer.authUserId) : null;
-  const blob = await buildSplitSheetRecordPdf(source, viewer, { includeAuditTrail: preferences?.settings.includeAuditTrail ?? true });
+  const blob = await buildSplitSheetRecordPdf(source, viewer, {
+    includeAuditTrail: preferences?.settings.includeAuditTrail ?? true,
+    evidenceSource: isSupabaseConfigured ? "server" : "local",
+  });
   const url = URL.createObjectURL(blob);
   const anchor = globalThis.document.createElement("a");
   try {

@@ -1,7 +1,10 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { useState } from "react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import Dashboard from "@/components/Dashboard";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { saveLocalSplitSheetDocuments } from "@/lib/splitSheetStorage";
+import * as splitSheetStorage from "@/lib/splitSheetStorage";
 import { createEmptyProfile, type UserProfile } from "@/lib/userProfile";
 import { makeDocument } from "@/test/fixtures/splitSheet";
 
@@ -9,6 +12,7 @@ vi.mock("@/integrations/supabase/client", () => ({
   isSupabaseConfigured: false,
   supabase: {},
 }));
+afterEach(() => vi.restoreAllMocks());
 
 function makeProfile(): UserProfile {
   return {
@@ -24,6 +28,7 @@ function makeCollaboratorProfile(): UserProfile {
     ...createEmptyProfile(),
     username: "mayarios",
     displayName: "Maya Rios",
+    legalName: "Maya Rios",
     emailAddress: "maya@example.com",
   };
 }
@@ -40,6 +45,32 @@ async function openNightSwimFromSearch() {
 }
 
 describe("dashboard global search", () => {
+  it("returns to signing only after saving supplied identity details", async () => {
+    const document = makeDocument(); document.sentAt = document.createdAt;
+    document.status = "Ready to Sign";
+    document.splitApprovals.forEach(approval => { approval.status = "Approved"; });
+    vi.spyOn(splitSheetStorage, "loadSplitSheetDocuments").mockResolvedValue([{ document, persisted: true }]);
+    const save = vi.fn().mockResolvedValue(undefined);
+    function ProfileHarness() {
+      const [profile, setProfile] = useState(makeProfile);
+      return <Dashboard userProfile={profile} onOpenAccountCreation={vi.fn()}
+        onUpdateProfile={async next => { await save(next); setProfile(next); }} />;
+    }
+    render(<TooltipProvider><ProfileHarness /></TooltipProvider>);
+    await openNightSwimFromSearch();
+    fireEvent.click(screen.getByRole("button", { name: "Open in Messages" }));
+    expect(screen.queryByRole("button", { name: "Sign" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Complete signing details" }));
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "Personal details" }), { button: 0, ctrlKey: false });
+    fireEvent.change(screen.getByLabelText("Legal First Name"), { target: { value: "Synthetic" } });
+    fireEvent.change(screen.getByLabelText("Legal Last Name"), { target: { value: "Signer" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save Changes" }));
+    await waitFor(() => expect(save).toHaveBeenCalledWith(expect.objectContaining({ legalName: "Synthetic Signer" })));
+    fireEvent.click(screen.getByRole("button", { name: /^Messages$/ }));
+    expect(await screen.findByRole("button", { name: "Sign" })).toBeEnabled();
+    expect(document.splitSignatures).toEqual([]);
+  });
+
   it("finds and opens a split sheet from the top search bar", async () => {
     const document = makeDocument();
     document.sentAt = document.createdAt;

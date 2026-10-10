@@ -77,6 +77,7 @@ type CollaborationViewProps = {
   userProfile: UserProfile;
   initialDealId?: string;
   onOpenAgreement?: (id: string) => void;
+  onCompleteSigningIdentity?: () => void;
   onReloadDocuments?: () => void;
   reloading?: boolean;
   onUpdateDocument: (
@@ -85,7 +86,8 @@ type CollaborationViewProps = {
   ) => StoredSplitSheetDocument | void | Promise<StoredSplitSheetDocument | void>;
 };
 
-export default function CollaborationView({ documents, userProfile, initialDealId, onUpdateDocument, onOpenAgreement, onReloadDocuments, reloading = false }: CollaborationViewProps) {
+export default function CollaborationView({ documents, userProfile, initialDealId, onUpdateDocument, onOpenAgreement, onCompleteSigningIdentity, onReloadDocuments, reloading = false }: CollaborationViewProps) {
+  const hasSigningName = Boolean(userProfile.legalName?.trim());
   const deals = useMemo(
     () => documents.map((document) => documentToNegotiationDeal(document, userProfile)).filter(Boolean) as NegotiationDeal[],
     [documents, userProfile],
@@ -472,6 +474,10 @@ export default function CollaborationView({ documents, userProfile, initialDealI
 
   const signDeal = async () => {
     if (!selectedDeal || !currentVersion || !readyToSign) return;
+    if (!hasSigningName) {
+      toast.error("Add your legal name to your profile before signing.");
+      return;
+    }
 
     const preparedSignatures = buildSplitSheetSignatureRecords(selectedDeal.document, currentVersion.id);
     const viewerSignature = preparedSignatures.find(
@@ -588,15 +594,16 @@ export default function CollaborationView({ documents, userProfile, initialDealI
                       </div>
                       {!viewerHasSigned && <button
                         type="button"
-                        onClick={signDeal}
-                        disabled={savingWrite}
+                        onClick={hasSigningName ? signDeal : onCompleteSigningIdentity}
+                        disabled={savingWrite || (!hasSigningName && !onCompleteSigningIdentity)}
                         aria-busy={savingWrite}
                         className="split-press inline-flex items-center justify-center gap-2 rounded-lg bg-[hsl(var(--split-verified))] px-4 py-2 text-sm font-bold text-white hover:opacity-90"
                       >
                         <FileSignature className="h-4 w-4" />
-                        Sign
+                        {hasSigningName ? "Sign" : "Complete signing details"}
                       </button>}
                     </div>
+                    {!viewerHasSigned && !hasSigningName && <p className="mt-2 text-sm text-destructive">Add your legal name to your profile before signing.</p>}
                   </div>
                 )}
               </div>

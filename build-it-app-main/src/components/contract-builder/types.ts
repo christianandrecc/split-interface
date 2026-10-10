@@ -358,7 +358,7 @@ export const DEFAULT_CONTRACT: ContractData = {
   requireApprovalBeforeSubmission: true,
   allowDesignatedSubmitter: false,
   requireAllSignatures: true,
-  signingOrderEnabled: true,
+  signingOrderEnabled: false,
   conditionalSignatures: false,
   includeAuditTrail: true,
 };
