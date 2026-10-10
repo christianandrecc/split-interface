@@ -17,6 +17,8 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 interface Props {
   data: ContractData;
   onChange: (d: Partial<ContractData>) => void;
+  percentDrafts: Record<string, string>;
+  onPercentDraftsChange: (drafts: Record<string, string>) => void;
   recentCollaborators?: CollaboratorSuggestion[];
   currentProfile?: UserProfile;
 }
@@ -62,9 +64,8 @@ function normalizeInviteValue(value: string, method: string) {
   return trimmed;
 }
 
-export default function StepParties({ data, onChange, recentCollaborators = [], currentProfile }: Props) {
+export default function StepParties({ data, onChange, percentDrafts, onPercentDraftsChange, recentCollaborators = [], currentProfile }: Props) {
   const { parties } = data;
-  const [percentDrafts, setPercentDrafts] = useState<Record<string, string>>({});
   const activeSplitType = data.splitType === "Equal" ? "Equal" : "Custom";
   const isEqualSplit = activeSplitType === "Equal";
   const { total, valid, complete } = splitShareState(parties.map((party) => party.percent));
@@ -79,7 +80,7 @@ export default function StepParties({ data, onChange, recentCollaborators = [], 
     onChange({ parties: parties.map((p) => (p.id === id ? { ...p, [field]: val } : p)) });
 
   const updatePercent = (id: string, rawValue: string) => {
-    setPercentDrafts((current) => ({ ...current, [id]: rawValue }));
+    onPercentDraftsChange({ ...percentDrafts, [id]: rawValue });
     // Invalid input remains editable but cannot pass the parent review/save gate.
     update(id, "percent", splitShareUnits(rawValue) === null ? NaN : Number(rawValue));
   };
@@ -134,7 +135,7 @@ export default function StepParties({ data, onChange, recentCollaborators = [], 
   };
 
   const chooseSplitType = (splitType: string) => {
-    setPercentDrafts({});
+    onPercentDraftsChange({});
     onChange({
       splitType,
       parties: splitType === "Equal" ? applyEqualSplits(parties) : parties,
@@ -156,7 +157,7 @@ export default function StepParties({ data, onChange, recentCollaborators = [], 
     const nextParties = parties
       .filter((p) => p.id !== id)
       .map((p, index) => ({ ...p, signingOrder: index + 1 }));
-    if (isEqualSplit || nextParties.length === 1) setPercentDrafts({});
+    if (isEqualSplit || nextParties.length === 1) onPercentDraftsChange({});
 
     onChange({
       parties:

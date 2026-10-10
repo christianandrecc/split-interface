@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import ContractBuilder from "@/components/contract-builder/ContractBuilder";
 import { makeDocument } from "@/test/fixtures/splitSheet";
@@ -12,9 +12,10 @@ function setup(editing = false, threePeople = false) {
   if (threePeople) doc.data.parties.push({ ...doc.data.parties[1], id: "third", professionalName: "Third Artist", inviteValue: "@third" });
   const onBack = vi.fn(); const onHome = vi.fn();
   const onStoreDocument = vi.fn(async (document) => ({ document, persisted: true }));
+  const onSendDocument = vi.fn();
   const view = render(<ContractBuilder userProfile={doc.creatorProfile} initialDocument={editing ? doc : undefined}
-    onBack={onBack} onHome={onHome} onStoreDocument={onStoreDocument} onSendDocument={vi.fn()} />);
-  return { ...view, doc, onBack, onHome, onStoreDocument };
+    onBack={onBack} onHome={onHome} onStoreDocument={onStoreDocument} onSendDocument={onSendDocument} />);
+  return { ...view, doc, onBack, onHome, onStoreDocument, onSendDocument };
 }
 
 function reloadEvent() {
@@ -24,6 +25,79 @@ function reloadEvent() {
 }
 
 describe("creation loss and precision guards", () => {
+  it.each([
+    ["33.333", "33.333", "33.334"],
+    ["-0.01", "50", "50.01"],
+    ["100.01", "0", "0"],
+    ["", "60", "40"],
+  ])("retains editable shares %s/%s/%s across step unmounts while rejecting submission", (...values) => {
+    const { onStoreDocument, onSendDocument } = setup(true, true);
+    fireEvent.click(screen.getByRole("button", { name: "Edit Collaborators & Initial Split" }));
+    const nav = within(screen.getByRole("navigation", { name: "Split creation steps" }));
+    values.forEach((value, index) => fireEvent.change(screen.getAllByRole("spinbutton")[index], { target: { value } }));
+    fireEvent.click(screen.getAllByRole("button", { name: /^Back$/ }).at(-1)!);
+    expect(screen.getByRole("heading", { name: "Sample Disclosure" })).toBeInTheDocument();
+    expect(screen.queryByRole("spinbutton")).not.toBeInTheDocument();
+    fireEvent.click(nav.getByRole("button", { name: "Collaborators" }));
+    expect(screen.getAllByRole("spinbutton").map(input => (input as HTMLInputElement).value)).toEqual(values);
+    fireEvent.click(nav.getByRole("button", { name: "Work" }));
+    fireEvent.click(nav.getByRole("button", { name: "Collaborators" }));
+    expect(screen.getAllByRole("spinbutton").map(input => (input as HTMLInputElement).value)).toEqual(values);
+    expect(screen.getByRole("button", { name: "Continue" })).toBeDisabled();
+    expect(nav.getByRole("button", { name: "Review" })).toBeDisabled();
+    expect(onStoreDocument).not.toHaveBeenCalled(); expect(onSendDocument).not.toHaveBeenCalled();
+    ["33.33", "33.33", "33.34"].forEach((value, index) => fireEvent.change(screen.getAllByRole("spinbutton")[index], { target: { value } }));
+    fireEvent.click(nav.getByRole("button", { name: "Review" }));
+    expect(screen.getByRole("button", { name: "Save To Drafts" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Send Split Invite" })).toBeEnabled();
+  });
+
+  it.each(["Back", "Go to Dashboard", "Cancel"].flatMap(opener => ["Keep editing", "Escape"].map(dismiss => [opener, dismiss])))(
+    "restores focus to %s after %s without leaving the builder", async (name, dismiss) => {
+      const { onBack, onHome } = setup();
+      fireEvent.change(screen.getByLabelText("Work Title"), { target: { value: "Keyboard session" } });
+      const opener = screen.getByRole("button", { name });
+      opener.focus(); fireEvent.click(opener);
+      const cancel = screen.getByRole("button", { name: "Keep editing" });
+      await waitFor(() => expect(cancel).toHaveFocus());
+      if (dismiss === "Escape") fireEvent.keyDown(cancel, { key: "Escape" });
+      else fireEvent.click(cancel);
+      await waitFor(() => expect(opener).toHaveFocus());
+      expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+      expect(screen.getByLabelText("Work Title")).toHaveValue("Keyboard session");
+      expect(reloadEvent().defaultPrevented).toBe(true);
+      expect(onBack).not.toHaveBeenCalled(); expect(onHome).not.toHaveBeenCalled();
+    });
+
+  it("does not resurrect invalid text after equal splitting and removal", () => {
+    setup(true, true);
+    fireEvent.click(screen.getByRole("button", { name: "Edit Collaborators & Initial Split" }));
+    fireEvent.change(screen.getAllByRole("spinbutton")[0], { target: { value: "33.333" } });
+    fireEvent.click(screen.getByRole("radio", { name: "Equal" }));
+    fireEvent.click(screen.getAllByRole("button", { name: /^Back$/ }).at(-1)!);
+    fireEvent.click(within(screen.getByRole("navigation", { name: "Split creation steps" })).getByRole("button", { name: "Collaborators" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Custom" }));
+    expect(screen.getAllByRole("spinbutton").map(input => (input as HTMLInputElement).value)).toEqual(["33.34", "33.33", "33.33"]);
+    fireEvent.change(screen.getAllByRole("spinbutton")[0], { target: { value: "100.01" } });
+    fireEvent.click(screen.getByRole("button", { name: "Remove Third Artist" }));
+    fireEvent.click(screen.getByRole("button", { name: "Remove Maya Rios" }));
+    expect(screen.getByRole("spinbutton")).toHaveDisplayValue("100");
+    expect(screen.getByRole("button", { name: "Continue" })).toBeEnabled();
+  });
+
+  it("leaves destination focus alone when discard is confirmed", async () => {
+    const { onBack, rerender } = setup();
+    onBack.mockImplementation(() => rerender(<button type="button" autoFocus>Destination</button>));
+    fireEvent.change(screen.getByLabelText("Work Title"), { target: { value: "Discarded session" } });
+    const opener = screen.getByRole("button", { name: "Back" });
+    opener.focus(); fireEvent.click(opener);
+    fireEvent.click(screen.getByRole("button", { name: "Leave without saving" }));
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
+    expect(screen.getByRole("button", { name: "Destination" })).toHaveFocus();
+    expect(opener).not.toBeInTheDocument();
+    expect(onBack).toHaveBeenCalledOnce();
+  });
+
   it.each(["Back", "Go to Dashboard", "Cancel"])("confirms dirty %s exits, cancels without losing edits, then follows the intended destination", (button) => {
     const { onBack, onHome } = setup();
     expect(reloadEvent().defaultPrevented).toBe(false);

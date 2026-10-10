@@ -26,6 +26,7 @@ function makeSparseProfile() {
 }
 
 function StepPartiesHarness() {
+  const [percentDrafts, setPercentDrafts] = useState<Record<string, string>>({});
   const [data, setData] = useState<ContractData>({
     ...DEFAULT_CONTRACT,
     splitType: "Custom",
@@ -46,10 +47,12 @@ function StepPartiesHarness() {
     ],
   });
 
-  return <StepParties data={data} onChange={(patch) => setData((current) => ({ ...current, ...patch }))} />;
+  return <StepParties data={data} onChange={(patch) => setData((current) => ({ ...current, ...patch }))}
+    percentDrafts={percentDrafts} onPercentDraftsChange={setPercentDrafts} />;
 }
 
 function StepPartiesSearchHarness() {
+  const [percentDrafts, setPercentDrafts] = useState<Record<string, string>>({});
   const [data, setData] = useState<ContractData>({
     ...DEFAULT_CONTRACT,
     splitType: "Custom",
@@ -87,6 +90,8 @@ function StepPartiesSearchHarness() {
     <StepParties
       data={data}
       onChange={(patch) => setData((current) => ({ ...current, ...patch }))}
+      percentDrafts={percentDrafts}
+      onPercentDraftsChange={setPercentDrafts}
       recentCollaborators={recentCollaborators}
     />
   );

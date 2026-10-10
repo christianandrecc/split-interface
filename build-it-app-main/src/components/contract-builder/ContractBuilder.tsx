@@ -58,8 +58,10 @@ export default function ContractBuilder({
   const [step, setStep] = useState<StepId>(initialDocument ? "review" : "metadata");
   const [furthestStep, setFurthestStep] = useState(initialDocument ? STEPS.length - 1 : 0);
   const [data, setData] = useState<ContractData>(() => initialDocument?.data ?? createInitialContract(userProfile, settings));
+  const [percentDrafts, setPercentDrafts] = useState<Record<string, string>>({});
   const initialData = useRef(JSON.stringify(data));
   const [pendingExit, setPendingExit] = useState<(() => void) | null>(null);
+  const exitOpener = useRef<HTMLButtonElement | null>(null);
   const [sampleTrack, setSampleTrack] = useState<AppleMusicTrack | null>(null);
   const documentRef = useRef<StoredSplitSheetDocument | null>(initialDocument ?? null);
   const inFlight = useRef(false);
@@ -74,9 +76,12 @@ export default function ContractBuilder({
   const dirty = JSON.stringify(data) !== initialData.current;
   const warnOnExit = !completed && (dirty || savingDocument);
 
-  const requestExit = (leave: () => void) => {
+  const requestExit = (leave: () => void, opener: HTMLButtonElement) => {
     if (inFlight.current || deleting) return;
-    if (warnOnExit) setPendingExit(() => leave);
+    if (warnOnExit) {
+      exitOpener.current = opener;
+      setPendingExit(() => leave);
+    }
     else leave();
   };
 
@@ -205,7 +210,7 @@ export default function ContractBuilder({
           <div className="flex min-w-0 items-center gap-3">
             <button
               type="button"
-              onClick={() => requestExit(onBack)}
+              onClick={(event) => requestExit(onBack, event.currentTarget)}
               aria-label="Back"
               disabled={savingDocument}
               title="Back"
@@ -217,7 +222,7 @@ export default function ContractBuilder({
               type="button"
               aria-label="Go to Dashboard"
               disabled={savingDocument}
-              onClick={() => requestExit(onHome ?? onBack)}
+              onClick={(event) => requestExit(onHome ?? onBack, event.currentTarget)}
               className="hidden h-11 shrink-0 items-center rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30 sm:inline-flex"
             >
               <img src={splitLockup} alt="SPLIT" className="h-8 w-auto object-contain" />
@@ -250,6 +255,8 @@ export default function ContractBuilder({
               <StepParties
                 data={data}
                 onChange={update}
+                percentDrafts={percentDrafts}
+                onPercentDraftsChange={setPercentDrafts}
                 recentCollaborators={recentCollaborators}
                 currentProfile={userProfile}
               />
@@ -261,7 +268,7 @@ export default function ContractBuilder({
             {saveError && !confirmSend && <p role="alert" className="mt-4 text-sm text-destructive">{saveError}</p>}
             <div className="sticky bottom-0 z-20 mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-border bg-background py-4">
               <button
-                onClick={stepIdx === 0 ? () => requestExit(onBack) : prev}
+                onClick={stepIdx === 0 ? (event) => requestExit(onBack, event.currentTarget) : prev}
                 className="inline-flex min-h-11 items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors font-medium"
               >
                 <ArrowLeft className="h-4 w-4" />{stepIdx === 0 ? "Cancel" : "Back"}
@@ -309,14 +316,21 @@ export default function ContractBuilder({
           </fieldset>
       </main>
       <AlertDialog open={pendingExit !== null} onOpenChange={(open) => { if (!open) setPendingExit(null); }}>
-        <AlertDialogContent className="w-[calc(100%-2rem)] max-w-md rounded-lg">
+        <AlertDialogContent className="w-[calc(100%-2rem)] max-w-md rounded-lg" onCloseAutoFocus={(event) => {
+          event.preventDefault();
+          const opener = exitOpener.current;
+          exitOpener.current = null;
+          if (opener?.isConnected) {
+            opener.focus({ preventScroll: true });
+          }
+        }}>
           <AlertDialogHeader>
             <AlertDialogTitle>Leave without saving?</AlertDialogTitle>
             <AlertDialogDescription>Your unsaved changes will be lost. Stay here to finish and save your split.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Keep editing</AlertDialogCancel>
-            <Button variant="destructive" onClick={() => { const leave = pendingExit; setPendingExit(null); leave?.(); }}>Leave without saving</Button>
+            <Button variant="destructive" onClick={() => { const leave = pendingExit; exitOpener.current = null; setPendingExit(null); leave?.(); }}>Leave without saving</Button>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
