@@ -8,7 +8,9 @@ Current: repository/platform/cloud metadata audit and local checks complete; sha
 
 ## Phase 2 — Core functionality
 
-Order: GM-02 dependency gate; GM-03 percentage validation; GM-04 native counter parity; GM-05 truthful agreement metadata; GM-06 native create/sign/export if included in first beta. In parallel, prepare GM-01 environment isolation, GM-09 recovery design, GM-10 legal/support/closure review.
+Founder authorized web-beta execution on October 10. Order: GM-02 dependency gate; GM-03 percentage validation/dirty-work protection; GM-05 truthful signer/export evidence; real auth/invitation verification; independent full web lifecycle and browser/accessibility checks. In parallel, prepare GM-01 environment isolation, GM-09 recovery design, GM-10 legal/support/closure review. [Execution tracker #3](https://github.com/christianandrecc/split-interface/issues/3), [active ownership](AGENT_TASKS.md).
+
+Native GM-04/06/11 continue as a separate platform track and do not block the web-beta milestone. Shared backend changes still require native compatibility review.
 
 Exit: applicable platform can create an account, create/send a valid split, route contributors, revise/approve, sign the current proposal, preserve the final record, and retrieve/export it. All changed behavior has independent regression and permission evidence; no unresolved P0 and no core P1 defects. Preserve current architecture and deferred publishing/AI/SMS decisions.
 
@@ -32,9 +34,9 @@ Require current security review, accurate terms/privacy/electronic consent, veri
 
 Instrument privacy-reviewed activation, split creation success/time, invitation acceptance, agreement completion, critical defects, weekly active users, and retention. Establish measured baselines before choosing targets. Prioritize reliability and completion; evaluate real Elephant AI, publishing/submission, reminders, and broader growth later.
 
-## Scope alternatives awaiting founder selection
+## Platform scope
 
-- **Web first:** close web/backend/operations gates; native runs its own development track and is not advertised as beta-complete. Fastest route based on inspected missing native functions.
-- **Combined:** same gates plus GM-06 and full native auth callbacks, real-device validation, distribution and cross-platform lifecycle evidence. Higher scope and dependency burden; no date estimate yet.
+- **Current milestone — web beta:** close web/backend/operations gates; native runs its own development track and is not advertised as beta-complete. Founder authorized this execution scope.
+- **Later native/combined release:** same shared gates plus GM-06 and full native auth callbacks, real-device validation, distribution and cross-platform lifecycle evidence. Requires its own candidate and release approval; no date estimate yet.
 
 No environment purchase, platform restructuring, provider activation, production rollout, or public announcement is implied by this roadmap.

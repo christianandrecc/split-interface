@@ -6,9 +6,12 @@ Updated October 10, 2026. Lifecycle: `BACKLOG → READY → IN PROGRESS → REVI
 
 | Workstream | Existing chat | Checkout / branch | Coordination |
 | --- | --- | --- | --- |
-| GM | Inspect SPLIT project architecture (`01a125fd-72cf-7c71-9c0b-f08068b3bf6f`) | Current `3303` worktree / `management/split-gm` | Current roadmap, specification, review and independent QA |
-| Web | SPLIT UI (Front End) (`019f0b98-14e3-7d90-a54e-d00371aed1c9`) | Agent confirmed `/Users/christiancarrera/Documents/SPLIT INTERFACE (CODEX)` / `main` at the audited baseline; its old `New project 2` default cwd no longer exists | Preserve clean tracked files and existing untracked work; use an isolated implementation branch/worktree for edits; main triggers production deployment |
-| iOS | Continue SPLIT iOS development (`01a125ed-8d05-7b73-9d57-accc0338dfa5`) | `22b2` worktree / `codex/ios-development` at `bf9723e` | Preserve committed native milestone, shared RPC compatibility and design blueprint |
+| GM | General Manager Agent (SPLIT) (`01a125fd-72cf-7c71-9c0b-f08068b3bf6f`) | Current `3303` worktree / `management/split-gm` | Current roadmap, specification, review and independent QA |
+| Web | Web Development Agent (SPLIT) (`019f0b98-14e3-7d90-a54e-d00371aed1c9`) | Managed `web-beta-fixes` worktree / `codex/web-beta-dependencies`, based on `4bf5a2a` | Own GM-02/03, then GM-05; preserve primary `main` and untracked work; no production integration |
+| iOS | iOS Development Agent (SPLIT) (`01a125ed-8d05-7b73-9d57-accc0338dfa5`) | `22b2` worktree / `codex/ios-development`; audited baseline `bf9723e`, latest observed HEAD `c8839cd` | Separate native track; post-audit changes need independent review and do not block web-beta preparation |
+| Backend specialist | Bounded `/root/backend_audit` assignment | Managed `backend-beta-readiness` worktree / `codex/backend-beta-readiness`, based on `4bf5a2a` | GM-01 manifest and GM-09 synthetic recovery harness/runbook; no hosted provisioning or schema changes |
+| Independent QA | Bounded `/root/web_audit` assignment | Read-only candidate review; reports under `/tmp/split-web-beta-qa/` | GM-02/03/05 acceptance review and GM-08 matrix; no overlapping developer edits |
+| Operations specialist | Bounded `/root/beta_operations` assignment | Read-only source/private draft assessment; sanitized reports under `/tmp/split-web-beta-operations/` | GM-10 counsel decision packet, support/closure/incident and onboarding gates; no publication/outreach |
 
 Older chats “SPLIT UI (Mobile Version)” and “Build native SPLIT iPhone app” are historical context, not additional active owners. Web and native chats were idle/not loaded at initial inspection; both are now active on the bounded review handoffs below. They are not continuously working. GM audit specialists were temporary and read-only.
 
@@ -17,16 +20,16 @@ Older chats “SPLIT UI (Mobile Version)” and “Build native SPLIT iPhone app
 | ID | Priority | Owner | State | Effort | Dependencies |
 | --- | --- | --- | --- | --- | --- |
 | GM-00 Initial audit/management records | P1 | GM | REVIEW | Completed assessment; integration pending | Founder operating directive |
-| GM-01 Isolated integration environment | P1 | Backend/GM | REVIEW | 1–2 days setup/validation after approval | Exact provider plan/cost approval; no production clone |
-| GM-02 Restore dependency release gate | P1 | Web + independent QA | READY | 1–2 days | Current audit; isolated implementation branch |
-| GM-03 Exact shares and dirty-builder protection | P1 | Web + QA | READY | 1–2 days | Existing counter validation; no schema expansion |
+| GM-01 Isolated integration environment | P1 | Backend/GM | IN PROGRESS | Preparation now; 1–2 days setup/validation after approval | Organization/cost selection and provisioning approval remain pending; no production clone |
+| GM-02 Restore dependency release gate | P1 | Web + independent QA | IN PROGRESS | 1–2 days | Current audit; isolated implementation branch |
+| GM-03 Exact shares and dirty-builder protection | P1 | Web + QA | IN PROGRESS | 1–2 days | Existing counter validation; no schema expansion |
 | GM-04 Native negotiation parity/reconciliation | P1 | iOS + QA | READY | 1.5–3 days | Preserve `bf9723e`; shared action contract |
 | GM-05 Truthful signer evidence and export metadata | P1 | Web/backend + QA | READY | 2–3 days | Legacy fixtures; review actual signing/consent semantics |
 | GM-06 Complete native lifecycle | P1 if native beta | iOS | BACKLOG | 13–23 days for core work | GM-01/04/05; platform-scope selection; auth/distribution added separately |
 | GM-07 Auth/delivery receipts and alert proof | P1 | Backend/QA/operations | BACKLOG | 1–3 days | GM-01; approved controlled inboxes/provider setup |
-| GM-08 Independent hosted lifecycle/device QA | P1 | QA + platform owners | BACKLOG | 3–5 days | GM-01–07 applicable scope; exact candidate build |
-| GM-09 Current recovery including Vault | P1 | Backend/infrastructure | READY | 2–4 days design/drill | Founder backup decision; current secret/scheduler dependency |
-| GM-10 Legal, support and closure operations | P1 | GM/founder + qualified counsel | BACKLOG | Engineering 1–3 days; external review unestimated | Founder policy/operator decisions; current product spec |
+| GM-08 Independent hosted lifecycle/device QA | P1 | QA + platform owners | IN PROGRESS | Matrix/local review now; 3–5 days hosted verification later | GM-01–07 applicable scope and exact candidate required for hosted writes |
+| GM-09 Current recovery including Vault | P1 | Backend/infrastructure | IN PROGRESS | 2–4 days design/drill | Local synthetic harness now; live capture/custody requires founder decision |
+| GM-10 Legal, support and closure operations | P1 | GM/founder + qualified counsel | IN PROGRESS | Packet/local assessment now; external review unestimated | Founder policy/operator decisions and qualified review remain pending |
 | GM-11 Native callback/distribution/device gate | P1 if native beta | iOS/QA/founder | BACKLOG | 5–8 days plus access/review | GM-01/06; Apple account/release identity |
 | GM-12 Draft retention and performance refinements | P2 | Platform owners | BACKLOG | Size after design | Core P1 gates; no new service without decision |
 
@@ -86,9 +89,14 @@ Problem/objective: mobile memory-only drafts and large web bundles increase fric
 
 ## Handoff and review ledger
 
+- Web-beta execution authorized by founder on October 10: "delegate the tasks to the corresponding agents ... for web beta launch." This replaces the earlier web read-only planning scope. [Execution tracker #3](https://github.com/christianandrecc/split-interface/issues/3) carries the release gates; individual task state remains here.
+- Web implementation assignment delivered through `send_message_to_thread`; supported status confirms active work. Git worktree inventory independently confirms the isolated path/branch above. Developer reports dependency remediation and creation safeguards in progress; these are not accepted fixes or passing release evidence yet. GM-05 is assigned next in the same workstream, READY until implementation starts.
+- Backend assignment delivered through `followup_task`; startup confirms clean dedicated branch and scope. Current work is a sanitized isolation manifest/runbook and synthetic-only recovery harness with inert cron/net/Vault substitutes. Current production capture refusal remains; all hosted provisioning/cost confirmation, real secrets and live backup/restore excluded.
+- QA assignment delivered through `followup_task`; startup confirms independent matrix/baseline review. GM-08 IN PROGRESS denotes preparation/local coverage, not live account/inbox/concurrency certification. Candidate testing begins after a concrete committed implementation is available.
+- Operations assignment delivered through `spawn_agent`; startup confirms GM-10 private read-only assessment and sanitized packet. No legal wording is approved/published, and no support contact/provider/session policy is changed.
 - Initial web/backend/native audit assignments: delivered through supported subagents; complete source reports received; root ran web/database gates and read back native logs. No claim of hosted workflow completion.
 - Management records: committed on `management/split-gm` and published as [draft PR #2](https://github.com/christianandrecc/split-interface/pull/2). Independent source/specification review completed; integration remains pending. The GitHub connector could not create the PR (integration permission denied); the existing authenticated browser created it successfully and the PR is attached to the GM chat.
-- Persistent web review handoff: delivered October 10 through `send_message_to_thread` to “SPLIT UI (Front End)”; supported wait snapshot confirms active review. Scope: verify checkout and independently review GM-02/03/05, returning isolated implementation plans and acceptance tests. No product edits or production actions authorized in this handoff. Implementation task states remain READY.
-- Persistent iOS review handoff: delivered October 10 through `send_message_to_thread` to “Continue SPLIT iOS development”; supported wait snapshot confirms active review. Scope: independently review GM-04 and outline conditional GM-06 dependencies. No source/backend/distribution changes authorized in this handoff. Implementation task states remain READY/BACKLOG.
+- Historical web read-only review handoff was delivered October 10 before implementation authorization; its restricted scope is superseded by the web-beta assignment above.
+- Historical iOS read-only review handoff was delivered October 10. The native chat now has separate subsequent development activity; its reported progress is not independent QA acceptance by GM.
 - GitHub search found no open issues/PRs at initial inspection. This document is the initial actionable queue; convert accepted tasks into issues as needed, referencing this single source rather than duplicating status across chats.
 - PR review → independent tests → founder-approved integration/release. `main` merge can cause production deployment. No merge authorized this session.

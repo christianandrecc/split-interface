@@ -19,7 +19,7 @@ October 10, 2026. Check only with linked evidence for the exact candidate. Histo
 
 ## Closed beta
 
-- [ ] Founder selects web-first or combined scope; supported handoffs/limitations are explicit to cohort.
+- [x] Founder directs the current milestone toward web beta; native development remains separate. Cohort-facing supported capabilities/limitations still need verification before invitation.
 - [ ] Exact candidate commit/deployment/migrations match; no applicable unresolved P0/core P1; independent QA evidence attached.
 - [ ] Invitation sending, actual controlled inbox receipt, intended account acceptance/decline, signed delivered/bounced receipts and creator-only guarded retry verified (GM-07).
 - [ ] Web production monitoring/event ingestion and actionable operator alert receipt proved; native crash/error coverage if included. No sensitive contents in telemetry.

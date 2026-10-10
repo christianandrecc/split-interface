@@ -19,9 +19,9 @@ See [initial audit](docs/management/INITIAL_AUDIT.md) for source evidence, iOS c
 
 ## Immediate priorities
 
-1. Restore the dependency gate and align percentage/action/document behavior with the shared contract. [GM-02–GM-05](AGENT_TASKS.md).
+1. Restore the dependency gate, protect creation/unsaved work, then make signer/export evidence truthful. Web implementation and independent QA have started. [GM-02/03/05](AGENT_TASKS.md).
 2. Establish an approved isolated integration target and validate the real A/B/C account lifecycle, invitation receipts, auth callbacks, and monitoring. [GM-01, GM-07, GM-08](AGENT_TASKS.md).
-3. Complete native creation/signing/retrieval if iOS is included in the first beta; keep it on the same guarded backend. [GM-06](AGENT_TASKS.md).
+3. Complete current recovery and legal/support/closure preparation alongside development. Backend and operations specialists have started bounded local preparation. [GM-09/10](AGENT_TASKS.md).
 
 Recovery for the current Vault-backed scheduler and legal/support/closure readiness also block a release recommendation. [Risks](RISKS.md), [roadmap](ROADMAP.md), [release gates](LAUNCH_CHECKLIST.md).
 
@@ -31,12 +31,12 @@ Recovery for the current Vault-backed scheduler and legal/support/closure readin
 - Bounded independent source audits delivered through supported subagents; fresh local web/database checks run by GM.
 - Existing chats and worktrees inspected; no additional permanent chats created.
 - Nine core management documents, a dated audit/evidence record, and an isolated environment proposal committed and independently reviewed in [draft PR #2](https://github.com/christianandrecc/split-interface/pull/2); integration pending.
-- Existing web and iOS chats received bounded read-only review/planning handoffs through supported tools; both are active. This is delivered coordination, not implementation completion.
+- Initial read-only handoffs were delivered; founder subsequently authorized web-beta implementation. Web now owns an isolated `web-beta-fixes` checkout; backend owns `backend-beta-readiness`. Independent QA and operations assignments are active. [Task ownership and delivery](AGENT_TASKS.md), [execution tracker #3](https://github.com/christianandrecc/split-interface/issues/3).
 - No production deployment, data/schema/settings mutation, outbound invitation, public launch, app submission, or new automation performed.
 
 ## Founder decisions open
 
-- First beta: web first with iOS following (recommended for shorter path), or complete native lifecycle before a combined beta. Recommendation is not a scope change approval.
+- Founder directed execution toward web beta. Native development continues separately and is not a web-beta release gate; no native/public release is implied.
 - Select/approve hosted staging and provider isolation only after the environment proposal and cost are prepared (GM-01).
 - Resolve review of legal documents, operating support/closure ownership, recovery budget, and paused SMS/password protection before applicable release gates. No purchase or publication is authorized by these records.
 
