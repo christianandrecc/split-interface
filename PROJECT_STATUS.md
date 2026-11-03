@@ -2,7 +2,7 @@
 
 **Execution RESUMED — November 3, 2026, America/New_York.** Founder selected DocuSign and explicitly resumed local web/iOS development, delegated signing review and the approved Tailwind migration. Historical pause is superseded; exact candidates/checkpoints are preserved. Provider direction is approved, hosted DocuSign/demo tests and purchases are not. Overall readiness remains At Risk. [Current local plan](docs/management/DOCUSIGN_LOCAL_PLAN_2026-11-03.md), [historical pause checkpoint](docs/management/PAUSE_CHECKPOINT_2026-10-10.md).
 
-Last reviewed: November 3, 2026 (America/New_York). **Overall: At Risk.** Web c210575 and native 33cbbae signing corrections pass independent bounded QA. Tailwind F1 closes at 325f64d; compatible tooling 7ea2359 now passes independent local review with gates. Production Zod and full-toolchain findings remain; fixed-Zod/resolver compatibility options are still a disposable investigation. Native simulation 87d6196 is frozen and in independent exact-SHA QA against aligned v0.1+C1. Hosted/provider, legal/operating, integration and release gates remain open.
+Last reviewed: November 3, 2026 (America/New_York). **Overall: At Risk.** Web signing/focus/tooling corrections pass separate bounded local QA; the dependency gate still fails on the unchanged application. Fixed-Zod/resolver disposable options are in independent review and strict-CSP qualification, with an evidence-bundle omission being corrected. Native simulation 87d6196 failed local acceptance for P2 F1: an older authorized response can restore lease/sample eligibility after a newer denial. Bounded native correction is active. No hosted/provider, legal, integration or release gate is cleared.
 
 ## Verified baseline — historical October 10 evidence
 
@@ -21,8 +21,8 @@ See [initial audit](docs/management/INITIAL_AUDIT.md) for source evidence, iOS c
 
 ## Current priorities
 
-1. Complete the concrete fixed-Zod/resolver compatibility options and deliberately review any proposed application-major/input policy. Accepted local focus 325f64d and tooling 7ea2359 remain separate; no combined candidate, Linux/minimum-browser or release acceptance. [GM02](AGENT_TASKS.md).
-2. Independently review frozen native simulation 87d619629f401fdbdf348e36089535a9fe99689b against [v0.1+C1](docs/management/DOCUSIGN_LOCAL_ALIGNMENT_V0_1_2026-11-03.md); route concrete corrections before any new feature. Owner 168 tests/6UI journeys/Release claims are not independent acceptance. No provider/hosted/legal/release clearance is implied.
+1. Complete independent fixed-Zod/resolver options review, corrected standalone evidence packaging and actual-app strict-CSP disposable qualification before selecting any application-major/input policy. Preserve the audit gate and separate accepted focus/tooling candidates. [GM02](AGENT_TASKS.md).
+2. Correct native simulation 87d6196 F1 publication after newer access denial, preserving original failure evidence; independently retest the exact correction before new features. Fresh 168 XCTest/builds pass but cannot substitute for the two failing adversarial cases. [QA](docs/management/qa/IOS_SIMULATION_87D6196_2026-11-03.md).
 3. Prepare the remaining real DocuSign service/old-client guard, artifact, consent and operating decisions while testing stays local. No server/schema/provider activation is authorized. [GM13 plan](docs/management/DOCUSIGN_LOCAL_PLAN_2026-11-03.md).
 
 ## Unmerged web-beta progress
@@ -73,3 +73,5 @@ Founder-selected hourly monitor monitor-split-web-and-ios-development is ACTIVE 
 Daily briefing split-morning-development-and-launch-briefing is ACTIVE again at 9 AM America/New_York, with the original GM target and updated provider/local-only scope. Meaningful hourly changes and the requested daily report remain distinct. Local schedules require the computer/app to be available; saved configuration is verified after update.
 
 Native simulation `87d6196` is delivered and frozen for independent QA. GM verified 24 source-manifest entries and 55 ios-only changes; only pre-existing file modified is Package.swift, with original app/project/tests/SDK pin unchanged. Owner claims168 tests(130existing+38 new),6UI journeys and Release exclusion; these await independent behavior review. Reviewer resumed after initial capacity error and starts isolated feature/source/unsigned-build checks, leaving owner Simulator/data untouched.
+
+Subsequent exact 87d6196 QA **FAIL_LOCAL_GM13C_F1** supersedes the pending-review checkpoint above. One P2 root cause/two reproductions: delayed authorized artifact/session success overwrites newer denied refresh. Fresh 168 tests, unsigned Debug/Release/exclusion checks pass; independent 1619/1621 assertions expose the race. Owner 6 UI/20PNG readback is separate. Correction delivered and startup confirmed; no production/provider exposure demonstrated. [Durable report](docs/management/qa/IOS_SIMULATION_87D6196_2026-11-03.md).

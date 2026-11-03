@@ -44,3 +44,7 @@ The native implementation handoff successfully delivered exact C1 after GM revie
 ## First executable candidate in independent review
 
 Native 87d619629f401fdbdf348e36089535a9fe99689b is frozen and handed to existing independent QA. GM source-identity checks confirm24 manifest entries/55 ios-only changes and original app/project/tests/SDK pin preserved. Owner behavior/build/UI claims await exact-candidate review; construction scans are supplemental, not service/security certification. No next feature/provider integration is authorized by delivery.
+
+## Exact 87d6196 acceptance failed; bounded correction active
+
+[Final independent QA](qa/IOS_SIMULATION_87D6196_2026-11-03.md) finds one P2/two reproductions where an already-authorized delayed response revives sample/session eligibility after a newer denied refresh. This violates local access-loss publication requirements; it does not change v0.1+C1 or demonstrate actual provider exposure. Fresh 168 tests/builds/exclusion/source identity pass, but 1619/1621 adversarial assertions block acceptance. GM verified 23 referenced artifact hashes and archived 25 originals externally; owner received the correction, acknowledged active work and preserves Simulator/data. Exact correction retest precedes any new feature.

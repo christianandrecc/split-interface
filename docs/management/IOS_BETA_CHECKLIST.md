@@ -1,6 +1,6 @@
 # SPLIT native beta delivery and acceptance
 
-**November 3 update:** native33cbbae technical signing corrections independently pass. Aligned v0.1+C1 simulation candidate87d6196 is frozen and in independent exact-SHA QA; owner 168 tests/6UI/Release evidence is not acceptance. The new dependency-free Debug app remains separate from the canonical app, real DocuSign, PDF/share and hosted release. [Scope/evidence](DOCUSIGN_LOCAL_ALIGNMENT_V0_1_2026-11-03.md), [signing QA](qa/IOS_SIGNING_33CBBAE_2026-11-03.md).
+**November 3 update:** native33cbbae signing corrections remain independently accepted. New simulation 87d6196 failed local QA on P2 F1: delayed authorized responses can revive lease/sample eligibility after newer denial. Bounded correction is active; exact-SHA independent retest is required. Fresh 168 tests/builds pass; ownerUI readback is separate. [Failure evidence](qa/IOS_SIMULATION_87D6196_2026-11-03.md), [scope](DOCUSIGN_LOCAL_ALIGNMENT_V0_1_2026-11-03.md).
 
 Updated October 10, 2026. Founder selected **web + iOS beta** in iOS Development Agent (SPLIT), then explicitly asked GM to coordinate continued mobile creation/polishing after the web handoff. Same account, same canonical backend records; native create → invite → negotiate → review/sign → retrieve/share is the intended phone journey.
 
