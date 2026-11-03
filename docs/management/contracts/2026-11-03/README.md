@@ -15,3 +15,7 @@ GM read the alignment/C1 and verified their hashes. C1 canonical JSON/digest exa
 ## Future service proposal S1
 
 [beta-docusign-server-boundary-cutover-proposal-v0.1-2026-11-03.md](beta-docusign-server-boundary-cutover-proposal-v0.1-2026-11-03.md) is a byte-identical docs-only snapshot from `536dfe65ad44a096c6939a2c5c150ab9ec21a508`, SHA-256 `c79ea6f9dea633d1d96c08f4200b7981c21ffa55748b04930dbf64a5311e3ac7`. Reserved service review identifier `split.execution.service.proposal.v0.1` is unimplemented and distinct from accepted simulation v0.1+C1. GM read all 205 lines, then delivered bounded web/native compatibility reviews. S1 business/security/encoding/ceremony/retention/commercial/operator decisions D01–D07 remain open; no server/schema/provider implementation is authorized.
+
+## S2 duplicate-session clarification
+
+[beta-docusign-server-boundary-s2-session-duplicate-2026-11-03.md](beta-docusign-server-boundary-s2-session-duplicate-2026-11-03.md) is a byte-identical docs-only snapshot from `0a5b9808667913033de8bc9efd77a7717dccbf50`, SHA-256 `9a9184f2581dcb9c08217ffae8b3d5aded7f1e27ba9670b4f95920364f593ba3`. It normatively corrects S1-N1 with one bearer-free duplicate-direct 409 response while preserving S1. Exact-revision native/web cross-review remains required before any fixture-adapter design; production decisions stay open. [Original native N1 review](../../qa/DOCUSIGN_S1_NATIVE_REVIEW_2026-11-03.md).
