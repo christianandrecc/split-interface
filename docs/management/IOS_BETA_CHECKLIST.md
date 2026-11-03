@@ -1,6 +1,6 @@
 # SPLIT native beta delivery and acceptance
 
-**November 3 update:** native33cbbae signing corrections remain independently accepted. New simulation 87d6196 failed local QA on P2 F1: delayed authorized responses can revive lease/sample eligibility after newer denial. Bounded correction is active; exact-SHA independent retest is required. Fresh 168 tests/builds pass; ownerUI readback is separate. [Failure evidence](qa/IOS_SIMULATION_87D6196_2026-11-03.md), [scope](DOCUSIGN_LOCAL_ALIGNMENT_V0_1_2026-11-03.md).
+**November 3 update:** isolated native execution simulation is locally accepted at 4f01499 after independent 175 XCTest, 1621 original assertions, 75 focused controls and unsigned builds/exclusions. Original 87 F1 failure/custody disclosure remain dated evidence. UI proof is historical owner readback; real DocuSign/service/callback/PDF/device/VoiceOver/legal/release remain open. [Acceptance](qa/IOS_SIMULATION_4F01499_2026-11-03.md), [scope](DOCUSIGN_LOCAL_ALIGNMENT_V0_1_2026-11-03.md).
 
 Updated October 10, 2026. Founder selected **web + iOS beta** in iOS Development Agent (SPLIT), then explicitly asked GM to coordinate continued mobile creation/polishing after the web handoff. Same account, same canonical backend records; native create → invite → negotiate → review/sign → retrieve/share is the intended phone journey.
 

@@ -2,7 +2,7 @@
 
 October 10, 2026. Check only with linked evidence for the exact candidate. Historical results are not current hosted certification. Any P0 blocks release; applicable P1 requires completion or documented founder risk acceptance. Final deployment/distribution/public launch always requires founder approval.
 
-November 3 current coordination: native 33cbbae signing corrections pass bounded independent local QA; shared simulation v0.1+C1 is aligned, but native 87d6196 failed P2 access-loss publication QA and is being corrected. Tailwind f975242 historical P2 keyboard-focus regression closes locally at 325f64d; compatible tooling 7ea2359 also passes bounded local QA; combined-candidate and platform coverage remain open. Dependency and all hosted/provider/legal/integration/release gates remain open. [Current scope](docs/management/DOCUSIGN_LOCAL_ALIGNMENT_V0_1_2026-11-03.md).
+November 3 current coordination: native 33cbbae signing corrections pass bounded independent local QA; shared simulation v0.1+C1 is aligned, but native local simulation is accepted at 4f01499 after the access-loss correction; real service/provider integration remains open. Tailwind f975242 historical P2 keyboard-focus regression closes locally at 325f64d; compatible tooling 7ea2359 also passes bounded local QA; combined-candidate and platform coverage remain open. Dependency and all hosted/provider/legal/integration/release gates remain open. [Current scope](docs/management/DOCUSIGN_LOCAL_ALIGNMENT_V0_1_2026-11-03.md).
 
 ## Development and internal testing
 

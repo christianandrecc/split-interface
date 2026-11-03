@@ -48,3 +48,11 @@ Native 87d619629f401fdbdf348e36089535a9fe99689b is frozen and handed to existing
 ## Exact 87d6196 acceptance failed; bounded correction active
 
 [Final independent QA](qa/IOS_SIMULATION_87D6196_2026-11-03.md) finds one P2/two reproductions where an already-authorized delayed response revives sample/session eligibility after a newer denied refresh. This violates local access-loss publication requirements; it does not change v0.1+C1 or demonstrate actual provider exposure. Fresh 168 tests/builds/exclusion/source identity pass, but 1619/1621 adversarial assertions block acceptance. GM verified 23 referenced artifact hashes and archived 25 originals externally; owner received the correction, acknowledged active work and preserves Simulator/data. Exact correction retest precedes any new feature.
+
+Correction 4f01499 is now frozen and assigned for independent retest. GM verified 25 source-manifest entries and output-only harness relocation; independent original 1621 assertions pass, with final175/build/exclusion/additional controls pending. Owner supplied 175/replay/build evidence remains separate; no next-feature or service integration clearance yet.
+
+## Bounded local simulation acceptance at 4f01499
+
+[Final independent correction review](qa/IOS_SIMULATION_4F01499_2026-11-03.md) passes 175 XCTest, 1621 unchanged original assertions and 75 new focused assertions, both unsigned builds/Release exclusions and 25 manifest entries. Both original timing cases retain the newer denial with empty eligibility; no regression/new defect found. GM verified all 28 referenced hashes and archived 29 original artifacts in a durable external bundle. The prior 87 failure and temporary owner overwrite/restoration disclosure remain historical.
+
+GM13C and its F1 correction are complete only for the cleared isolated simulation/15-group scope. Historical owner six UI journeys/20 PNG readback is not new correction UI, device or VoiceOver certification. No real DocuSign/service/schema/callback/storage/PDF/canonical app/legal/integration/release acceptance follows. Native owner received exact acceptance and preserves its branch/Simulator. The next bounded handoff is an active docs-only future server/cutover contract proposal for cross-platform review; it authorizes no implementation.
