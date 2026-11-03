@@ -40,3 +40,7 @@ The native owner raised omitted wire-format details while building a transport-f
 C1 fixes allocation entry/ordered required-party keys and exact integer totals, canonical bounded base64, immutable tagged command-input bindings before identifiers exist, command/result payload membership and omission rules, nested document/manifest/lease/artifact keys, and deterministic local digest inputs. It adds no execution capability. Fake registry account authorization remains separate from public party-pair digests; account reassignment invalidates the frozen snapshot. Read-only account-scoped projection comparison is explicit.
 
 The native implementation handoff successfully delivered exact C1 after GM review; affected codecs may proceed inside the original isolated scope. Contradictory existing serialization requires explicit review rather than alias tolerance. [Byte-identical archived contract and C1](contracts/2026-11-03/README.md) make the source reviewable in the management PR. Future exact-candidate QA, service guards, transport and release gates remain open.
+
+## First executable candidate in independent review
+
+Native 87d619629f401fdbdf348e36089535a9fe99689b is frozen and handed to existing independent QA. GM source-identity checks confirm24 manifest entries/55 ios-only changes and original app/project/tests/SDK pin preserved. Owner behavior/build/UI claims await exact-candidate review; construction scans are supplemental, not service/security certification. No next feature/provider integration is authorized by delivery.
