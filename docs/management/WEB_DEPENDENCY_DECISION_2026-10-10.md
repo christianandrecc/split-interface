@@ -1,5 +1,7 @@
 # Web dependency decision for founder review
 
+**November 3 update:** this is the historical approved proposal, not a current clean-audit claim. GitHub withdrew the original braces advisory on October 23. Fresh baseline/proposed installed audits have newer findings, so current remediation options and exposure must be reviewed separately. Founder explicitly resumed the approved local Tailwind migration; it does not by itself prove the current gate passes. [Official advisory](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm), [resume record](RESUME_2026-11-03.md).
+
 October 10, 2026. Proposal source: docs-only `355203b71b70542ec99e81333a521be5112743fe`, based on corrected web `c57f8b2`. Founder subsequently explicitly approved local implementation of the reviewed proposal; no app migration or release has been accepted. This record stays in the GM worktree when the web owner changes branches.
 
 ## Proposed decision
