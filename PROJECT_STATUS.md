@@ -1,10 +1,10 @@
 # SPLIT project status
 
-**Execution PAUSED — October 10, 2026, 3:50 PM America/New_York.** Founder asked to stop for today and continue tomorrow only on their command. Both platform owners confirmed stopped/idle with preserved checkpoints. Development, QA dispatch, monitoring and briefing remain paused until explicit founder resume; no automatic restart tomorrow. Prior launch readiness remains At Risk. [Pause checkpoint](docs/management/PAUSE_CHECKPOINT_2026-10-10.md).
+**Execution RESUMED — November 3, 2026, America/New_York.** Founder selected DocuSign and explicitly resumed local web/iOS development, delegated signing review and the approved Tailwind migration. Historical pause is superseded; exact candidates/checkpoints are preserved. Provider direction is approved, hosted DocuSign/demo tests and purchases are not. Overall readiness remains At Risk. [Current local plan](docs/management/DOCUSIGN_LOCAL_PLAN_2026-11-03.md), [historical pause checkpoint](docs/management/PAUSE_CHECKPOINT_2026-10-10.md).
 
-Last reviewed: October 10, 2026, 3:46 PM (America/New_York). **Overall: At Risk.** Founder selected a combined web + iOS beta. Web corrections and native negotiation/creation/protected recovery/auth hardening pass bounded independent local acceptance. Native signing failed independent acceptance; signing corrections are active on both platforms before dependent PDF/styling work. Founder approved the independently reviewed local web migration; implementation handoff delivered. Closed beta is not yet verified. No target launch date is asserted.
+Last reviewed: November 3, 2026 (America/New_York). **Overall: At Risk.** Local web/iOS work resumed with DocuSign selected for new real-agreement execution. Exact web c210575 and native db6c64a signing corrections are in independent local review. Web migration preflight and native provider-readiness mapping are delegated; backend provider contract is in design. The selected provider is not activated or tested. Closed beta, hosted integration and release remain unverified.
 
-## Verified baseline
+## Verified baseline — historical October 10 evidence
 
 | Area | Current evidence | Readiness |
 | --- | --- | --- |
@@ -19,11 +19,11 @@ Last reviewed: October 10, 2026, 3:46 PM (America/New_York). **Overall: At Risk.
 
 See [initial audit](docs/management/INITIAL_AUDIT.md) for source evidence, iOS check results, cloud metadata, and limitations. [Feature matrix](FEATURE_MATRIX.md) tracks platform differences.
 
-## Priorities after explicit founder resume
+## Current priorities
 
 1. Independently review delivered web orphan-signature correction `c210575`, then deliver the founder-approved local Tailwind 4 migration following reviewed options `355203b` and required QA additions. Chrome reload note `3d39da7` passes supplied-evidence review, without a fresh browser execution. Existing web correction acceptance remains valid. [GM-02/03/05A](AGENT_TASKS.md).
 2. Independently review delivered native signing correction `db6c64a` against the findings at `e1ec61d`. Auth hardening is independently accepted locally at `f7fc8e6`; PDF remains blocked pending signing acceptance. Local passes do not close integration/device/hosted/consent gates. [GM-04/06/11](AGENT_TASKS.md), [native beta checklist](docs/management/IOS_BETA_CHECKLIST.md).
-3. Continue local lifecycle/permissions/UX review and resolve the dependency gate; review delivered recovery and legal/support preparation. Hosted account/inbox tests remain deferred under the founder's local-only decision. [GM-02/08/09/10](AGENT_TASKS.md).
+3. Design a shared DocuSign provider boundary and native readiness/fixture mapping while preserving legacy signing evidence. Continue local lifecycle/permissions/UX and recovery/legal preparation; hosted provider/account/inbox tests remain deferred. [GM-13 local plan](docs/management/DOCUSIGN_LOCAL_PLAN_2026-11-03.md).
 
 ## Unmerged web-beta progress
 
@@ -32,7 +32,7 @@ See [initial audit](docs/management/INITIAL_AUDIT.md) for source evidence, iOS c
 - Subsequent docs-only options `355203b71b70542ec99e81333a521be5112743fe` are delivered: compatible Tailwind 3 probe passes developer 844 tests/identical CSS but still five high audit entries; complete Tailwind 4 manifest resolves with zero production/full audit findings. This is dependency resolution, not an implemented migration. Options independently passed review with two QA additions. Founder explicitly approved local migration/browser floor/tagger removal; handoff acknowledged, after active reload verification. No release approval.
 - GM-03 original `a5add19` failed for lost editing text/focus. Corrections pass independent local acceptance at descendant `c57f8b2`. Developer Chrome native reload matrix passes with immutable note `3d39da7`; independent readback accepts supplied evidence only (29 consistency checks, matching ledger hash/screenshots), without a fresh browser execution. Other browser engines/mobile and integration remain open.
 - GM-05 original `06317a5` failed for conflicting-approval labels and control-only name certification. Corrections independently pass at `c57f8b2`: combined 68 new/original independent cases,151 focused candidate checks and typecheck. Developer 844 full web/166 DB evidence remains separately attributed; integration/hosted signing/consent remain open.
-- GM-05A follow-up reproduces complete detail/PDF certification despite unresolved current Signed evidence. Owner subsequently delivered correction `c2105759bdeb8a288644f5a4bc0f43f97555e638`, with developer 864 tests/typecheck/lint/build and local detail/PDF/browser evidence. Independent correction acceptance is pending and dispatch is paused. Migration has not started. Earlier acceptance/records remain preserved; no hosted auth-bypass claim.
+- GM-05A correction c2105759bdeb8a288644f5a4bc0f43f97555e638 is in independent local review. Developer 864 tests/typecheck/lint/build and prior local artifacts remain attributed separately. The preserved archive recovers some fixtures; missing temporary QA reports require transparently reconstructed checks. Tailwind preflight is delegated separately; no correction/provider acceptance is implied.
 - Backend `dd74071` delivers a synthetic-only environment/recovery harness; GM independently reran ten focused tests successfully. Operations delivered a sanitized review packet with nine open gates. Neither establishes hosted recovery or legal/operating approval.
 
 [Candidate review record](docs/management/WEB_BETA_PROGRESS_2026-10-10.md). These results do not replace the verified `main` baseline above or authorize release.
@@ -44,7 +44,7 @@ See [initial audit](docs/management/INITIAL_AUDIT.md) for source evidence, iOS c
 - GM-11A correction `f7fc8e651f90a4b352f095f6659e277cbffc31d3` **passes independent local auth-hardening acceptance**: 111 XCTest, all 101 original hostile assertions, 46 focused assertions and unsigned build pass. All three PATH/GRANT/LATE-RESTORE findings close locally; original b80 failure evidence retained. Supplied five UI journeys read back separately, no independent Simulator launch. This auth-only commit inherits open signing findings. Registration/profile/consent remains web; actual inbox/OS/device/hosted proof open.
 - GM-06C `e1ec61d360012b1efae2e3377988ff4acf641f0c` delivers full native review/explicit own-party signing. Developer reports 106 code/HTTP tests, five final signing UI journeys plus ten earlier regressions and unsigned build; independent exact-SHA QA completed: original signing acceptance failed; signing corrections precede PDF, currently blocked. [Native progress](docs/management/IOS_BETA_PROGRESS_2026-10-10.md), [ordered checklist](docs/management/IOS_BETA_CHECKLIST.md).
 
-Independent signing QA at e1 reproduced changed proposal/history/unknown/audit/ambiguous evidence and final-await account-publication gaps: one P1/two P2. Owner subsequently delivered correction `db6c64ae8c544119340a029b3546c1c37f1a860b`, reporting 120 host tests,186 reproduced assertions, five UI journeys/build passing. These are developer results; independent correction acceptance remains pending and dispatch is paused. PDF has not started. Original failure evidence remains intact; no hosted wrong-account write claimed.
+Independent signing QA at e1 historically failed one P1/two P2. Correction db6c64ae8c544119340a029b3546c1c37f1a860b is now in fresh independent local review; baseline 120 XCTest/unsigned build passed, adversarial review is pending. Original failure descriptions remain intact. Provider-era completion and executed-artifact handling are separate GM13 contract requirements, not existing in-house acknowledgements.
 
 Recovery for the current Vault-backed scheduler and legal/support/closure readiness also block a release recommendation. [Risks](RISKS.md), [roadmap](ROADMAP.md), [release gates](LAUNCH_CHECKLIST.md).
 
@@ -64,6 +64,6 @@ Recovery for the current Vault-backed scheduler and legal/support/closure readin
 - Founder approved the independently reviewed local Tailwind 4 migration, browser floor and development component-tagger removal (4–7 engineering/QA days estimated). [Concrete decision packet](docs/management/WEB_DEPENDENCY_DECISION_2026-10-10.md); implementation handoff delivered after active reload task. Clean manifest audits do not constitute a working migrated app or release approval.
 - Resolve review of legal documents, operating support/closure ownership, recovery budget, and paused SMS/password protection before applicable release gates. No purchase or publication is authorized by these records.
 
-Founder selected hourly GM monitoring. Heartbeat `monitor-split-web-and-ios-development` is now **PAUSED** under the stop-for-today command; saved hourly cadence/target/prompt are preserved. The weekly SMS reminder was also paused; the account-closure reminder was already paused. No automated continuation until explicit founder resume.
+Founder-selected hourly monitor monitor-split-web-and-ios-development is ACTIVE again under the explicit project resume. Its target/cadence are preserved and prompt now includes DocuSign/local-only boundaries. The weekly SMS reminder is restored; the already-paused closure reminder remains paused. This is scheduled review, not continuous supervision.
 
-Founder also requested a daily morning status report. Heartbeat `split-morning-development-and-launch-briefing` is now **PAUSED**; its daily 9 AM America/New_York cadence and current GM target are preserved. It will not run tomorrow unless the founder explicitly resumes the project and schedules.
+Daily briefing split-morning-development-and-launch-briefing is ACTIVE again at 9 AM America/New_York, with the original GM target and updated provider/local-only scope. Meaningful hourly changes and the requested daily report remain distinct. Local schedules require the computer/app to be available; saved configuration is verified after update.

@@ -19,6 +19,8 @@ October 10, 2026. Check only with linked evidence for the exact candidate. Histo
 
 ## Closed beta
 
+- [ ] DocuSign execution: independently accepted web/iOS/shared integration, server enforcement against old-client bypass, authenticated provider completion/version/party binding, exact executed PDF/certificate retrieval, current commercial/legal/privacy/retention review and separately authorized hosted validation. Local mocks and legacy acknowledgements do not close this gate. [Local plan](docs/management/DOCUSIGN_LOCAL_PLAN_2026-11-03.md).
+
 - [x] Founder selects a combined web + iOS beta and directs GM to continue native creation/polishing after the web handoff. Cohort-facing capabilities/limitations still need verification; [native beta gates](docs/management/IOS_BETA_CHECKLIST.md) are required before combined-cohort invitation.
 - [ ] Exact candidate commit/deployment/migrations match; no applicable unresolved P0/core P1; independent QA evidence attached.
 - [ ] Invitation sending, actual controlled inbox receipt, intended account acceptance/decline, signed delivered/bounced receipts and creator-only guarded retry verified (GM-07).

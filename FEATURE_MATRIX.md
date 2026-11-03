@@ -2,7 +2,7 @@
 
 Baseline: October 10, 2026; web `4bf5a2a`, iOS `bf9723e`. Status vocabulary: **Not started, Planned, In progress, Implemented, Tested, Blocked, Deferred**. Implemented means inspected code exists. Tested denotes the stated local scope only; no row certifies a hosted multi-account journey or release. Backend status includes local RPC verification plus migration presence, not hosted behavioral certification.
 
-Current unmerged candidates: web correction `c57f8b2`, native negotiation `c8839cd`, creation/protected recovery `084220d` and auth hardening `f7fc8e6` pass bounded independent local acceptance. Separate web orphan-evidence correction is active. Signing `e1ec61d` failed independent acceptance, hardening active and PDF blocked. Rows include candidate states without replacing baseline or certifying hosted behavior. [Ordered native checklist](docs/management/IOS_BETA_CHECKLIST.md), [web evidence](docs/management/WEB_BETA_PROGRESS_2026-10-10.md).
+Current November 3 state: web c210575 and native db6c64a corrections are in fresh independent local review. Earlier negotiation, creation/recovery/auth and web correction acceptance remain historical scoped evidence. DocuSign is selected for future real execution; shared contract/native readiness design is active, no provider implementation or hosted acceptance. [Local plan](docs/management/DOCUSIGN_LOCAL_PLAN_2026-11-03.md).
 
 | Feature | Web | iOS | Backend | Priority / dependency and validation |
 | --- | --- | --- | --- | --- |
@@ -17,9 +17,10 @@ Current unmerged candidates: web correction `c57f8b2`, native negotiation `c8839
 | Signed delivered/bounced receipt visibility/retry | Tested | Not started | Implemented | P1 GM-07; webhook deployment exists, provider secret/subscription/live events unverified |
 | Chat and proposal/history reads | Tested | Tested | Tested | P1; native append text/counter history exists; live sync/reload open |
 | Approval and counteroffers | Tested | Tested | Tested | P1 GM-04; `c8839cd` independent local acceptance passed; supplied developer UI readback separate; hosted/device parity open |
-| Authenticated current-proposal signing | Tested | Implemented | Tested | P1 GM-05/06C; native `e1ec61d` delivered with developer 106 local tests, independent QA failed with one P1/two P2, hardening active; web corrections accepted; consent/provenance/hosted open |
+| Authenticated current-proposal signing | Tested | Implemented | Tested | Current in-house path; c210575/db6c64a independent correction reviews active. Legacy evidence remains distinct from selected DocuSign execution; provider/legal/hosted gates open |
+| DocuSign final execution and completion certificate | Planned | Planned | Planned | Founder selected November 3; GM13 contract/native readiness active, local simulation only after review; no provider account/API/hosted proof |
 | Finalization/immutable agreement/history | Tested | Implemented | Tested | P1; native reads/history and signing candidate exist; independent signing/hosted persistence/retrieval gates open |
-| PDF generation/download | Tested | Not started | Tested | P1 GM-05/06; browser fetches authorized fresh record and renders PDF; no stored PDF bucket |
+| PDF generation/download | Tested | Not started | Tested | Existing web-generated PDF retains truthful legacy labels; future DocuSign executed original and certificate must be preserved/retrieved without regeneration; contract pending |
 | CSV/JSON export, PRO/MLC submission | Deferred | Deferred | Deferred | P3; leftover builder controls are not implementation proof |
 | Elephant guidance | Implemented | Implemented | Deferred | P2/P3; deterministic help/shortcuts; no AI inference or autonomous negotiation |
 | Real AI-assisted negotiation | Deferred | Deferred | Not started | P3; scope/cost/privacy decision required |

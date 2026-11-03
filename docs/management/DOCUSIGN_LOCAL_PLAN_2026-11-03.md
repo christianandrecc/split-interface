@@ -1,0 +1,48 @@
+# SPLIT DocuSign execution plan — local phase
+
+November 3, 2026, America/New_York. Founder selected DocuSign, explicitly resumed web and iOS development, requested delegated signing review and Tailwind migration, and retained local testing only. This supersedes the October execution hold. GM is called Steve in the founder chat. Cost is not the primary constraint; clarity, responsible execution and fairness are the priorities. Existing approvals and historical agreement evidence remain intact.
+
+## Product direction and authority
+
+SPLIT owns collaboration, invitations, negotiation, permissions, exact shares and agreement preparation. DocuSign is the selected final execution provider for new real agreements once its integration, legal terms, operating model and release are approved. Current native/web signing code remains subject to independent integrity review; it does not become DocuSign evidence. Preserve prior signatures, source/proposal/audit history and truthful legacy labels without retroactive conversion or new consent assertions.
+
+The founder approved provider direction and local development, not a purchase, hosted target or legal publication. Do not create a DocuSign account, start OAuth/consent, call its demo/production APIs, create/send an envelope, upload agreements, send email, register a public callback/tunnel or obtain provider credentials during this phase. Demo is a hosted service too. Public documentation and development dependency downloads are allowed; application tests use fixtures, intercepted transport or disposable local databases. No hosted Supabase changes, shared schema/RPC mutation, new spend, main merge/deployment, TestFlight, external contact or legal commitments.
+
+## Bounded assignments and dependencies
+
+| Track | Owner | Immediate deliverable | Acceptance boundary |
+| --- | --- | --- | --- |
+| GM-05A web signing correction | Independent web QA | Review exact c2105759bdeb8a288644f5a4bc0f43f97555e638 in detached checkout | Current unknown/missing-party Signed evidence blocks aggregate certification while preserving legitimate counts, aliases, historical/non-Signed controls and full original JSON; detail/emitted PDF agree |
+| GM-06C native signing correction | Independent native QA | Review exact db6c64ae8c544119340a029b3546c1c37f1a860b in detached checkout/caches | Reject changed reviewed content/history/ambiguous evidence, allow documented registration/audit/concurrent valid signatures, and block late old-account publication; no developer Simulator interruption |
+| GM-02 Tailwind migration | Existing web development chat | Start baseline/dependency/browser preflight; implement separate approved migration after signing correction acceptance | Node 24, configured audit gate and React/Vite/PostCSS preserved; full installed build, functional/visual/browser/native compiler QA; exact independent candidate review |
+| GM-13A DocuSign contract | Bounded backend specialist | Docs-only proposed provider boundary, state transitions, correlation/evidence model and synthetic fixture matrix in owned branch | Web/iOS compatibility review before shared schema/RPC or executable provider integration; no hosted activation |
+| GM-13B native readiness | Existing iOS development chat | Separate docs-only native signing/retrieval/navigation mapping and local fixture plan against preserved db6c64a | Review proposed backend contract; implement Debug-only prototype only after GM alignment; no live DocuSign UI, new in-house execution path or claimed provider completion |
+
+Old /tmp QA folders were absent on resume. Committed verification notes and owner checkpoints remain; web has a preserved ignored evidence archive and native ignored artifacts may remain. Reviewers must inventory what is recoverable, reconstruct missing independent probes explicitly, retain earlier failure descriptions and avoid claiming unchanged original harness execution without its source/hash. Current acceptance reports must be durably summarized in management records; temporary files alone are insufficient release evidence.
+
+## Proposed signing boundary for cross-platform review
+
+1. All required parties review the same canonical proposal/terms, party bindings, rights and exact shares. Joining and approving remain distinct from signing.
+2. A server operation authorizes the initiating account and freezes a versioned, reproducible document plus its digest and required signer set. Proposal/revision/digest correlation is immutable. New fields, storage and RPCs are proposals until reviewed; this plan does not apply a migration.
+Before any real provider cutover, enforce the agreement execution policy on the server: an older web/native client must not bypass DocuSign by calling the in-house sign RPC. Existing code records `SPLIT in-app acknowledgement`; provider execution and certificates remain additive/distinct. This guard is a proposed shared-contract change, not an applied migration.
+
+3. A provider adapter creates one correlated execution request with idempotent retry/reconciliation. Credentials stay server-side. Signer sessions are issued only to the correct authenticated canonical party; membership and account changes invalidate stale sessions. Access to a supplied email/name alone is not authorization.
+4. Web and native present the provider ceremony through supported platform surfaces. The local phase uses visibly simulated fixtures with no external URL. Exact UI choice, consent wording, accessibility and additional authentication are reviewed separately.
+5. Completion is established by authenticated provider events and server reconciliation, never by a browser return parameter or client success flag. Proposed controls include raw-body HMAC verification, duplicate/out-of-order/replayed event handling, wrong-account/envelope/version denial, explicit uncertainty and safe retries. A completed event for a superseded version cannot finalize a newer proposal.
+6. Proposed local states distinguish preparation, provider signing, completed, declined, voided, expired and uncertain. Provider execution status and SPLIT's canonical agreement state are distinct; no client or raw webhook payload replaces canonical documents. Simulated completion must remain visibly simulated and cannot produce a real DocuSign certificate or verified badge.
+7. Preserve exact provider-returned executed document bytes and completion certificate as separately identified records, with digests, permissions, version linkage, retention and recovery design. Do not regenerate a different PDF and label it the executed original. All authorized parties can obtain the same executed package through both clients.
+8. Changes during an unfinished ceremony require a deliberately superseded/voided request and a new signature cycle. Completed originals remain unchanged; a later amendment/new agreement is separately reviewed and executed. Preserve existing signed records through any future transition.
+
+## Fairness and launch acceptance
+
+- Plain, reviewed terms identify the rights covered, all required parties and exact percentages. A music/IP lawyer reviews the template, electronic consent, signer authority and applicable U.S. state requirements. Provider use is not a legal enforceability certification.
+- Each person sees the same version, signs only their own role, may decline, and receives the final document/evidence. Invitations, approval and signing remain separate deliberate actions. No queued offline consent or automatic signature replay.
+- Privacy review covers document sharing with DocuSign, authentication evidence, retention/deletion boundaries, account closure and access after leaving SPLIT. Do not invent retention periods or collect extra identity evidence without an approved need.
+- Before hosted validation: review commercial/API/ISV terms, account ownership, authentication methods, cost structure, data handling, support and go-live requirements. No purchase/provider contact authorized by the current local phase.
+- Future hosted tests require a concrete isolated target/controlled recipients/provider scope and separate founder authorization. Exact-candidate integration, completed-provider evidence retrieval, cross-platform synchronization, recovery/alerts, legal/operating approval and release authorization remain open beta gates.
+
+## Sources and verification limits
+
+Current provider research was checked during the November 3 discussion: [embedded recipient view](https://developers.docusign.com/docs/esign-rest-api/reference/envelopes/envelopeviews/createrecipient/), [Connect implementation/security](https://developers.docusign.com/platform/webhooks/connect/implement/), [transaction evidence](https://www.docusign.com/trust/security/transaction-data-use), [API plans](https://ecom.docusign.com/isv/plans-and-pricing/developer) and [ISV embedding](https://www.docusign.com/partners/isv-embed). These support feasibility, not a configured or tested SPLIT integration. Recheck relevant official documentation at implementation; no contractual entitlement, budget quote or completion date is asserted here.
+
+The independent signing reviews establish local integrity only. They cannot certify DocuSign, legal enforceability, real identity, inbox delivery, hosted permissions or distribution. Tailwind work stays separate from signing/provider changes.

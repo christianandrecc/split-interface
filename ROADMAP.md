@@ -1,6 +1,6 @@
 # SPLIT roadmap
 
-Baseline: October 10, 2026. Milestones are evidence gates, not calendar promises. Effort ranges in [AGENT_TASKS.md](AGENT_TASKS.md) are preliminary work estimates; sequencing, provider/counsel review, and founder decisions determine elapsed time.
+Updated November 3, 2026; historical baseline October 10. Founder resumed local web+iOS and selected DocuSign for new real-agreement execution. Milestones remain evidence gates, not calendar promises. [Current local plan](docs/management/DOCUSIGN_LOCAL_PLAN_2026-11-03.md).
 
 ## Phase 1 — Project audit and management
 
@@ -10,7 +10,7 @@ Current: repository/platform/cloud metadata audit and local checks complete; sha
 
 Founder authorized web-beta execution on October 10. Order: GM-02 dependency gate; GM-03 percentage validation/dirty-work protection; GM-05 truthful signer/export evidence; real auth/invitation verification; independent full web lifecycle and browser/accessibility checks. In parallel, prepare GM-01 environment isolation, GM-09 recovery design, GM-10 legal/support/closure review. [Execution tracker #3](https://github.com/christianandrecc/split-interface/issues/3), [active ownership](AGENT_TASKS.md).
 
-Founder subsequently selected combined web + iOS beta and asked GM to coordinate native creation/polishing after the web handoff. GM-04 `c8839cd` and GM-06A/06B creation/recovery at `084220d` now pass bounded independent local acceptance; integration and actual device/hosted proof remain open. Current native work is GM-11A auth/invitation continuation, followed by GM-06C review/signing and GM-06D PDF sharing. Native layout/keyboard/Dynamic Type/accessibility review accompanies each milestone. Shared backend changes still require both platforms' compatibility review. Local implementation proceeds while hosted integration remains deferred.
+Combined web+iOS scope remains selected. Earlier native negotiation, creation/recovery and auth hardening pass bounded independent local acceptance. Current work: fresh web/native signing correction reviews; separate approved Tailwind migration preflight; shared DocuSign contract and native readiness design. Provider execution replaces the intended new-real-agreement final-signing direction, while historical in-house evidence remains intact. Shared contract/schema changes require both-platform review; no hosted testing is approved.
 
 Exit: applicable platform can create an account, create/send a valid split, route contributors, revise/approve, sign the current proposal, preserve the final record, and retrieve/export it. All changed behavior has independent regression and permission evidence; no unresolved P0 and no core P1 defects. Preserve current architecture and deferred publishing/AI/SMS decisions.
 

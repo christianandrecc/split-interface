@@ -1,9 +1,11 @@
 # SPLIT risk register
 
-October 10, 2026. Verified defects and unverified release gates are distinguished. No confirmed new authorization breach was established; absence of a finding is not security certification. Detailed evidence: [initial audit](docs/management/INITIAL_AUDIT.md).
+Updated November 3, 2026. Historical October evidence remains dated. Current local reviews and DocuSign planning do not establish hosted/provider/legal readiness. No new authorization breach is asserted. [Current plan](docs/management/DOCUSIGN_LOCAL_PLAN_2026-11-03.md).
 
 | Risk | Evidence / impact | Priority / owner / mitigation |
 | --- | --- | --- |
+| Provider cutover and old-client bypass | Current RPC records SPLIT in-app acknowledgements and native validates that method. A client-only DocuSign UI cannot enforce provider-required signing. | P1 backend/web/iOS; additive provider policy and server-side old-client guard required before real cutover; preserve all legacy records, no schema change authorized now |
+| Temporary QA evidence unavailable | October temporary QA folders were absent on resume; preserved developer archive/artifacts recover only part of evidence. | QA/GM; reconstruct probes transparently, preserve provenance and durably summarize fresh acceptance; never treat old counts as current execution |
 | Current dependency gate fails | Initial eight entries reduced to five high; Tailwind 3 patch probe still fails. `355203b` offers manifest-only Tailwind 4 resolution with zero production/full audit findings, not app migration proof. No app-input exploit demonstrated. | P1 Web/QA; reviewed local migration/browser/tooling change approved, candidate/QA required; preserve gate |
 | No hosted isolation | Only main Supabase branch; active invitation sender. A worktree or Vercel Preview can still affect real users/data. | P1 Backend/GM; GM-01 isolated target, synthetic accounts, no copied provider secrets or outbound jobs |
 | Creation precision and dirty exits | Initial defects corrected; `c57f8b2` strict editing/focus passes independent local QA. Actual browser reload cancel/confirm remains inconclusive and is actively being verified. | P1 Web; GM-03 remaining reload proof and integration; preserve raw edits/identity |

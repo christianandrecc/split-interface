@@ -53,11 +53,15 @@ Current beta scope: **web + iOS**, selected directly by the founder and recorded
 
 ## Approval and electronic signing
 
+**November 3 approved direction:** use DocuSign for final execution of new real agreements, with SPLIT retaining negotiation/preparation/permissions. Current implementation below remains in-house acknowledgement evidence; do not relabel it as DocuSign. Local contract/native readiness design is active. Server-enforced provider policy must prevent older-client bypass; provider completion is established by authenticated server reconciliation and exact version/party/document correlation. No schema or hosted provider activation is approved in this phase. [Plan](docs/management/DOCUSIGN_LOCAL_PLAN_2026-11-03.md).
+
 - **Objective/behavior:** each authenticated party reviews and explicitly acknowledges the current agreement; approval alone is not signing. Data: proposal ID, canonical signer user/party identity, supplied legal-name snapshot, server time, acknowledgement method and audit event.
 - **Permissions/errors:** actor can sign only their own party; all current required parties must have joined/approved. Reject stale proposal, forged signer/time, duplicate signature, missing legal identity and finalized writes with no partial changes. Current server allows ready parties in any order; UI/export must not claim ordered enforcement (GM-05).
 - **Platforms/completion:** web signing/evidence corrections pass bounded local acceptance at `c57f8b2`; native full review/own-party signing `e1ec61d` is delivered with developer 106 code/HTTP tests and independent acceptance failed with one P1/two P2; corrections and immutable retest required before PDF. Review actual signing presentation/consent with qualified counsel; verify explicit informed action, per-user identity, current-proposal consensus and denial cases. Technical tests do not establish legal enforceability.
 
 ## Finalized access, exports and history
+
+For future DocuSign executions, retain/retrieve the exact provider-executed document and completion certificate with permissions, provenance, digests and recovery. A regenerated SPLIT PDF cannot substitute for the executed original. Completed historical records remain immutable; later terms use a separately executed version/amendment. Storage/retention/RPC details remain proposals pending compatibility/legal review.
 
 - **Objective/behavior:** retain finalized agreement/proposals/audit and allow authorized users to retrieve/download a faithful record after reload. Data: frozen current payload plus signature/audit history; PDF rendered from a fresh authorized server record.
 - **Permissions/errors:** owner/authorized member reads only; no stale sent-record export fallback. Reject unauthorized retrieval; handle offline failure without replacing signed content. Legacy/local evidence must receive truthful labels, not inferred verified signature claims (GM-05).

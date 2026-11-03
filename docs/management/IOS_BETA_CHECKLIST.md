@@ -1,5 +1,7 @@
 # SPLIT native beta delivery and acceptance
 
+**November 3 resume:** DocuSign selected for new real execution; local-only development resumed. Exact db6 signing correction is in independent review and GM13B native readiness mapping is delegated. Historical in-house signing milestones below remain scoped; PDF execution records require the shared provider contract before implementation. [Current plan](DOCUSIGN_LOCAL_PLAN_2026-11-03.md).
+
 Updated October 10, 2026. Founder selected **web + iOS beta** in iOS Development Agent (SPLIT), then explicitly asked GM to coordinate continued mobile creation/polishing after the web handoff. Same account, same canonical backend records; native create → invite → negotiate → review/sign → retrieve/share is the intended phone journey.
 
 Current environment decision: **local testing only**. Native development uses Debug fixtures and intercepted synthetic HTTP. Hosted Auth, actual inboxes, cross-platform concurrency and device/backend proof remain open. Selecting SPLIT for future staging does not authorize provisioning or spend. No TestFlight distribution or production merge/deployment is approved.
