@@ -2,7 +2,7 @@
 
 October 10, 2026. Check only with linked evidence for the exact candidate. Historical results are not current hosted certification. Any P0 blocks release; applicable P1 requires completion or documented founder risk acceptance. Final deployment/distribution/public launch always requires founder approval.
 
-November 3 current coordination: native 33cbbae signing corrections pass bounded independent local QA; shared simulation v0.1 is aligned and the native prototype handoff is delivered. Tailwind f975242 has confirmed P2 keyboard-focus regression QA-GM02-F1, correction/retest required. Dependency and all hosted/provider/legal/integration/release gates remain open. [Current scope](docs/management/DOCUSIGN_LOCAL_ALIGNMENT_V0_1_2026-11-03.md).
+November 3 current coordination: native 33cbbae signing corrections pass bounded independent local QA; shared simulation v0.1 is aligned and the native prototype handoff is delivered. Tailwind f975242 historical P2 keyboard-focus regression closes locally at 325f64d; separate tooling/combined-candidate and platform coverage remain open. Dependency and all hosted/provider/legal/integration/release gates remain open. [Current scope](docs/management/DOCUSIGN_LOCAL_ALIGNMENT_V0_1_2026-11-03.md).
 
 ## Development and internal testing
 
