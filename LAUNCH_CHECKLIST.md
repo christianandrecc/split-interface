@@ -2,7 +2,7 @@
 
 October 10, 2026. Check only with linked evidence for the exact candidate. Historical results are not current hosted certification. Any P0 blocks release; applicable P1 requires completion or documented founder risk acceptance. Final deployment/distribution/public launch always requires founder approval.
 
-November 3 current coordination: native 33cbbae signing corrections pass bounded independent local QA; shared simulation v0.1+C1 is aligned, but native local simulation is accepted at 4f01499 after the access-loss correction; real service/provider integration remains open. Tailwind f975242 historical P2 keyboard-focus regression closes locally at 325f64d; compatible tooling 7ea2359 also passes bounded local QA; combined-candidate and platform coverage remain open. Dependency and all hosted/provider/legal/integration/release gates remain open. [Current scope](docs/management/DOCUSIGN_LOCAL_ALIGNMENT_V0_1_2026-11-03.md).
+November 3 current coordination: native signing 33cbbae and local simulation 4f01499 pass bounded independent local QA. Assembled web49eacadc now independently passes local combined maintenance, including the Tailwind/focus/tooling/CSP changes and configured production dependency audit 0. Full audit still has 12 moderate tooling entries; platform/performance and all hosted/provider/legal/integration/release gates remain open. S1+S2 is reviewed proposal evidence and isolated semantic-model development only. [Exact web QA](docs/management/qa/WEB_ASSEMBLED_49EACADC_2026-11-03.md), [native scope](docs/management/DOCUSIGN_LOCAL_ALIGNMENT_V0_1_2026-11-03.md).
 
 ## Development and internal testing
 
@@ -10,7 +10,8 @@ November 3 current coordination: native 33cbbae signing corrections pass bounded
 - [x] Web `verify:beta`: typecheck, lint (0 errors/7 warnings), 764 tests and production build pass at `4bf5a2a`.
 - [x] Disposable database: 166 checks, 30 migrations replayed, two scheduler/transport migrations explicitly excluded.
 - [x] Native `bf9723e`: 31 host tests and unsigned generic Simulator build pass; no device/app launch.
-- [ ] Resolve fresh dependency audit failure at configured threshold (GM-02).
+- [x] Resolve the configured production dependency-audit failure locally at exact 49eacadc: unchanged moderate threshold, fresh zero findings; independent installed-candidate acceptance ([QA](docs/management/qa/WEB_ASSEMBLED_49EACADC_2026-11-03.md)). This applies to the unmerged candidate, not current production.
+- [ ] Review remaining 12 moderate full-audit tooling findings and complete platform/performance/deployment-environment/PR/integration validation for the assembled web candidate (GM-02); no audit waiver or release approval follows from the local pass.
 - [ ] Integrate locally accepted percentages/dirty-builder, native parity/reconciliation and identity/legacy/export corrections (GM-03–05). Independent web corrections pass at `c57f8b2` and native parity passes at `c8839cd`; actual browser reload protection, consent/provenance and hosted/integration gates remain open ([web record](docs/management/WEB_BETA_PROGRESS_2026-10-10.md), [native record](docs/management/IOS_BETA_PROGRESS_2026-10-10.md)).
 - [ ] Approve and validate isolated integration target with synthetic accounts and outbound delivery disabled (GM-01).
 - [ ] Verify complete lifecycle using A (creator), B (participant), C (outsider); extend to 3+ contributors, unknown email/@username, duplicate identities and declined invites (GM-08).

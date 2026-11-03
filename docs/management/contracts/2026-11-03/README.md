@@ -19,3 +19,9 @@ GM read the alignment/C1 and verified their hashes. C1 canonical JSON/digest exa
 ## S2 duplicate-session clarification
 
 [beta-docusign-server-boundary-s2-session-duplicate-2026-11-03.md](beta-docusign-server-boundary-s2-session-duplicate-2026-11-03.md) is a byte-identical docs-only snapshot from `0a5b9808667913033de8bc9efd77a7717dccbf50`, SHA-256 `9a9184f2581dcb9c08217ffae8b3d5aded7f1e27ba9670b4f95920364f593ba3`. It normatively corrects S1-N1 with one bearer-free duplicate-direct 409 response while preserving S1. Exact-revision native/web cross-review remains required before any fixture-adapter design; production decisions stay open. [Original native N1 review](../../qa/DOCUSIGN_S1_NATIVE_REVIEW_2026-11-03.md).
+
+Both platform docs reviews are now recorded: [native S2 N1 closure](../../qa/DOCUSIGN_S2_NATIVE_REVIEW_2026-11-03.md) and [web S1+S2 review](../../qa/DOCUSIGN_S1_S2_WEB_REVIEW_2026-11-03.md). GM13D is complete only as cross-reviewed proposal evidence. GM13E is a separately assigned docs-only fixture-test plan, with no runtime or production-policy authorization.
+
+## First isolated fixture model plan
+
+[beta-docusign-gm13e-first-fixture-plan-2026-11-03.md](beta-docusign-gm13e-first-fixture-plan-2026-11-03.md) is a byte-identical snapshot of docs-only plan `17fbba641ffb21da1e8851e65fd09d0afa4bb00f`, SHA-256 `d96d153f900ff20ee1ccbea646dec179cd9b694c0ed64224a29711d5c2f11c5e`. GM read all 91 lines and selected only its isolated Node24 in-memory semantic model for a separate GM13F implementation handoff. Unsafe controls remain test-only/scratch-only. No SQL/RLS/RPC/trigger enforcement, real service or S1 D01–D07 policy is approved by model work.
