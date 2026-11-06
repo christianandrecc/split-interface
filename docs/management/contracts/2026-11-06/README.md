@@ -15,3 +15,5 @@ Subsequent exact G2 reviews now pass for the narrowed memory-only specification:
 Both 6c/PDF1 formal reviews are complete: [joint findings and routing](../../qa/PDF1_PLAN_6C4630F_REVIEWS_2026-11-06.md). Native needs N-PDF1-1/2 closure; web W-I1–3 imposes convergent conditions. A new R1 docs-only addendum is assigned; no PDF assets, parser code or production policy accepted. Earlier review-active descriptions above are dated intake state.
 
 [Exact PDF1 R1 addendum](beta-docusign-pdf1-r1-catalog-test-seams-2026-11-06.md) is byte-identical to 91f5a902ed1597e7dc5d12c771fd7721a13ff17d (parent 6c), 79 lines/18,349 bytes, SHA-256 8ca79fdb3ff0a56a065bd986da62ee7081ae7a86462bbcbe8e8817338ce9d907. [Intake/routing](../../qa/PDF1_R1_91F5A90_INTAKE_2026-11-06.md): native closure review active; web closure READY after active dependency J. No specification/runtime/assets accepted by intake.
+
+Exact R1 [native specification-only closure](../../qa/PDF1_R1_NATIVE_91F5A90_2026-11-06.md) passes and is fully read/verified. Separate web closure is now active; no shared-spec/asset/runtime acceptance or executable continuation follows the native verdict alone.
