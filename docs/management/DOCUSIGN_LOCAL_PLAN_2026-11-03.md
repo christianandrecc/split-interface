@@ -4,7 +4,7 @@ November 3, 2026, America/New_York. Founder selected DocuSign, explicitly resume
 
 Current checkpoint later November 3: historical initial assignments below are preserved. Native correction 33cbbae and isolated simulation 4f01499 are accepted locally; assembled web 49eacadc also passes independent local maintenance/production-audit QA. Cross-reviewed future S1+S2 and exact plan 17fbba6 now lead to GM13F isolated Node 24 semantic-model implementation, not an actual service/schema/provider cutover. Use [current queue](../../AGENT_TASKS.md) for exact active candidates and ready dependencies.
 
-November 6 latest coordination: independent local semantic correction 1f82c270 is accepted; separate docs-only artifact proposal G1/1d1c087 is under both-platform review. AF1 core, native viewer/share and actual provider/service integration are still unimplemented and separately scoped. [Archived G1](contracts/2026-11-06/README.md).
+November 6 latest coordination: selected local service model 1f82c270 and separate AF1 memory core 4e2deed are accepted only in their bounded synthetic scopes. PDF1 asset/parser plan 6c4630f is a docs-only proposal under both-platform review, with no assets/parser/host implementation or actual provider/service approval. Legacy evidence and AF1’s NON-PDF dataset remain distinct. [Current plan intake](qa/PDF1_PLAN_6C4630F_INTAKE_2026-11-06.md), [current queue](../../AGENT_TASKS.md).
 
 ## Product direction and authority
 

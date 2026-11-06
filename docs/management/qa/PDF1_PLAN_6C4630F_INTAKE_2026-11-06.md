@@ -1,0 +1,9 @@
+# PDF1 plan 6c4630f — GM intake
+
+**Docs-only REVIEW; no asset or parser acceptance.** Exact 6c4630f61bfcce17ee6baa91b393222a8b86a35b, parent G2/485c7b11db9e981d0d9588bb191b9e6bb2eca3e6, sole new Markdown: 84 lines/19913 bytes, SHA-256 bb42cc745964621b9a8e6416a0b6691acd4596b3e8699b7c430f0dfcc005ae4a. [Byte-identical plan](../contracts/2026-11-06/beta-docusign-pdf-asset-parser-fixture-plan-2026-11-06.md).
+
+GM read all 84 lines, verified 16 ledger entries, 12 accepted package input blobs, 4 original report hashes, 4 exact line anchors and all 408 unchanged parent entries. Source and reference verification only; no runtime/PDF/generator/render/build test was performed. Existing corrected 74-file QA readback remains historical execution, not a new suite. Evidence root /Users/christiancarrera/.codex/artifacts/split-gm13i-pdf-parser-plan-20261106/; ledger SHA-256 fef0f6e3fd41c1cf8a3935d7d717b839d68e3c9a22daffb936bda803925086fd.
+
+Proposal separates PDF1 inspection dataset/package from accepted ASCII NON-PDF AF1. Three planned curated positive assets and matching-hash malformed/locked/unlocked-encrypted negatives require later independent freezing, reproducible generation and every-positive-page visual review. No future asset hashes are invented. Its inspector returns typed facts without byte/PDFDocument/URL/view/share/authorization eligibility. Authoring/bundle I/O and later H1 host materialization are distinct.
+
+Both exact platform docs reviews are required before a new bounded asset/code handoff. Review complete future file surfaces, independent identity/oracle/byte ownership, genuine PDFKit observations, encryption/page and dataset/order expectations, authoring provenance/license/generation limits, and no AF1/permission/canonical-service widening. Planner stopped after delivery. Actual PDF/parser/host/provider/service/device/D01–D07/GM06D/integration/release gates remain open.
