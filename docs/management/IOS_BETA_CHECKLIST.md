@@ -2,6 +2,8 @@
 
 **November 3 update:** isolated native execution simulation is locally accepted at 4f01499 after independent 175 XCTest, 1621 original assertions, 75 focused controls and unsigned builds/exclusions. Original 87 F1 failure/custody disclosure remain dated evidence. UI proof is historical owner readback; real DocuSign/service/callback/PDF/device/VoiceOver/legal/release remain open. [Acceptance](qa/IOS_SIMULATION_4F01499_2026-11-03.md), [scope](DOCUSIGN_LOCAL_ALIGNMENT_V0_1_2026-11-03.md).
 
+November 6 shared checkpoint: local service model 1f82c270 also passes its selected independent semantic correction scope. This implements no real provider/server/artifact path and does not unblock finalized retrieval/PDF sharing by itself. Native chat is inactive after S2 docs review; no fresh device/VoiceOver/integration/distribution proof. [Current briefing](DAILY_BRIEFING_2026-11-06.md).
+
 Updated October 10, 2026. Founder selected **web + iOS beta** in iOS Development Agent (SPLIT), then explicitly asked GM to coordinate continued mobile creation/polishing after the web handoff. Same account, same canonical backend records; native create → invite → negotiate → review/sign → retrieve/share is the intended phone journey.
 
 Current environment decision: **local testing only**. Native development uses Debug fixtures and intercepted synthetic HTTP. Hosted Auth, actual inboxes, cross-platform concurrency and device/backend proof remain open. Selecting SPLIT for future staging does not authorize provisioning or spend. No TestFlight distribution or production merge/deployment is approved.
