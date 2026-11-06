@@ -4,6 +4,8 @@ November 3, 2026, America/New_York. Founder selected DocuSign, explicitly resume
 
 Current checkpoint later November 3: historical initial assignments below are preserved. Native correction 33cbbae and isolated simulation 4f01499 are accepted locally; assembled web 49eacadc also passes independent local maintenance/production-audit QA. Cross-reviewed future S1+S2 and exact plan 17fbba6 now lead to GM13F isolated Node 24 semantic-model implementation, not an actual service/schema/provider cutover. Use [current queue](../../AGENT_TASKS.md) for exact active candidates and ready dependencies.
 
+November 6 latest coordination: independent local semantic correction 1f82c270 is accepted; separate docs-only artifact proposal G1/1d1c087 is under both-platform review. AF1 core, native viewer/share and actual provider/service integration are still unimplemented and separately scoped. [Archived G1](contracts/2026-11-06/README.md).
+
 ## Product direction and authority
 
 SPLIT owns collaboration, invitations, negotiation, permissions, exact shares and agreement preparation. DocuSign is the selected final execution provider for new real agreements once its integration, legal terms, operating model and release are approved. Current native/web signing code remains subject to independent integrity review; it does not become DocuSign evidence. Preserve prior signatures, source/proposal/audit history and truthful legacy labels without retroactive conversion or new consent assertions.

@@ -1,0 +1,5 @@
+# Shared artifact fixture proposal snapshots — November 6, 2026
+
+[GM13G G1](beta-docusign-artifact-retrieval-fixture-plan-2026-11-06.md) is a byte-identical docs-only snapshot of `1d1c087a83ae47fcb7905c98bdfcb0ecff23e051`, parent1f82c270. SHA-256 `10df910307b828b95f10c76dba8cee9d12540e36ace37dd6a06186ee2fabc9c3`. GM read all 124 lines and verified 12 source blobs,9 immutable anchors, all 3 evidence-index entries and 406 unchanged parent paths. Original relative links resolve in its source checkout; archived S1/S2/GM13E inputs are under [November 3 snapshots](../2026-11-03/README.md).
+
+G1 proposes separate unimplemented AF1 read metadata/byte context and staged local validation core/native viewer-share fixtures. It does not amend accepted native/service contracts, implement a provider/server/PDF path or clear D01–D07. Both platform source/DTO/custody reviews are required before any subsequent bounded code assignment. No runtime/PDF/Simulator tests were executed for this document. Evidence root `/Users/christiancarrera/.codex/artifacts/split-gm13g-doc-plan-20261106/`.
