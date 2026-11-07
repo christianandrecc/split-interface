@@ -51,4 +51,6 @@
 
 | D-40 / 2026-11-07 | Route exact AFP1 99c739c to separate platform reviews. Select the two Firefox 153 component pages for the next browser check after the web review. | Read-only contract reviews are active. The browser check needs a separate handoff and covers the archived local CSP fixture. [AFP1 intake](docs/management/qa/AFP1_99C739C_COMPOSITION_INTAKE_2026-11-07.md) · [Browser plan intake](docs/management/qa/WEB_BROWSER_COVERAGE_PLAN_2026-11-07.md) |
 
+| D-41 / 2026-11-07 | Move the AFP1 web compatibility review to an existing bounded specialist after the web owner's completed turn ended without a current review. Dispatch the ready Firefox component check separately to the idle web owner. | Native AFP1 findings and the pending web verdict will drive one reconciled docs revision. The Firefox check covers the local archived fixture. [AFP1 review intake](docs/management/qa/AFP1_99C739C_COMPOSITION_INTAKE_2026-11-07.md) · [Browser scope](docs/management/qa/WEB_BROWSER_COVERAGE_PLAN_2026-11-07.md) |
+
 Use new dated entries for consequential changes. Do not reinterpret an old approved release as continuing authorization to deploy, change data, spend money, or publish legal commitments.
