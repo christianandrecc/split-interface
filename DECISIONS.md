@@ -49,4 +49,6 @@
 
 | D-39 / 2026-11-07 | Assign GM13K to the existing planner for one docs-only synthetic AF1/PDF composition proposal from exact R1. | Define whole-set permission and independent inspection before web and iOS compatibility review. H1, app integration and real provider behavior remain later gates. [Accepted component evidence](docs/management/qa/PDF1_86BE367_INDEPENDENT_2026-11-07.md) |
 
+| D-40 / 2026-11-07 | Route exact AFP1 99c739c to separate platform reviews. Select the two Firefox 153 component pages for the next browser check after the web review. | Read-only contract reviews are active. The browser check needs a separate handoff and covers the archived local CSP fixture. [AFP1 intake](docs/management/qa/AFP1_99C739C_COMPOSITION_INTAKE_2026-11-07.md) · [Browser plan intake](docs/management/qa/WEB_BROWSER_COVERAGE_PLAN_2026-11-07.md) |
+
 Use new dated entries for consequential changes. Do not reinterpret an old approved release as continuing authorization to deploy, change data, spend money, or publish legal commitments.
