@@ -8,6 +8,8 @@ November 6 update: exact 49’s fresh unchanged-gate audit remains production 0;
 
 November 7 PDF1 update. Independent local QA passes for exact 86be367 in the standalone package, including the six asset identities, real PDFKit checks and four rendered pages. The provenance wording correction is verified at 01de78a. Host, app, provider, device and release gates still require their own evidence. [Independent QA](docs/management/qa/PDF1_86BE367_INDEPENDENT_2026-11-07.md)
 
+November 7 browser and contract update. Exact web 49 passed both Firefox 153 component fixture viewports. Both reviews of AFP1 99c739c require a clarification of authorization, quarantine and test schedules before implementation. [Firefox fixture QA](docs/management/qa/WEB_FIREFOX153_CSP_FIXTURE_49_2026-11-07.md) · [AFP1 review intake](docs/management/qa/AFP1_99C739C_COMPOSITION_INTAKE_2026-11-07.md)
+
 ## Development and internal testing
 
 - [x] Inspect web/native/backend architecture and distinguish source from live evidence ([audit](docs/management/INITIAL_AUDIT.md)).
@@ -16,6 +18,8 @@ November 7 PDF1 update. Independent local QA passes for exact 86be367 in the sta
 - [x] Native `bf9723e`: 31 host tests and unsigned generic Simulator build pass; no device/app launch.
 - [x] Resolve the configured production dependency-audit failure locally at exact 49eacadc: unchanged moderate threshold, fresh zero findings; independent installed-candidate acceptance ([QA](docs/management/qa/WEB_ASSEMBLED_49EACADC_2026-11-03.md)). This applies to the unmerged candidate, not current production.
 - [ ] Review current 7 moderate full-audit tooling package entries (1 advisory; November 6 refresh; original 12 retained as dated evidence) and complete platform/performance/deployment-environment/PR/integration validation for the assembled web candidate (GM-02); no audit waiver or release approval follows from the local pass.
+- [x] Verify the archived form and sample-search fixture in Firefox 153 at desktop and narrow widths with the tested CSP. [Firefox fixture QA](docs/management/qa/WEB_FIREFOX153_CSP_FIXTURE_49_2026-11-07.md)
+- [ ] Verify complete app workflows and the approved minimum browser versions.
 - [ ] Integrate locally accepted percentages/dirty-builder, native parity/reconciliation and identity/legacy/export corrections (GM-03–05). Independent web corrections pass at `c57f8b2` and native parity passes at `c8839cd`; actual browser reload protection, consent/provenance and hosted/integration gates remain open ([web record](docs/management/WEB_BETA_PROGRESS_2026-10-10.md), [native record](docs/management/IOS_BETA_PROGRESS_2026-10-10.md)).
 - [ ] Approve and validate isolated integration target with synthetic accounts and outbound delivery disabled (GM-01).
 - [ ] Verify complete lifecycle using A (creator), B (participant), C (outsider); extend to 3+ contributors, unknown email/@username, duplicate identities and declined invites (GM-08).

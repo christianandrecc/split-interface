@@ -2,21 +2,21 @@
 
 **Execution RESUMED by founder on November 3, 2026.** DocuSign is selected for final execution of new real agreements; this phase is local only. Signing reviews and the approved Tailwind migration are authorized; provider contracts/native readiness proceed without hosted APIs, schema mutation, spending or release. Historical task evidence remains scoped. [Current plan](docs/management/DOCUSIGN_LOCAL_PLAN_2026-11-03.md).
 
-Updated November 6, 2026. Lifecycle: `BACKLOG → READY → IN PROGRESS → REVIEW → TESTING → COMPLETE`, or `BLOCKED`. Task stages require exact evidence; source delivery, local tests, hosted integration and release approval remain distinct. The current provider phase is local only.
+Updated November 7, 2026. Lifecycle: `BACKLOG → READY → IN PROGRESS → REVIEW → TESTING → COMPLETE`, or `BLOCKED`. Task stages require exact evidence; source delivery, local tests, hosted integration and release approval remain distinct. The current provider phase is local only.
 
 ## Workstream ownership
 
 | Workstream | Existing chat | Checkout / branch | Coordination |
 | --- | --- | --- | --- |
 | GM | General Manager Agent (SPLIT) (`01a125fd-72cf-7c71-9c0b-f08068b3bf6f`) | Current `3303` worktree / `management/split-gm` | Current roadmap, specification, review and independent QA |
-| Web | Web Development Agent (SPLIT) (`019f0b98-14e3-7d90-a54e-d00371aed1c9`) | Frozen 49; owner evidence 40b4a5f preserved | First Firefox preflight stop verified and preserved. The separate corrected attempt is active. AFP1 web review stays with the specialist. |
+| Web | Web Development Agent (SPLIT) (`019f0b98-14e3-7d90-a54e-d00371aed1c9`) | Frozen 49; owner evidence 40b4a5f preserved | Corrected Firefox 153 fixture attempt accepted. Owner is idle pending scoped full-app or browser-floor work. |
 | iOS | iOS Development Agent (SPLIT) (`01a125ed-8d05-7b73-9d57-accc0338dfa5`) | Accepted 4f and separate selected AF1 core 4e2deed frozen | AFP1 99c739c native review completed with changes needed. Native owner is idle. |
-| Backend specialist | Bounded `/root/docusign_artifact_plan` | codex/docusign-pdf1-r1-seams at exact 91f5a90, parent 6c | GM13K delivered exact proposal 99c739c. Planner stopped pending reconciliation of platform findings. |
+| Backend specialist | Bounded `/root/docusign_artifact_plan` | Exact 99c739c base for codex/docusign-afp1-contract-clarification | GM13K-R1 assigned for both platform findings. |
 | Independent QA | Bounded `/root/web_signing_review_resume` | Exact cbda187 service-model review; accepted web 49 remains separate | Original cbda FAIL retained; subsequent direct GM independent 1f82 retest passes selected scope, 47 artifacts verified. No active review worker |
 | Independent native QA | Bounded `/root/af1_core_independent_qa` | Detached scratch review of PDF1 86be367 | Independent PDF1 QA passed with a P3 documentation qualification. Earlier 4e2deed acceptance stays separate. |
 | Operations specialist | Bounded `/root/beta_operations` assignment | Read-only source/private draft assessment; sanitized reports under `/tmp/split-web-beta-operations/` | GM-10 counsel decision packet, support/closure/incident and onboarding gates; no publication/outreach |
 
-Older chats “SPLIT UI (Mobile Version)” and “Build native SPLIT iPhone app” are historical context, not additional active owners. Web and native chats were idle/not loaded at initial inspection; both are now active on the bounded review handoffs below. They are not continuously working. GM audit specialists were temporary and read-only.
+The older “SPLIT UI (Mobile Version)” and “Build native SPLIT iPhone app” chats are historical context. Current owner activity is recorded above and in the saved cursors.
 
 ## Current queue
 
@@ -40,7 +40,7 @@ Older chats “SPLIT UI (Mobile Version)” and “Build native SPLIT iPhone app
 | GM-02B-K0 Coverage collector calibration | P2 | Web + GM | COMPLETE | Both guarded children produced a write witness and zero V8 reports. GM verified 44 entries and 12 receipts. | [Inconclusive intake](docs/management/qa/WEB_V8_COLLECTOR_CALIBRATION_2026-11-06.md). Further override experiments parked. |
 | GM-02C Browser coverage planning | P1 | Web + GM | COMPLETE | Evidence inventory and smallest next fixture check verified. | [Plan intake](docs/management/qa/WEB_BROWSER_COVERAGE_PLAN_2026-11-07.md). All three runtime floors remain open. |
 | GM-02C-FX Firefox CSP fixture check | P1 | Web + GM | COMPLETE | Attempt closed inconclusively at preflight. GM verified the seal and both unrun viewport outcomes. | [Stopped evidence](docs/management/qa/WEB_BROWSER_COVERAGE_PLAN_2026-11-07.md#sealed-preflight-stop-and-corrected-attempt). |
-| GM-02C-FXR Corrected Firefox fixture attempt | P1 | Web + GM | IN PROGRESS | Separately dispatched at web cursor 63 after preserving the stopped attempt. | Compare each immutable ref to its own root tree. Original Firefox 153 two-page component scope. |
+| GM-02C-FXR Corrected Firefox fixture attempt | P1 | Web + GM | COMPLETE | Firefox 153 passed both viewport flows. GM verified the sealed owner run and four screenshots. | [Bounded fixture evidence](docs/management/qa/WEB_FIREFOX153_CSP_FIXTURE_49_2026-11-07.md). Full-app and minimum-browser checks remain open. |
 | GM-03 Exact shares and dirty-builder protection | P1 | Web + QA | TESTING | Editing/focus corrections independently pass; developer Chrome reload matrix passed; independent supplied-evidence-only acceptance received | Creation `2fd0c24` executed at descendant `c57f8b2`; docs-only `3d39da7`; other browser/mobile/integration proof open |
 | GM-04 Native negotiation parity/reconciliation | P1 | iOS + QA | REVIEW | Independent bounded local acceptance passed; PR/integration open | `c8839cd`; 41 candidate XCTest + 75 independent checks + unsigned build pass; supplied UI readback 4/4, no independent UI rerun |
 | GM-05 Truthful signer evidence and export metadata | P1 | Web/backend + QA | REVIEW | Corrected evidence behavior independently passes locally; integration/consent open | `c57f8b2`; web corrections combined 68 independent cases +151 focused candidate checks/typecheck; hosted signing/legal acceptance separate |
@@ -75,7 +75,8 @@ Older chats “SPLIT UI (Mobile Version)” and “Build native SPLIT iPhone app
 | GM-13I-R1 Catalog/group/parser-test clarification | P1 | Bounded planner + web/iOS review | COMPLETE | Exact91f5a90 passes native N-PDF1-1/2 and independent web W-I1–3 specification closure | [Shared acceptance](docs/management/qa/PDF1_R1_SHARED_ACCEPTANCE_2026-11-06.md); equal-length parseable derivative/caller-alias calibration mandatory; no runtime acceptance |
 | GM-13J Standalone PDF1 executable candidate | P1 | iOS owner + independent QA | COMPLETE | Standalone local behavior accepted at 86be367 after 23 independent test reruns, builds, four renders and three fault controls. | [Independent QA](docs/management/qa/PDF1_86BE367_INDEPENDENT_2026-11-07.md). P3 provenance wording tracked separately. |
 | GM-13J-DOC PDF1 notice provenance | P3 | iOS owner + GM | COMPLETE | One documentation file corrected at direct child 01de78a. | GM verified the two archive members and QA copy, inline notice bytes and the other 672 tracked entries. |
-| GM-13K AF1/PDF composition contract | P1 | Bounded planner + web/iOS review | REVIEW | Native changes needed on 99c739c. Bounded independent web review active. | [AFP1 intake and native findings](docs/management/qa/AFP1_99C739C_COMPOSITION_INTAKE_2026-11-07.md). Reconcile both verdicts before a docs revision. |
+| GM-13K AF1/PDF composition contract | P1 | Bounded planner + web/iOS review | REVIEW | Both reviews of 99c739c require docs clarifications. | [AFP1 review intake](docs/management/qa/AFP1_99C739C_COMPOSITION_INTAKE_2026-11-07.md). |
+| GM-13K-R1 AFP1 contract clarification | P1 | Bounded planner + web/iOS closure review | IN PROGRESS | One docs addition from exact 99c739c assigned. | Close N-AFP1-1–5 and W-K1/2 before executable handoff. |
 
 ## Assignment briefs
 

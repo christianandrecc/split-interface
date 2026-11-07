@@ -55,4 +55,6 @@
 
 | D-42 / 2026-11-07 | Authorize one corrected local Firefox fixture attempt after verifying the sealed preflight stop. | Compare executable 49 and evidence child 40 to their own immutable tree roots in new scratch evidence. The selected two-page component scope and input digests carry forward. [Browser evidence](docs/management/qa/WEB_BROWSER_COVERAGE_PLAN_2026-11-07.md) |
 
+| D-43 / 2026-11-07 | Accept the bounded Firefox 153 component result and assign one docs-only AFP1 clarification from exact 99c739c. | Full-app and minimum-browser checks need separate evidence. Both platform findings must close before an AFP1 executable handoff. [Firefox fixture QA](docs/management/qa/WEB_FIREFOX153_CSP_FIXTURE_49_2026-11-07.md) · [AFP1 review intake](docs/management/qa/AFP1_99C739C_COMPOSITION_INTAKE_2026-11-07.md) |
+
 Use new dated entries for consequential changes. Do not reinterpret an old approved release as continuing authorization to deploy, change data, spend money, or publish legal commitments.
