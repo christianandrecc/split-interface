@@ -8,7 +8,7 @@ November 6 update: exact 49’s fresh unchanged-gate audit remains production 0;
 
 November 7 PDF1 update. Independent local QA passes for exact 86be367 in the standalone package, including the six asset identities, real PDFKit checks and four rendered pages. The provenance wording correction is verified at 01de78a. Host, app, provider, device and release gates still require their own evidence. [Independent QA](docs/management/qa/PDF1_86BE367_INDEPENDENT_2026-11-07.md)
 
-November 7 browser and contract update. Exact web 49 passed both Firefox 153 component fixture viewports. Full-app build preparation stopped at preflight and a separate corrected attempt is active. Both platforms accepted AFP1 clarification e4f80e4 as a specification and standalone synthetic implementation is active. [Firefox fixture QA](docs/management/qa/WEB_FIREFOX153_CSP_FIXTURE_49_2026-11-07.md) · [Build stop](docs/management/qa/WEB_DIST49_PREFLIGHT_STOP_2026-11-07.md) · [AFP1 shared closure](docs/management/qa/AFP1_E4F80E4_SHARED_CLOSURE_2026-11-07.md)
+November 7 browser and contract update. Exact web 49 passed both Firefox 153 component fixture viewports. The corrected full-app build passed, and GM verified its output. Full-app Firefox workflow QA is active. Both platforms accepted AFP1 clarification e4f80e4 as a specification and standalone synthetic f5c92bb is in independent QA. [Current QA](docs/management/qa/LAUNCH_STEPS_1_2_2026-11-07.md) [Firefox fixture QA](docs/management/qa/WEB_FIREFOX153_CSP_FIXTURE_49_2026-11-07.md) · [Build stop](docs/management/qa/WEB_DIST49_PREFLIGHT_STOP_2026-11-07.md) · [AFP1 shared closure](docs/management/qa/AFP1_E4F80E4_SHARED_CLOSURE_2026-11-07.md)
 
 ## Development and internal testing
 

@@ -63,4 +63,6 @@
 
 | D-46 / 2026-11-07 | Accept 99c739c plus e4f80e4 as the standalone synthetic AFP1 specification after both platform closure passes. Assign GM13L from exact 01de78a. | One new native in-memory package with the frozen PDF1 dependency. Independent executable QA follows delivery. Host, provider, device and release gates remain open. [Closure and scope](docs/management/qa/AFP1_E4F80E4_SHARED_CLOSURE_2026-11-07.md) |
 
+| D-47 / 2026-11-07 | Start founder-selected local QA and signing steps. Accept verified exact-49 build custody for scoped Firefox workflow QA and route exact f5c92bb to independent review. | No device enumerated. Hosted and provider integration remain separate. [Current evidence](docs/management/qa/LAUNCH_STEPS_1_2_2026-11-07.md) |
+
 Use new dated entries for consequential changes. Do not reinterpret an old approved release as continuing authorization to deploy, change data, spend money, or publish legal commitments.
