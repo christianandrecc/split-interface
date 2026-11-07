@@ -73,4 +73,6 @@
 
 | D-51 / 2026-11-07 | Route exact viewer 7277db9 to independent source/build review. Preserve the Firefox 128 preflight stop and start one bounded correction. | Viewer build evidence verified; runtime and protected sharing remain open. Firefox work is confined to loopback controls and public runner provenance assessment before browser execution. [Intake and limits](docs/management/qa/LAUNCH_STEPS_1_2_2026-11-07.md#viewer-delivery-and-firefox-128-preflight-stop) |
 
+| D-52 / 2026-11-07 | Accept the independent source/build review at 7277db9 and assign the unchanged runtime baseline to independent QA. Route the uncompleted Firefox 128 correction to a bounded web specialist. | Use one freshly created disposable iOS QA Simulator. Keep preview and owner devices untouched. Web stays at containment and provenance preflight. [Evidence and limits](docs/management/qa/LAUNCH_STEPS_1_2_2026-11-07.md#independent-viewer-review-and-qa-recovery) |
+
 Use new dated entries for consequential changes. Do not reinterpret an old approved release as continuing authorization to deploy, change data, spend money, or publish legal commitments.
