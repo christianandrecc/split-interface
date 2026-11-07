@@ -57,4 +57,6 @@
 
 | D-43 / 2026-11-07 | Accept the bounded Firefox 153 component result and assign one docs-only AFP1 clarification from exact 99c739c. | Full-app and minimum-browser checks need separate evidence. Both platform findings must close before an AFP1 executable handoff. [Firefox fixture QA](docs/management/qa/WEB_FIREFOX153_CSP_FIXTURE_49_2026-11-07.md) · [AFP1 review intake](docs/management/qa/AFP1_99C739C_COMPOSITION_INTAKE_2026-11-07.md) |
 
+| D-44 / 2026-11-07 | Select one fresh isolated synthetic build at exact 49 as the input for later full-app Firefox QA. | The retained app JS lacks a complete seal. Verify the full output inventory, preserve the frozen lock and source, and stop after artifact custody. Minimum-browser checks are separate. [Browser scope](docs/management/qa/WEB_FIREFOX153_CSP_FIXTURE_49_2026-11-07.md) |
+
 Use new dated entries for consequential changes. Do not reinterpret an old approved release as continuing authorization to deploy, change data, spend money, or publish legal commitments.

@@ -22,7 +22,7 @@ See [initial audit](docs/management/INITIAL_AUDIT.md) for source evidence, iOS c
 ## Current priorities
 
 1. Review GM13K-R1 against both platform findings before assigning AFP1 implementation. Host, sharing, provider enforcement and D01–D07 remain separate gates. [AFP1 intake](docs/management/qa/AFP1_99C739C_COMPOSITION_INTAKE_2026-11-07.md)
-2. Scope the full-app Firefox evidence and the separate minimum-browser checks. Establish a sealed complete application artifact before assigning a full-app run. [Firefox fixture QA](docs/management/qa/WEB_FIREFOX153_CSP_FIXTURE_49_2026-11-07.md)
+2. Verify the isolated full-app artifact assigned as GM02C-DIST before selecting a Firefox workflow run. Minimum-browser coverage remains a separate track. [Firefox fixture QA](docs/management/qa/WEB_FIREFOX153_CSP_FIXTURE_49_2026-11-07.md)
 3. Keep the combined-beta readiness packet current for recovery, reviewed legal/consent/privacy, support/closure and device/accessibility proof. These business/operating gates remain separate from local prototype and dependency acceptance. [Release checklist](LAUNCH_CHECKLIST.md).
 
 ## Unmerged web-beta progress
