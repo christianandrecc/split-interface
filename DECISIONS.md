@@ -59,4 +59,6 @@
 
 | D-44 / 2026-11-07 | Select one fresh isolated synthetic build at exact 49 as the input for later full-app Firefox QA. | The retained app JS lacks a complete seal. Verify the full output inventory, preserve the frozen lock and source, and stop after artifact custody. Minimum-browser checks are separate. [Browser scope](docs/management/qa/WEB_FIREFOX153_CSP_FIXTURE_49_2026-11-07.md) |
 
+| D-45 / 2026-11-07 | Route exact AFP1 clarification e4f80e4 to both platform closure reviews. Authorize one separately sealed exact-49 build attempt with corrected bundled-entry classification. | Review is docs-only. The web stop occurred before install/build. Verify the strict lock classification and complete artifact before further browser work. [AFP1 intake](docs/management/qa/AFP1_E4F80E4_CLARIFICATION_INTAKE_2026-11-07.md) · [Build stop](docs/management/qa/WEB_DIST49_PREFLIGHT_STOP_2026-11-07.md) |
+
 Use new dated entries for consequential changes. Do not reinterpret an old approved release as continuing authorization to deploy, change data, spend money, or publish legal commitments.
