@@ -79,4 +79,6 @@
 
 | D-54 / 2026-11-07 | Accept four viewer fault calibrations; route exact focused child 7603887 to independent compile and runtime QA. Accept Firefox stock design as evidence and park its execution; start one current-Chrome narrow workflow. | iOS uses the dedicated QA Simulator only; mounted verification is separate. Firefox 128 needs a verified local peer boundary, signature and diagnostics. Current Chrome does not satisfy any browser floor. [Evidence](docs/management/qa/LAUNCH_STEPS_1_2_2026-11-07.md#viewer-fault-calibration-and-next-platform-tests) |
 
+| D-55 / 2026-11-07 | Accept exact 7603887's 13 hosted Simulator tests and assign mounted QA. Preserve the installed Chrome preflight failure and qualify one official Chrome for Testing candidate. | Viewer work stays on the dedicated Simulator. Chrome qualification is static and does not change installed apps, testing gates or the browser floor. [Evidence](docs/management/qa/LAUNCH_STEPS_1_2_2026-11-07.md#focused-simulator-acceptance-and-chrome-runner-stop) |
+
 Use new dated entries for consequential changes. Do not reinterpret an old approved release as continuing authorization to deploy, change data, spend money, or publish legal commitments.
