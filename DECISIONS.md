@@ -75,4 +75,6 @@
 
 | D-52 / 2026-11-07 | Accept the independent source/build review at 7277db9 and assign the unchanged runtime baseline to independent QA. Route the uncompleted Firefox 128 correction to a bounded web specialist. | Use one freshly created disposable iOS QA Simulator. Keep preview and owner devices untouched. Web stays at containment and provenance preflight. [Evidence and limits](docs/management/qa/LAUNCH_STEPS_1_2_2026-11-07.md#independent-viewer-review-and-qa-recovery) |
 
+| D-53 / 2026-11-07 | Accept exact 7277db9's nine-test Simulator baseline and the 36 scoped Firefox preflight containment controls. Start separate focused viewer tests and fault controls, and one stock-runner isolation design. | iOS owner remains source-only while independent QA owns the dedicated device. Firefox 128 remains unqualified; the owner must resolve stock transport, mock isolation and historical signing before execution. [Evidence](docs/management/qa/LAUNCH_STEPS_1_2_2026-11-07.md#simulator-baseline-and-firefox-containment-acceptance) |
+
 Use new dated entries for consequential changes. Do not reinterpret an old approved release as continuing authorization to deploy, change data, spend money, or publish legal commitments.
