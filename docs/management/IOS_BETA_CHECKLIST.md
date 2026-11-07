@@ -6,7 +6,7 @@ November 6 shared checkpoint: local model 1f82 and separate native simulation 4f
 
 November 7 PDF1 acceptance. Exact 86be367 passes 23 fresh macOS tests, six asset identities, four visual inspections, the three fault controls, and iOS 17 arm64 compile and link. Verified child 01de78a clarifies the scope of inline authoring notices. Device behavior, host, sharing, provider and app integration remain separate. [Independent QA](qa/PDF1_86BE367_INDEPENDENT_2026-11-07.md)
 
-November 7 AFP1 update. Both static reviews passed exact e4f80e4. Standalone synthetic authorization and PDF inspection passed independent QA at f5c92bb. GM13M-A is active on the in-memory synthetic viewer. GM-06D remains gated on real service/provider work and host integration. [Shared closure and scope](qa/AFP1_E4F80E4_SHARED_CLOSURE_2026-11-07.md)
+November 7 AFP1 update. Both static reviews passed exact e4f80e4. Standalone synthetic authorization and PDF inspection passed independent QA at f5c92bb. GM13M-A delivered the standalone viewer at 7277db9. The build includes nine compiled tests; independent source/build review is active and Simulator runtime is unverified. [Viewer intake](qa/LAUNCH_STEPS_1_2_2026-11-07.md#viewer-delivery-and-firefox-128-preflight-stop) GM-06D remains gated on real service/provider work and host integration. [Shared closure and scope](qa/AFP1_E4F80E4_SHARED_CLOSURE_2026-11-07.md)
 
 Updated October 10, 2026. Founder selected **web + iOS beta** in iOS Development Agent (SPLIT), then explicitly asked GM to coordinate continued mobile creation/polishing after the web handoff. Same account, same canonical backend records; native create → invite → negotiate → review/sign → retrieve/share is the intended phone journey.
 

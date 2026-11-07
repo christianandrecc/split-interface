@@ -71,4 +71,6 @@
 
 | D-50 / 2026-11-07 | Close the scoped Firefox 153 workflow after seal readback and start Firefox 128 runner preflight. | Historical public runner acquisition and containment planning in scratch. Browser launch requires the verified isolation path. [Evidence](docs/management/qa/LAUNCH_STEPS_1_2_2026-11-07.md#firefox-153-seal-and-firefox-128-preflight) |
 
+| D-51 / 2026-11-07 | Route exact viewer 7277db9 to independent source/build review. Preserve the Firefox 128 preflight stop and start one bounded correction. | Viewer build evidence verified; runtime and protected sharing remain open. Firefox work is confined to loopback controls and public runner provenance assessment before browser execution. [Intake and limits](docs/management/qa/LAUNCH_STEPS_1_2_2026-11-07.md#viewer-delivery-and-firefox-128-preflight-stop) |
+
 Use new dated entries for consequential changes. Do not reinterpret an old approved release as continuing authorization to deploy, change data, spend money, or publish legal commitments.
