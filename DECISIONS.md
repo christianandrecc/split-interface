@@ -67,4 +67,6 @@
 
 | D-48 / 2026-11-07 | Replace the restricted test loopback port in a separate exact-49 fixture build and rerun the scoped Firefox workflow once. | Independent Firefox 153 probe verified interception on the replacement port. First stop preserved. [Evidence](docs/management/qa/LAUNCH_STEPS_1_2_2026-11-07.md#firefox-fixture-port-correction) |
 
+| D-49 / 2026-11-07 | Accept exact f5c92bb for standalone synthetic authorization and PDF inspection. Assign first H1 in-memory viewer slice. | One standalone Debug target using exact synthetic bytes and live authorization. File sharing, real DocuSign, app integration and device proof remain separate. [Evidence and scope](docs/management/qa/LAUNCH_STEPS_1_2_2026-11-07.md#corrected-firefox-and-independent-native-qa) |
+
 Use new dated entries for consequential changes. Do not reinterpret an old approved release as continuing authorization to deploy, change data, spend money, or publish legal commitments.
