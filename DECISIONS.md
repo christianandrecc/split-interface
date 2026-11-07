@@ -65,4 +65,6 @@
 
 | D-47 / 2026-11-07 | Start founder-selected local QA and signing steps. Accept verified exact-49 build custody for scoped Firefox workflow QA and route exact f5c92bb to independent review. | No device enumerated. Hosted and provider integration remain separate. [Current evidence](docs/management/qa/LAUNCH_STEPS_1_2_2026-11-07.md) |
 
+| D-48 / 2026-11-07 | Replace the restricted test loopback port in a separate exact-49 fixture build and rerun the scoped Firefox workflow once. | Independent Firefox 153 probe verified interception on the replacement port. First stop preserved. [Evidence](docs/management/qa/LAUNCH_STEPS_1_2_2026-11-07.md#firefox-fixture-port-correction) |
+
 Use new dated entries for consequential changes. Do not reinterpret an old approved release as continuing authorization to deploy, change data, spend money, or publish legal commitments.

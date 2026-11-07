@@ -25,3 +25,9 @@ Xcode device inventory returned no devices. When a suitable iPhone is attached, 
 - On the actual phone enable VoiceOver and exercise the same steps with large text. Verify the form's labels and order, reachable controls, readable errors and that invitation review does not imply approval or signing. Record physical and minimum-iOS checks separately.
 
 DocuSign execution, original signed PDF and certificate retrieval, and the production old-client guard remain later implementation and integration gates. This phase uses local fixtures.
+
+## Firefox fixture port correction
+
+The first exact-49 workflow loaded SPLIT in Firefox 153 but stopped at account creation before the dashboard. No backend mock request was observed. Draft save/reload, narrow viewport and isolation assertions were unrun. GM verified the report, seal and all 65 entries. [First stop](/Users/christiancarrera/.codex/artifacts/split-web-full-fx49-kZ1Lr5GX/REVIEW.md) · [Preserved packet](/Users/christiancarrera/.codex/artifacts/split-gm-web49-safe-port.7nTtrO46/first-attempt-original-evidence.tar.gz)
+
+GM reproduced the key boundary in an independent Firefox 153 probe. The init script seeded storage, port 1 failed before the interception handler, and the identical request on unbound loopback port 49321 was intercepted and returned 200. A fresh network-denied build from exact 49 changed only the synthetic endpoint inputs. GM rechecked 400 tracked files, 39 dist entries and archive readback. Startup for the separate bounded workflow rerun was observed at web cursor 81. [Firefox probe](/Users/christiancarrera/.codex/artifacts/split-firefox-loopback-probe.Uw8c0f2Y/result-attached.json) · [Corrected archive verification](/Users/christiancarrera/.codex/artifacts/split-gm-web49-safe-port.7nTtrO46/verification.json)
