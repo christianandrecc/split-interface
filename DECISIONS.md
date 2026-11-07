@@ -45,4 +45,8 @@
 
 | D-37 / 2026-11-06 | Park the out-of-range estree override experiment after the two guarded coverage controls failed to produce counters. Shift the next web assignment to read-only browser evidence planning for exact 49eacadc. | GM routing within resumed local development. Further qualification requires a reviewed guarded measurement or supported dependency route. Browser execution is separately scoped. [Calibration intake](docs/management/qa/WEB_V8_COLLECTOR_CALIBRATION_2026-11-06.md) |
 
+| D-38 / 2026-11-07 | Accept the standalone synthetic PDF1 behavior at 86be367 after independent asset, parser, fault and visual checks. Verify the separate P3 notice wording correction at direct child 01de78a. | Bounded local QA acceptance. The existing archives preserve the unused font notice. Host, combined permissions, real provider and release require their own evidence. [Independent QA](docs/management/qa/PDF1_86BE367_INDEPENDENT_2026-11-07.md) |
+
+| D-39 / 2026-11-07 | Assign GM13K to the existing planner for one docs-only synthetic AF1/PDF composition proposal from exact R1. | Define whole-set permission and independent inspection before web and iOS compatibility review. H1, app integration and real provider behavior remain later gates. [Accepted component evidence](docs/management/qa/PDF1_86BE367_INDEPENDENT_2026-11-07.md) |
+
 Use new dated entries for consequential changes. Do not reinterpret an old approved release as continuing authorization to deploy, change data, spend money, or publish legal commitments.

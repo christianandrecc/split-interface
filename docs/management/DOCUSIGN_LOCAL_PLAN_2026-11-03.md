@@ -6,6 +6,8 @@ Current checkpoint later November 3: historical initial assignments below are pr
 
 November 6 latest coordination: selected local service model 1f82c270 and separate AF1 memory core 4e2deed are accepted only in their bounded synthetic scopes. Both reviews of docs-only PDF1 plan 6c4630f are complete; exact R1/91f5a90 passes both platform specification reviews. Native delivered standalone PDF1 candidate 86be367. Independent asset, parser and visual QA is active. Host, provider and service acceptance require separate work. [Owner intake](qa/PDF1_86BE367_OWNER_2026-11-06.md) Legacy evidence and AF1’s NON-PDF dataset remain distinct. [Current plan intake](qa/PDF1_PLAN_6C4630F_INTAKE_2026-11-06.md), [current queue](../../AGENT_TASKS.md).
 
+November 7 PDF1 checkpoint. The standalone synthetic asset and inspection behavior passed independent local QA at exact 86be367. The notice provenance correction is verified at 01de78a. GM13K is a separate synthetic composition proposal for platform review. Combined authorization, H1 host behavior and provider execution require separate work. [Independent QA](qa/PDF1_86BE367_INDEPENDENT_2026-11-07.md)
+
 ## Product direction and authority
 
 SPLIT owns collaboration, invitations, negotiation, permissions, exact shares and agreement preparation. DocuSign is the selected final execution provider for new real agreements once its integration, legal terms, operating model and release are approved. Current native/web signing code remains subject to independent integrity review; it does not become DocuSign evidence. Preserve prior signatures, source/proposal/audit history and truthful legacy labels without retroactive conversion or new consent assertions.

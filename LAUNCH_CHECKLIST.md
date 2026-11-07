@@ -6,6 +6,8 @@ November 3 current coordination: native signing 33cbbae and local simulation 4f0
 
 November 6 update: exact 49’s fresh unchanged-gate audit remains production 0; full graph is 7 moderate package entries/1 advisory after revised advisory data, not code remediation. Exact 4e2deed independently passes only the selected local memory-core/F1–F2 scope. PDF1 base6c + R1/91f5a90 now pass both platform specification reviews; the native owner delivered the first standalone PDF1 candidate at 86be367 and independent asset and parser QA is active. [Owner intake](docs/management/qa/PDF1_86BE367_OWNER_2026-11-06.md) Actual PDF/host/provider/service/device/operational/integration/release gates stay open. [Fresh audit](docs/management/qa/WEB_FROZEN49_AUDIT_REFRESH_2026-11-06.md), [core acceptance](docs/management/qa/AF1_CORE_4E2DEED_INDEPENDENT_2026-11-06.md).
 
+November 7 PDF1 update. Independent local QA passes for exact 86be367 in the standalone package, including the six asset identities, real PDFKit checks and four rendered pages. The provenance wording correction is verified at 01de78a. Host, app, provider, device and release gates still require their own evidence. [Independent QA](docs/management/qa/PDF1_86BE367_INDEPENDENT_2026-11-07.md)
+
 ## Development and internal testing
 
 - [x] Inspect web/native/backend architecture and distinguish source from live evidence ([audit](docs/management/INITIAL_AUDIT.md)).
