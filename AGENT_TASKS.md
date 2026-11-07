@@ -10,8 +10,8 @@ Updated November 7, 2026. Lifecycle: `BACKLOG → READY → IN PROGRESS → REVI
 | --- | --- | --- | --- |
 | GM | General Manager Agent (SPLIT) (`01a125fd-72cf-7c71-9c0b-f08068b3bf6f`) | Current `3303` worktree / `management/split-gm` | Current roadmap, specification, review and independent QA |
 | Web | Web Development Agent (SPLIT) (`019f0b98-14e3-7d90-a54e-d00371aed1c9`) | Frozen 49; owner evidence 40b4a5f preserved | Firefox 153 fixture accepted. GM02C-DIST stopped at preflight. Corrected GM02C-DIST-R is active from exact 49. |
-| iOS | iOS Development Agent (SPLIT) (`01a125ed-8d05-7b73-9d57-accc0338dfa5`) | Accepted 4f and separate selected AF1 core 4e2deed frozen | Read-only native closure review active on AFP1 clarification e4f80e4. |
-| Backend specialist | Bounded `/root/docusign_artifact_plan` | codex/docusign-afp1-contract-clarification at e4f80e4 | GM13K-R1 delivered. Planner stopped for both closure reviews. |
+| iOS | iOS Development Agent (SPLIT) (`01a125ed-8d05-7b73-9d57-accc0338dfa5`) | Accepted 4f and separate selected AF1 core 4e2deed frozen | AFP1 e4f80e4 docs accepted. Native owner active on standalone local GM13L. |
+| Backend specialist | Bounded `/root/docusign_artifact_plan` | codex/docusign-afp1-contract-clarification at e4f80e4 | GM13K-R1 delivered and accepted by both static reviews. Planner is idle. |
 | Independent QA | Bounded `/root/web_signing_review_resume` | Exact cbda187 service-model review; accepted web 49 remains separate | Original cbda FAIL retained; subsequent direct GM independent 1f82 retest passes selected scope, 47 artifacts verified. No active review worker |
 | Independent native QA | Bounded `/root/af1_core_independent_qa` | Detached scratch review of PDF1 86be367 | Independent PDF1 QA passed with a P3 documentation qualification. Earlier 4e2deed acceptance stays separate. |
 | Operations specialist | Bounded `/root/beta_operations` assignment | Read-only source/private draft assessment; sanitized reports under `/tmp/split-web-beta-operations/` | GM-10 counsel decision packet, support/closure/incident and onboarding gates; no publication/outreach |
@@ -78,7 +78,8 @@ The older “SPLIT UI (Mobile Version)” and “Build native SPLIT iPhone app�
 | GM-13J Standalone PDF1 executable candidate | P1 | iOS owner + independent QA | COMPLETE | Standalone local behavior accepted at 86be367 after 23 independent test reruns, builds, four renders and three fault controls. | [Independent QA](docs/management/qa/PDF1_86BE367_INDEPENDENT_2026-11-07.md). P3 provenance wording tracked separately. |
 | GM-13J-DOC PDF1 notice provenance | P3 | iOS owner + GM | COMPLETE | One documentation file corrected at direct child 01de78a. | GM verified the two archive members and QA copy, inline notice bytes and the other 672 tracked entries. |
 | GM-13K AF1/PDF composition contract | P1 | Bounded planner + web/iOS review | REVIEW | Both reviews of 99c739c require docs clarifications. | [AFP1 review intake](docs/management/qa/AFP1_99C739C_COMPOSITION_INTAKE_2026-11-07.md). |
-| GM-13K-R1 AFP1 contract clarification | P1 | Planner, native owner and web specialist | REVIEW | Exact e4f80e4 intake verified. Both closure reviews active. | Close N-AFP1-1–5 and W-K1/2 before executable handoff. [Clarification intake](docs/management/qa/AFP1_E4F80E4_CLARIFICATION_INTAKE_2026-11-07.md) |
+| GM-13K-R1 AFP1 contract clarification | P1 | Planner, native owner and web specialist | COMPLETE | Both exact e4f80e4 reviews passed docs-only. All seven findings close. | [Shared closure](docs/management/qa/AFP1_E4F80E4_SHARED_CLOSURE_2026-11-07.md) |
+| GM-13L Standalone AFP1 composition fixture | P1 | iOS + independent QA | IN PROGRESS | Native startup confirmed at cursor 46 on one synthetic in-memory package from exact 01de78a. | Independent exact-candidate QA after delivery. [Handoff](docs/management/qa/AFP1_E4F80E4_SHARED_CLOSURE_2026-11-07.md#gm13l-standalone-executable-candidate) |
 
 ## Assignment briefs
 

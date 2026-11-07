@@ -61,4 +61,6 @@
 
 | D-45 / 2026-11-07 | Route exact AFP1 clarification e4f80e4 to both platform closure reviews. Authorize one separately sealed exact-49 build attempt with corrected bundled-entry classification. | Review is docs-only. The web stop occurred before install/build. Verify the strict lock classification and complete artifact before further browser work. [AFP1 intake](docs/management/qa/AFP1_E4F80E4_CLARIFICATION_INTAKE_2026-11-07.md) · [Build stop](docs/management/qa/WEB_DIST49_PREFLIGHT_STOP_2026-11-07.md) |
 
+| D-46 / 2026-11-07 | Accept 99c739c plus e4f80e4 as the standalone synthetic AFP1 specification after both platform closure passes. Assign GM13L from exact 01de78a. | One new native in-memory package with the frozen PDF1 dependency. Independent executable QA follows delivery. Host, provider, device and release gates remain open. [Closure and scope](docs/management/qa/AFP1_E4F80E4_SHARED_CLOSURE_2026-11-07.md) |
+
 Use new dated entries for consequential changes. Do not reinterpret an old approved release as continuing authorization to deploy, change data, spend money, or publish legal commitments.
