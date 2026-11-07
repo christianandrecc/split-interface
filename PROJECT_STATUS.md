@@ -22,7 +22,7 @@ See [initial audit](docs/management/INITIAL_AUDIT.md) for source evidence, iOS c
 ## Current priorities
 
 1. Review the in-memory synthetic viewer candidate after GM13M-A delivery, then scope protected local sharing. Host, sharing, provider enforcement and D01–D07 remain separate gates. [Accepted AFP1 specification and handoff](docs/management/qa/AFP1_E4F80E4_SHARED_CLOSURE_2026-11-07.md)
-2. Finish reviewing the corrected Firefox workflow packet and plan the remaining minimum-browser checks. Minimum-browser checks and the physical iPhone pass remain open. [Current work](docs/management/qa/LAUNCH_STEPS_1_2_2026-11-07.md)
+2. Review Firefox 128 runner provenance and containment before selecting the minimum-browser smoke. Chrome, Safari and physical iPhone checks remain open. [Current work](docs/management/qa/LAUNCH_STEPS_1_2_2026-11-07.md)
 3. Keep the combined-beta readiness packet current for recovery, reviewed legal/consent/privacy, support/closure and device/accessibility proof. These business/operating gates remain separate from local prototype and dependency acceptance. [Release checklist](LAUNCH_CHECKLIST.md).
 
 ## Unmerged web-beta progress

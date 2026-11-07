@@ -69,4 +69,6 @@
 
 | D-49 / 2026-11-07 | Accept exact f5c92bb for standalone synthetic authorization and PDF inspection. Assign first H1 in-memory viewer slice. | One standalone Debug target using exact synthetic bytes and live authorization. File sharing, real DocuSign, app integration and device proof remain separate. [Evidence and scope](docs/management/qa/LAUNCH_STEPS_1_2_2026-11-07.md#corrected-firefox-and-independent-native-qa) |
 
+| D-50 / 2026-11-07 | Close the scoped Firefox 153 workflow after seal readback and start Firefox 128 runner preflight. | Historical public runner acquisition and containment planning in scratch. Browser launch requires the verified isolation path. [Evidence](docs/management/qa/LAUNCH_STEPS_1_2_2026-11-07.md#firefox-153-seal-and-firefox-128-preflight) |
+
 Use new dated entries for consequential changes. Do not reinterpret an old approved release as continuing authorization to deploy, change data, spend money, or publish legal commitments.
