@@ -77,4 +77,6 @@
 
 | D-53 / 2026-11-07 | Accept exact 7277db9's nine-test Simulator baseline and the 36 scoped Firefox preflight containment controls. Start separate focused viewer tests and fault controls, and one stock-runner isolation design. | iOS owner remains source-only while independent QA owns the dedicated device. Firefox 128 remains unqualified; the owner must resolve stock transport, mock isolation and historical signing before execution. [Evidence](docs/management/qa/LAUNCH_STEPS_1_2_2026-11-07.md#simulator-baseline-and-firefox-containment-acceptance) |
 
+| D-54 / 2026-11-07 | Accept four viewer fault calibrations; route exact focused child 7603887 to independent compile and runtime QA. Accept Firefox stock design as evidence and park its execution; start one current-Chrome narrow workflow. | iOS uses the dedicated QA Simulator only; mounted verification is separate. Firefox 128 needs a verified local peer boundary, signature and diagnostics. Current Chrome does not satisfy any browser floor. [Evidence](docs/management/qa/LAUNCH_STEPS_1_2_2026-11-07.md#viewer-fault-calibration-and-next-platform-tests) |
+
 Use new dated entries for consequential changes. Do not reinterpret an old approved release as continuing authorization to deploy, change data, spend money, or publish legal commitments.
