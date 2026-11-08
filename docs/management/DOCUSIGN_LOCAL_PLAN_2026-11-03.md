@@ -10,6 +10,8 @@ November 7 PDF1 checkpoint. The standalone synthetic asset and inspection behavi
 
 November 7 functionality priority. Independent QA found two defects in the first intercepted request adapter at a44a7f7. Corrected child 9b8d2af passed the independent local retest. Separate fixture cd9761c retrieves an exact synthetic signed PDF and separate completion certificate together and is in independent review. Actual envelope delivery, authenticated completion, protected storage and app integration remain open. [Current functionality checkpoint](BETA_FUNCTIONALITY_2026-11-07.md)
 
+November 8. Independent QA blocked exact retrieval fixture cd9761c after reproducing cross-reader access through a shared byte buffer. A direct-child correction is assigned. Both client handoffs wait for independent acceptance. [Review and scope](BETA_FUNCTIONALITY_2026-11-07.md#independent-signed-evidence-review)
+
 ## Product direction and authority
 
 SPLIT owns collaboration, invitations, negotiation, permissions, exact shares and agreement preparation. DocuSign is the selected final execution provider for new real agreements once its integration, legal terms, operating model and release are approved. Current native/web signing code remains subject to independent integrity review; it does not become DocuSign evidence. Preserve prior signatures, source/proposal/audit history and truthful legacy labels without retroactive conversion or new consent assertions.

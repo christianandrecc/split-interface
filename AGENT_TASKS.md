@@ -13,8 +13,8 @@ Updated November 7, 2026. Lifecycle: `BACKLOG → READY → IN PROGRESS → REVI
 | iOS | iOS Development Agent (SPLIT) (`01a125ed-8d05-7b73-9d57-accc0338dfa5`) | Standalone viewer branch `codex/ios-afp1-h1-viewer-fixture` at 7603887 | UI runner built. Simulator runtime mode blocked before test methods. |
 | Backend specialist | Bounded `/root/docusign_artifact_plan` | `codex/docusign-wire-adapter-fixture` at 9b8d2af | Delivered corrections for the two confirmed validation findings. |
 | Independent QA | Bounded `/root/web_signing_review_resume` | Exact cbda187 service-model review; accepted web 49 remains separate | Original cbda FAIL retained; subsequent direct GM independent 1f82 retest passes selected scope, 47 artifacts verified. No active review worker |
-| Signed evidence specialist | Bounded `/root/af1_core_independent_qa` | `codex/gm13n-b-synthetic-artifact-retrieval` at cd9761c | Delivered signed PDF and certificate retrieval fixture and both client handoffs. |
-| Independent QA | Bounded `/root/web_supported_dependency_options` | Private exports only | Auth passed offline; real-run blockers and repin options recorded. Reviewing exact cd9761c retrieval fixture. |
+| Signed evidence specialist | Bounded `/root/af1_core_independent_qa` | `codex/gm13n-b-synthetic-artifact-retrieval` from cd9761c | Assigned independent byte allocation correction for both artifacts and repeated reads. |
+| Independent QA | Bounded `/root/web_supported_dependency_options` | Private exports only | Auth passed offline. Found cross-reader byte exposure in exact cd9761c. |
 | Operations specialist | Bounded `/root/beta_operations` assignment | Read-only source/private draft assessment; sanitized reports under `/tmp/split-web-beta-operations/` | GM-10 counsel decision packet, support/closure/incident and onboarding gates; no publication/outreach |
 
 The older “SPLIT UI (Mobile Version)” and “Build native SPLIT iPhone app” chats are historical context. Current owner activity is recorded above and in the saved cursors.
@@ -104,7 +104,8 @@ The older “SPLIT UI (Mobile Version)” and “Build native SPLIT iPhone app�
 | GM-13M-A-FAULTS Viewer fault controls | P1 | Independent native QA | COMPLETE | Four isolated faults built and hit intended assertions in unchanged tests from exact 7277db9. | Prior exact baseline and fault results preserved. |
 | GM-13N-A DocuSign adapter first slice | P1 | Bounded backend specialist + independent QA | BLOCKED | Independent QA confirmed two P2s at a44a7f7 involving response capture and exact object fields. | [Evidence](docs/management/BETA_FUNCTIONALITY_2026-11-07.md#founder-follow-up-on-signing-signed-documents-and-account-recovery). |
 | GM-13N-A-R DocuSign adapter corrections | P1 | Bounded backend specialist + GM independent QA | COMPLETE | Exact 9b8d2af passed 14 owner cases and all 7 unchanged sealed reviewer groups in GM's fresh network-denied replay. | Local fixture request scope. Original a44a7f7 failure preserved. |
-| GM-13N-B Signed PDF and certificate retrieval | P1 | Bounded signed evidence specialist + independent QA | REVIEW | Exact cd9761c independently queued; owner reports nine focused retrieval and 59 unchanged parent checks. | Synthetic fixture. Provider completion, storage and web/iOS wiring remain open. |
+| GM-13N-B Signed PDF and certificate retrieval | P1 | Bounded signed evidence specialist + independent QA | BLOCKED | Independent QA at exact cd9761c confirmed one P1. Two separately authorized readers could inspect and mutate another reader's returned PDF bytes through a shared buffer. | Synthetic fixture. Preserve this failure. [QA record](docs/management/BETA_FUNCTIONALITY_2026-11-07.md#independent-signed-evidence-review) |
+| GM-13N-B-R Isolate returned artifact bytes | P1 | Bounded signed evidence specialist + independent QA | IN PROGRESS | Correct on a direct child of cd9761c. Use dedicated exact-length backing for each returned copy of either artifact. | Repeat original focused suite and the cross-reader access and mutation regression before either client uses this fixture. |
 
 ## Assignment briefs
 
