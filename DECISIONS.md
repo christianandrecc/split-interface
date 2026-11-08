@@ -87,4 +87,6 @@
 
 | D-58 / 2026-11-07 | Record the official Chrome for Testing signature stop and start a separate conditional WebKit narrow workflow. | Browser launch depends on cache integrity and proven local containment. Chrome and approved browser floors remain open. [Evidence](docs/management/qa/LAUNCH_STEPS_1_2_2026-11-07.md#chrome-for-testing-signature-stop) |
 
+| D-59 / 2026-11-07 | Route the external iOS UI runner to independent build and conditional dedicated Simulator QA. Preserve the WebKit framework failure and switch the web owner to the local deployment-config CLI. | Browser checks await a qualified runner. The validator uses synthetic configuration. Visible UI and actual PDFKit page readback remain separate evidence. [Verification](docs/management/qa/LAUNCH_STEPS_1_2_2026-11-07.md#external-ui-harness-and-webkit-preflight-stop) |
+
 Use new dated entries for consequential changes. Do not reinterpret an old approved release as continuing authorization to deploy, change data, spend money, or publish legal commitments.
