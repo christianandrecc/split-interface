@@ -89,4 +89,6 @@
 
 | D-59 / 2026-11-07 | Route the external iOS UI runner to independent build and conditional dedicated Simulator QA. Preserve the WebKit framework failure and switch the web owner to the local deployment-config CLI. | Browser checks await a qualified runner. The validator uses synthetic configuration. Visible UI and actual PDFKit page readback remain separate evidence. [Verification](docs/management/qa/LAUNCH_STEPS_1_2_2026-11-07.md#external-ui-harness-and-webkit-preflight-stop) |
 
+| D-60 / 2026-11-07 | Prioritize the local account confirmation and recovery journey and the first executable DocuSign adapter slice. | Web owns the runnable Auth harness. The backend specialist owns two provider wire operations with injected fixture transport. Browser and mounted viewer runner recovery stay queued. Hosted testing remains deferred. [Functionality checkpoint](docs/management/BETA_FUNCTIONALITY_2026-11-07.md) |
+
 Use new dated entries for consequential changes. Do not reinterpret an old approved release as continuing authorization to deploy, change data, spend money, or publish legal commitments.
