@@ -91,4 +91,6 @@
 
 | D-60 / 2026-11-07 | Prioritize the local account confirmation and recovery journey and the first executable DocuSign adapter slice. | Web owns the runnable Auth harness. The backend specialist owns two provider wire operations with injected fixture transport. Browser and mounted viewer runner recovery stay queued. Hosted testing remains deferred. [Functionality checkpoint](docs/management/BETA_FUNCTIONALITY_2026-11-07.md) |
 
+| D-61 / 2026-11-07 | Route exact a44a7f7 to independent QA for the two intercepted DocuSign request operations. | Review scope covers binding, input custody, duplicate dispatch, ambiguous replies and session-marker handling. Live sending and completion remain separate. [Functionality checkpoint](docs/management/BETA_FUNCTIONALITY_2026-11-07.md) |
+
 Use new dated entries for consequential changes. Do not reinterpret an old approved release as continuing authorization to deploy, change data, spend money, or publish legal commitments.

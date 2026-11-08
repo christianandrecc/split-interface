@@ -11,10 +11,10 @@ Updated November 7, 2026. Lifecycle: `BACKLOG → READY → IN PROGRESS → REVI
 | GM | General Manager Agent (SPLIT) (`01a125fd-72cf-7c71-9c0b-f08068b3bf6f`) | Current `3303` worktree / `management/split-gm` | Current roadmap, specification, review and independent QA |
 | Web | Web Development Agent (SPLIT) (`019f0b98-14e3-7d90-a54e-d00371aed1c9`) | Frozen 49 with owner evidence 40b4a5f | Owner active on the local signup confirmation and password recovery journey. |
 | iOS | iOS Development Agent (SPLIT) (`01a125ed-8d05-7b73-9d57-accc0338dfa5`) | Standalone viewer branch `codex/ios-afp1-h1-viewer-fixture` at 7603887 | UI runner built. Simulator runtime mode blocked before test methods. |
-| Backend specialist | Bounded `/root/docusign_artifact_plan` | New isolated branch from 1f82c270 assigned | Implement first executable DocuSign adapter slice with fixture transport. |
+| Backend specialist | Bounded `/root/docusign_artifact_plan` | `codex/docusign-wire-adapter-fixture` at a44a7f7 | First executable adapter slice delivered. Independent QA assigned. |
 | Independent QA | Bounded `/root/web_signing_review_resume` | Exact cbda187 service-model review; accepted web 49 remains separate | Original cbda FAIL retained; subsequent direct GM independent 1f82 retest passes selected scope, 47 artifacts verified. No active review worker |
 | Independent native QA | Bounded `/root/af1_core_independent_qa` | Exact H1 7603887 and scratch UI runner | Exact hosted suite passed 13/13. External runner qualification and conditional UI test assigned. |
-| Web preflight specialist | Bounded `/root/web_supported_dependency_options` | Private scratch | Official Chrome for Testing failed strict signature verification. GM verified the full seal. |
+| Independent adapter QA | Bounded `/root/web_supported_dependency_options` | Private Git export of a44a7f7 | Independent review and targeted Node fixture tests assigned. |
 | Operations specialist | Bounded `/root/beta_operations` assignment | Read-only source/private draft assessment; sanitized reports under `/tmp/split-web-beta-operations/` | GM-10 counsel decision packet, support/closure/incident and onboarding gates; no publication/outreach |
 
 The older “SPLIT UI (Mobile Version)” and “Build native SPLIT iPhone app” chats are historical context. Current owner activity is recorded above and in the saved cursors.
@@ -101,7 +101,7 @@ The older “SPLIT UI (Mobile Version)” and “Build native SPLIT iPhone app�
 | GM-13M-A-MOUNTED-HARNESS XCTest UI harness | P1 | iOS owner | REVIEW | Delivered sealed scratch source, Clang API validation and six spec-helper checks. | Independent build and destination validation next. |
 | GM-13M-A-MOUNTED-XCT External UI runner QA | P1 | Independent native QA | BLOCKED | Runner built. Xcode 26.5 requires an iOS device for destination-artifact mode, before any UI method. | Prior hosted test acceptance stands. Mounted behavior remains open. |
 | GM-13M-A-FAULTS Viewer fault controls | P1 | Independent native QA | COMPLETE | Four isolated faults built and hit intended assertions in unchanged tests from exact 7277db9. | Prior exact baseline and fault results preserved. |
-| GM-13N-A DocuSign adapter first slice | P1 | Bounded backend specialist | IN PROGRESS | Implement draft-envelope and own-recipient-session wire operations in an isolated Node 24 module from 1f82c270. | Injected fixture transport. Sending, provider completion, signed evidence and platform integration follow separately. |
+| GM-13N-A DocuSign adapter first slice | P1 | Bounded backend specialist + independent QA | REVIEW | Exact a44a7f7 delivered. Owner reports 11 passing Node tests. GM verified source scope and assigned independent review. | Injected fixture transport. Sending, provider completion, signed evidence and platform integration follow separately. |
 
 ## Assignment briefs
 
