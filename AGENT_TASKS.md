@@ -9,12 +9,12 @@ Updated November 7, 2026. Lifecycle: `BACKLOG → READY → IN PROGRESS → REVI
 | Workstream | Existing chat | Checkout / branch | Coordination |
 | --- | --- | --- | --- |
 | GM | General Manager Agent (SPLIT) (`01a125fd-72cf-7c71-9c0b-f08068b3bf6f`) | Current `3303` worktree / `management/split-gm` | Current roadmap, specification, review and independent QA |
-| Web | Web Development Agent (SPLIT) (`019f0b98-14e3-7d90-a54e-d00371aed1c9`) | Frozen 49 with owner evidence 40b4a5f | Owner active on the local signup confirmation and password recovery journey. |
+| Web | Web Development Agent (SPLIT) (`019f0b98-14e3-7d90-a54e-d00371aed1c9`) | Frozen 49 with owner evidence 40b4a5f | Local Auth harness delivered. Owner active on rejection and cleanup corrections and the environment proposal. |
 | iOS | iOS Development Agent (SPLIT) (`01a125ed-8d05-7b73-9d57-accc0338dfa5`) | Standalone viewer branch `codex/ios-afp1-h1-viewer-fixture` at 7603887 | UI runner built. Simulator runtime mode blocked before test methods. |
-| Backend specialist | Bounded `/root/docusign_artifact_plan` | `codex/docusign-wire-adapter-fixture` at a44a7f7 | First executable adapter slice delivered. Independent QA assigned. |
+| Backend specialist | Bounded `/root/docusign_artifact_plan` | `codex/docusign-wire-adapter-fixture` at 9b8d2af | Delivered corrections for the two confirmed validation findings. |
 | Independent QA | Bounded `/root/web_signing_review_resume` | Exact cbda187 service-model review; accepted web 49 remains separate | Original cbda FAIL retained; subsequent direct GM independent 1f82 retest passes selected scope, 47 artifacts verified. No active review worker |
-| Independent native QA | Bounded `/root/af1_core_independent_qa` | Exact H1 7603887 and scratch UI runner | Exact hosted suite passed 13/13. External runner qualification and conditional UI test assigned. |
-| Independent adapter QA | Bounded `/root/web_supported_dependency_options` | Private Git export of a44a7f7 | Independent review and targeted Node fixture tests assigned. |
+| Signed evidence specialist | Bounded `/root/af1_core_independent_qa` | `codex/gm13n-b-synthetic-artifact-retrieval` at cd9761c | Delivered signed PDF and certificate retrieval fixture and both client handoffs. |
+| Independent QA | Bounded `/root/web_supported_dependency_options` | Private exports only | Auth passed offline; real-run blockers and repin options recorded. Reviewing exact cd9761c retrieval fixture. |
 | Operations specialist | Bounded `/root/beta_operations` assignment | Read-only source/private draft assessment; sanitized reports under `/tmp/split-web-beta-operations/` | GM-10 counsel decision packet, support/closure/incident and onboarding gates; no publication/outreach |
 
 The older “SPLIT UI (Mobile Version)” and “Build native SPLIT iPhone app” chats are historical context. Current owner activity is recorded above and in the saved cursors.
@@ -67,7 +67,8 @@ The older “SPLIT UI (Mobile Version)” and “Build native SPLIT iPhone app�
 | GM-06C-4 Per-party count preservation | P2 | iOS + existing independent QA | REVIEW | Independent local acceptance passed at 33cbbae; integration gates open | Fresh 130 XCTest/build, unchanged 177 + overlapping 11 and 115 additional boundary assertions pass; global guards/source originals preserved |
 | GM-06D Fresh finalized retrieval and PDF sharing | P1 | iOS + shared-contract QA | BLOCKED | Signing acceptance and DocuSign artifact contract required | Preserve exact provider-executed PDF/certificate separately from generated/legacy PDF; no live storage/service activation |
 | GM-07 Auth/delivery receipts and alert proof | P1 | Backend/QA/operations | BACKLOG | 1–3 days | GM-01; approved controlled inboxes/provider setup |
-| GM-11A-LOCAL-AUTH-JOURNEY Confirmation and password recovery | P1 | Web owner + GM | IN PROGRESS | Runnable local Auth and captured-inbox harness from exact 49. Verify runtime prerequisites and exercise one journey when the target is ready. | Synthetic accounts and local delivery. Hosted inboxes and native device proof follow separately. |
+| GM-11A-LOCAL-AUTH-JOURNEY Confirmation and password recovery | P1 | Web owner + GM | REVIEW | Exact-49 harness delivered with 12 offline checks. The real run needs a qualified local stack. | Original packet preserved. Correct negative assertions and cleanup before run approval. |
+| GM-11A-LOCAL-AUTH-JOURNEY-R Auth harness correction | P1 | Web owner + independent QA | IN PROGRESS | Prove reached Auth rejection, existing account survival, interrupted owned-resource cleanup and independent synthetic passwords. | Prepare supported runtime/image pins and exact approval proposal; verify independent review findings at intake. |
 | GM-08 Independent hosted lifecycle/device QA | P1 | QA + platform owners | IN PROGRESS | Matrix/local review now; 3–5 days hosted verification later | GM-01–07 applicable scope and exact candidate required for hosted writes |
 | GM-09 Current recovery including Vault | P1 | Backend/infrastructure | REVIEW | Local synthetic harness committed; hosted recovery remains open | `dd74071`; live capture/custody requires founder decision |
 | GM-10 Legal, support and closure operations | P1 | GM/founder + qualified counsel | REVIEW | Sanitized packet prepared; external review unestimated | Founder policy/operator decisions and qualified review remain pending |
@@ -101,7 +102,9 @@ The older “SPLIT UI (Mobile Version)” and “Build native SPLIT iPhone app�
 | GM-13M-A-MOUNTED-HARNESS XCTest UI harness | P1 | iOS owner | REVIEW | Delivered sealed scratch source, Clang API validation and six spec-helper checks. | Independent build and destination validation next. |
 | GM-13M-A-MOUNTED-XCT External UI runner QA | P1 | Independent native QA | BLOCKED | Runner built. Xcode 26.5 requires an iOS device for destination-artifact mode, before any UI method. | Prior hosted test acceptance stands. Mounted behavior remains open. |
 | GM-13M-A-FAULTS Viewer fault controls | P1 | Independent native QA | COMPLETE | Four isolated faults built and hit intended assertions in unchanged tests from exact 7277db9. | Prior exact baseline and fault results preserved. |
-| GM-13N-A DocuSign adapter first slice | P1 | Bounded backend specialist + independent QA | REVIEW | Exact a44a7f7 delivered. Owner reports 11 passing Node tests. GM verified source scope and assigned independent review. | Injected fixture transport. Sending, provider completion, signed evidence and platform integration follow separately. |
+| GM-13N-A DocuSign adapter first slice | P1 | Bounded backend specialist + independent QA | BLOCKED | Independent QA confirmed two P2s at a44a7f7 involving response capture and exact object fields. | [Evidence](docs/management/BETA_FUNCTIONALITY_2026-11-07.md#founder-follow-up-on-signing-signed-documents-and-account-recovery). |
+| GM-13N-A-R DocuSign adapter corrections | P1 | Bounded backend specialist + GM independent QA | COMPLETE | Exact 9b8d2af passed 14 owner cases and all 7 unchanged sealed reviewer groups in GM's fresh network-denied replay. | Local fixture request scope. Original a44a7f7 failure preserved. |
+| GM-13N-B Signed PDF and certificate retrieval | P1 | Bounded signed evidence specialist + independent QA | REVIEW | Exact cd9761c independently queued; owner reports nine focused retrieval and 59 unchanged parent checks. | Synthetic fixture. Provider completion, storage and web/iOS wiring remain open. |
 
 ## Assignment briefs
 

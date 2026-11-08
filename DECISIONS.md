@@ -93,4 +93,6 @@
 
 | D-61 / 2026-11-07 | Route exact a44a7f7 to independent QA for the two intercepted DocuSign request operations. | Review scope covers binding, input custody, duplicate dispatch, ambiguous replies and session-marker handling. Live sending and completion remain separate. [Functionality checkpoint](docs/management/BETA_FUNCTIONALITY_2026-11-07.md) |
 
+| D-62 / 2026-11-07 | Continue signing and signed-document retrieval in parallel. Correct the two adapter findings and qualify the local confirmation and password recovery harness before proposing environment setup. | Original a44a7f7 needs changes. Signed PDF and certificate work uses a separate fixture from accepted 1f82c270. The founder requested notification before an environment is needed. [Functionality checkpoint](docs/management/BETA_FUNCTIONALITY_2026-11-07.md#founder-follow-up-on-signing-signed-documents-and-account-recovery) |
+
 Use new dated entries for consequential changes. Do not reinterpret an old approved release as continuing authorization to deploy, change data, spend money, or publish legal commitments.
