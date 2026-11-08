@@ -10,10 +10,10 @@ Updated November 7, 2026. Lifecycle: `BACKLOG → READY → IN PROGRESS → REVI
 | --- | --- | --- | --- |
 | GM | General Manager Agent (SPLIT) (`01a125fd-72cf-7c71-9c0b-f08068b3bf6f`) | Current `3303` worktree / `management/split-gm` | Current roadmap, specification, review and independent QA |
 | Web | Web Development Agent (SPLIT) (`019f0b98-14e3-7d90-a54e-d00371aed1c9`) | Frozen 49 with owner evidence 40b4a5f | Owner idle after qualification turn ended without evidence. The web specialist owns the static runner recovery. |
-| iOS | iOS Development Agent (SPLIT) (`01a125ed-8d05-7b73-9d57-accc0338dfa5`) | Standalone viewer branch `codex/ios-afp1-h1-viewer-fixture` at 7603887 | Exact 13-test local pass. Owner idle during independent mounted QA. |
+| iOS | iOS Development Agent (SPLIT) (`01a125ed-8d05-7b73-9d57-accc0338dfa5`) | Standalone viewer branch `codex/ios-afp1-h1-viewer-fixture` at 7603887 | Exact 13-test local pass and visible idle launch. Owner preparing a scratch XCTest UI harness. |
 | Backend specialist | Bounded `/root/docusign_artifact_plan` | codex/docusign-afp1-contract-clarification at e4f80e4 | GM13K-R1 delivered and accepted by both static reviews. Planner is idle. |
 | Independent QA | Bounded `/root/web_signing_review_resume` | Exact cbda187 service-model review; accepted web 49 remains separate | Original cbda FAIL retained; subsequent direct GM independent 1f82 retest passes selected scope, 47 artifacts verified. No active review worker |
-| Independent native QA | Bounded `/root/af1_core_independent_qa` | Exact H1 7603887 retained fixture | Exact hosted suite passed 13/13. One mounted launch correction assigned after CLI preflight stop. |
+| Independent native QA | Bounded `/root/af1_core_independent_qa` | Exact H1 7603887 retained fixture | Exact hosted suite passed 13/13. Corrected launch reached visible idle and stopped on headless accessibility inspection. |
 | Web preflight specialist | Bounded `/root/web_supported_dependency_options` | Private scratch | Qualifying one pinned official Chrome for Testing candidate. |
 | Operations specialist | Bounded `/root/beta_operations` assignment | Read-only source/private draft assessment; sanitized reports under `/tmp/split-web-beta-operations/` | GM-10 counsel decision packet, support/closure/incident and onboarding gates; no publication/outreach |
 
@@ -94,7 +94,8 @@ The older “SPLIT UI (Mobile Version)” and “Build native SPLIT iPhone app�
 | GM-13M-A In-memory synthetic PDF viewer | P1 | iOS + independent QA | TESTING | Parent baseline and four fault controls accepted. Tests-only 7603887 passed all 13 hosted methods. | Mounted paging/lifecycle remains open. [QA record](docs/management/qa/LAUNCH_STEPS_1_2_2026-11-07.md#focused-simulator-acceptance-and-chrome-runner-stop) |
 | GM-13M-A-FOCUSED Viewer coverage child | P1 | iOS owner + independent QA | COMPLETE | Exact 7603887 independent build and 13/13 hosted tests pass. | Dedicated local QA Simulator; no mounted or release claim. |
 | GM-13M-A-MOUNTED Viewer mounted paging/lifecycle | P1 | Independent native QA | BLOCKED | Launch command rejected optional architecture flag before a fixture PID existed. | [Preserved stop](docs/management/qa/LAUNCH_STEPS_1_2_2026-11-07.md#mounted-launch-stop-and-chrome-qualification-recovery) |
-| GM-13M-A-MOUNTED-R Mounted launch correction | P1 | Independent native QA | TESTING | One minimal launch command for exact installed 7603887. Then observe PDFKit page movement, Done and scene return if tools qualify. | Dedicated QA Simulator and exact fixture only. |
+| GM-13M-A-MOUNTED-R Mounted launch correction | P1 | Independent native QA | BLOCKED | Exact fixture launched and idle was visible. Headless accessibility inspection failed before input. | [Verified partial evidence](docs/management/qa/LAUNCH_STEPS_1_2_2026-11-07.md#viewer-launch-verified-mounted-interaction-blocked) |
+| GM-13M-A-MOUNTED-HARNESS XCTest UI harness | P1 | iOS owner | IN PROGRESS | Prepare a scratch harness for exact installed fixture and document PDFKit readback. | Source and configuration review first. |
 | GM-13M-A-FAULTS Viewer fault controls | P1 | Independent native QA | COMPLETE | Four isolated faults built and hit intended assertions in unchanged tests from exact 7277db9. | Prior exact baseline and fault results preserved. |
 
 ## Assignment briefs
