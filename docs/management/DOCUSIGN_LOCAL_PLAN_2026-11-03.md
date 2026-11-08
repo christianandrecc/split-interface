@@ -12,6 +12,8 @@ November 7 functionality priority. Independent QA found two defects in the first
 
 November 8. Independent QA blocked exact retrieval fixture cd9761c after reproducing cross-reader access through a shared byte buffer. A direct-child correction is assigned. Both client handoffs wait for independent acceptance. [Review and scope](BETA_FUNCTIONALITY_2026-11-07.md#independent-signed-evidence-review)
 
+Later November 8. Child 52c0399 passed GM's fresh local retest, including all 12 independent cross-reader pairs. Use this accepted fixture when defining the shared authorization and completion path. Actual service enforcement, protected storage and client wiring are separate. [Retest and scope](BETA_FUNCTIONALITY_2026-11-07.md#independent-signed-evidence-review)
+
 ## Product direction and authority
 
 SPLIT owns collaboration, invitations, negotiation, permissions, exact shares and agreement preparation. DocuSign is the selected final execution provider for new real agreements once its integration, legal terms, operating model and release are approved. Current native/web signing code remains subject to independent integrity review; it does not become DocuSign evidence. Preserve prior signatures, source/proposal/audit history and truthful legacy labels without retroactive conversion or new consent assertions.
