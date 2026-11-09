@@ -24,7 +24,7 @@ See [initial audit](docs/management/INITIAL_AUDIT.md) for source evidence, iOS c
 ## Current priorities
 
 1. Restore the disk headroom required by the proposed local Auth setup before requesting approval. Run confirmation and recovery with a captured local inbox after setup and isolation are qualified.
-2. Use the accepted private composition at 0d1d3cf to scope service authorization, verified completion and protected storage. Both client integrations remain open.
+2. Correct the local evidence custody P2 at acf1eca and independently retest the held-read schedule. Accepted composition 0d1d3cf stands. Verified provider completion, service storage and both client integrations remain open.
 3. Keep isolated hosted validation separate for later approval. It covers real confirmation and recovery delivery, agreement completion and web/iOS access controls. Physical device and browser gates remain open.
 
 [Functionality checkpoint](docs/management/BETA_FUNCTIONALITY_2026-11-07.md)
