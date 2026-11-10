@@ -6,6 +6,8 @@ Last reviewed: November 7, 2026 (America/New_York). **Overall: At Risk.** Web 49
 
 November 9 functionality priorities are account confirmation, password recovery, DocuSign signing and return of the signed PDF and completion certificate. The recovered Auth correction passed all 22 independent offline checks. Available disk space varied from 2.0 to 14.3 GiB during the check, below the proposed 25 GiB bootstrap floor. DocuSign adapter 9b8d2af, retrieval correction 52c0399 and composition 0d1d3cf pass their independent local scopes. Hosted validation remains deferred. The local deployment validator completed 19 scoped cases. The iOS UI runner built, then Xcode rejected destination-artifact mode on Simulator before any UI test. [Functionality checkpoint](docs/management/BETA_FUNCTIONALITY_2026-11-07.md)
 
+November 10. Independent local QA accepts custody correction `efa4797` for controlled folder replacement during a read. The original failure at `acf1eca` is preserved. The proposed Auth setup is still below its disk floor. [Custody retest](docs/management/DOCUSIGN_LOCAL_PLAN_2026-11-03.md#gm13n-d-local-evidence-custody)
+
 ## Verified baseline — historical October 10 evidence
 
 | Area | Current evidence | Readiness |
@@ -24,7 +26,7 @@ See [initial audit](docs/management/INITIAL_AUDIT.md) for source evidence, iOS c
 ## Current priorities
 
 1. Restore the disk headroom required by the proposed local Auth setup before requesting approval. Run confirmation and recovery with a captured local inbox after setup and isolation are qualified.
-2. Correct the local evidence custody P2 at acf1eca and independently retest the held-read schedule. Accepted composition 0d1d3cf stands. Verified provider completion, service storage and both client integrations remain open.
+2. Use accepted local composition 0d1d3cf and custody correction efa4797 to scope service authorization and storage. Verified provider completion, durable service recovery and both client integrations remain open.
 3. Keep isolated hosted validation separate for later approval. It covers real confirmation and recovery delivery, agreement completion and web/iOS access controls. Physical device and browser gates remain open.
 
 [Functionality checkpoint](docs/management/BETA_FUNCTIONALITY_2026-11-07.md)
